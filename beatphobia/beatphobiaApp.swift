@@ -10,23 +10,28 @@ import SwiftData
 
 @main
 struct beatphobiaApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-
+    @StateObject var authManager = AuthManager()
+    
+    
+    init() {
+        checkSupabaseConfiguration()
+        registerUserDefaults()
+    }
+    
+    private func registerUserDefaults() {
+        let defaults: [String: Any] = [
+            "setting.notifications": true,
+            "setting.vibrations": true,
+            "setting.backup": true,
+            "setting.miles": true,
+        ]
+        
+        UserDefaults.standard.register(defaults: defaults)
+    }
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView().environmentObject(authManager)
         }
-        .modelContainer(sharedModelContainer)
     }
 }

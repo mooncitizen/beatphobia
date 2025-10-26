@@ -8,54 +8,57 @@
 import SwiftUI
 import SwiftData
 
+import SwiftUI
+import SwiftData
+
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @EnvironmentObject var authManager: AuthManager
+    
+    @State private var profileExists: Bool? = nil
+    @State private var profileError: String?
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
+        Group {
+            if authManager.isLoading {
+                FullScreenLoading(text: "Loading")
+            } else {
+                switch authManager.authState {
+                case .signedIn:
+                    Group {
+                        if let profileError {
+                            Text("Error: \(profileError)")
+                        } else if profileExists == nil {
+                            FullScreenLoading(text: "Loading Application")
+                        } else if profileExists == true {
+                            HomeView()
+                        } else {
+                            InitialProfileView()
+                        }
                     }
-                }
-                .onDelete(perform: deleteItems)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
+                    .task {
+                        await loadProfile()
                     }
+                    
+                case .signedOut:
+                    SignInView()
                 }
             }
-        } detail: {
-            Text("Select an item")
         }
     }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
+    
+    private func loadProfile() async {
+        profileError = nil
+        do {
+            let profile = try await authManager.getProfile()
+            profileExists = (profile != nil)
+        } catch {
+            profileError = error.localizedDescription
+            print("Error loading profile: \(error)")
         }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+            .environmentObject(AuthManager())
 }

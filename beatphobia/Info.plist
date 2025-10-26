@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>UIAppFonts</key>
+	<array>
+		<string>SourceCodePro-VariableFont_wght.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>location</string>
+		<string>voip</string>
+		<string>remote-notification</string>
+		<string>processing</string>
+	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>BeatPhobia needs your location to track your journeys outside your safe space and help you visualize your progress.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>BeatPhobia needs your location to track your journeys even when the app is in the background, so you can focus on your journey without keeping the app open.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>BeatPhobia needs your location to track your journeys and provide continuous support during your exposure therapy sessions.</string>
+	<key>BundleName</key>
+	<string>Expoverit</string>
+</dict>
+</plist>

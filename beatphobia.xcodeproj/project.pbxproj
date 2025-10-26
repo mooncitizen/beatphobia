@@ -6,6 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		DA0610802EA43A7C001EBA37 /* Auth in Frameworks */ = {isa = PBXBuildFile; productRef = DA06107F2EA43A7C001EBA37 /* Auth */; };
+		DA0610822EA43A7C001EBA37 /* Functions in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610812EA43A7C001EBA37 /* Functions */; };
+		DA0610842EA43A7C001EBA37 /* PostgREST in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610832EA43A7C001EBA37 /* PostgREST */; };
+		DA0610862EA43A7C001EBA37 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610852EA43A7C001EBA37 /* Realtime */; };
+		DA0610882EA43A7C001EBA37 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610872EA43A7C001EBA37 /* Storage */; };
+		DA06108A2EA43A7C001EBA37 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610892EA43A7C001EBA37 /* Supabase */; };
+		DA259C262EA6DC3E00BF64D4 /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = DA259C252EA6DC3E00BF64D4 /* RealmSwift */; };
+		DA259C352EA7054A00BF64D4 /* RealmSwift in Embed Frameworks */ = {isa = PBXBuildFile; productRef = DA259C252EA6DC3E00BF64D4 /* RealmSwift */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		DA259C3B2EA70B3100BF64D4 /* CoreHaptics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DA259C3A2EA70B3100BF64D4 /* CoreHaptics.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		DA0610622EA4381B001EBA37 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -23,15 +35,43 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		DA259C362EA7054A00BF64D4 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				DA259C352EA7054A00BF64D4 /* RealmSwift in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		DA0610522EA43819001EBA37 /* beatphobia.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = beatphobia.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA0610612EA4381B001EBA37 /* beatphobiaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = beatphobiaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA06106B2EA4381B001EBA37 /* beatphobiaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = beatphobiaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DA259C3A2EA70B3100BF64D4 /* CoreHaptics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreHaptics.framework; path = System/Library/Frameworks/CoreHaptics.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		DA0610B32EA44974001EBA37 /* Exceptions for "beatphobia" folder in "beatphobia" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = DA0610512EA43819001EBA37 /* beatphobia */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		DA0610542EA43819001EBA37 /* beatphobia */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DA0610B32EA44974001EBA37 /* Exceptions for "beatphobia" folder in "beatphobia" target */,
+			);
 			path = beatphobia;
 			sourceTree = "<group>";
 		};
@@ -52,6 +92,14 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA259C262EA6DC3E00BF64D4 /* RealmSwift in Frameworks */,
+				DA0610842EA43A7C001EBA37 /* PostgREST in Frameworks */,
+				DA0610822EA43A7C001EBA37 /* Functions in Frameworks */,
+				DA06108A2EA43A7C001EBA37 /* Supabase in Frameworks */,
+				DA0610802EA43A7C001EBA37 /* Auth in Frameworks */,
+				DA0610882EA43A7C001EBA37 /* Storage in Frameworks */,
+				DA259C3B2EA70B3100BF64D4 /* CoreHaptics.framework in Frameworks */,
+				DA0610862EA43A7C001EBA37 /* Realtime in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -78,6 +126,7 @@
 				DA0610542EA43819001EBA37 /* beatphobia */,
 				DA0610642EA4381B001EBA37 /* beatphobiaTests */,
 				DA06106E2EA4381B001EBA37 /* beatphobiaUITests */,
+				DA259C392EA70B3100BF64D4 /* Frameworks */,
 				DA0610532EA43819001EBA37 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -92,6 +141,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		DA259C392EA70B3100BF64D4 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				DA259C3A2EA70B3100BF64D4 /* CoreHaptics.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -102,6 +159,7 @@
 				DA06104E2EA43819001EBA37 /* Sources */,
 				DA06104F2EA43819001EBA37 /* Frameworks */,
 				DA0610502EA43819001EBA37 /* Resources */,
+				DA259C362EA7054A00BF64D4 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -112,6 +170,13 @@
 			);
 			name = beatphobia;
 			packageProductDependencies = (
+				DA06107F2EA43A7C001EBA37 /* Auth */,
+				DA0610812EA43A7C001EBA37 /* Functions */,
+				DA0610832EA43A7C001EBA37 /* PostgREST */,
+				DA0610852EA43A7C001EBA37 /* Realtime */,
+				DA0610872EA43A7C001EBA37 /* Storage */,
+				DA0610892EA43A7C001EBA37 /* Supabase */,
+				DA259C252EA6DC3E00BF64D4 /* RealmSwift */,
 			);
 			productName = beatphobia;
 			productReference = DA0610522EA43819001EBA37 /* beatphobia.app */;
@@ -195,6 +260,10 @@
 			);
 			mainGroup = DA0610492EA43819001EBA37;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DA06107E2EA43A7C001EBA37 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				DA259C222EA6DC3E00BF64D4 /* XCRemoteSwiftPackageReference "realm-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DA0610532EA43819001EBA37 /* Products */;
 			projectDirPath = "";
@@ -395,13 +464,18 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = DFJQ67UM9L;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = beatphobia/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Menty Health";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera for the Focus Training tool, which helps you practice grounding techniques by focusing on objects around you.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -426,13 +500,18 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = DFJQ67UM9L;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = beatphobia/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Menty Health";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
+				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera for the Focus Training tool, which helps you practice grounding techniques by focusing on objects around you.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -570,6 +649,63 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DA06107E2EA43A7C001EBA37 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+		DA259C222EA6DC3E00BF64D4 /* XCRemoteSwiftPackageReference "realm-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/realm/realm-swift.git";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DA06107F2EA43A7C001EBA37 /* Auth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA06107E2EA43A7C001EBA37 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Auth;
+		};
+		DA0610812EA43A7C001EBA37 /* Functions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA06107E2EA43A7C001EBA37 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Functions;
+		};
+		DA0610832EA43A7C001EBA37 /* PostgREST */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA06107E2EA43A7C001EBA37 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = PostgREST;
+		};
+		DA0610852EA43A7C001EBA37 /* Realtime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA06107E2EA43A7C001EBA37 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Realtime;
+		};
+		DA0610872EA43A7C001EBA37 /* Storage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA06107E2EA43A7C001EBA37 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Storage;
+		};
+		DA0610892EA43A7C001EBA37 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA06107E2EA43A7C001EBA37 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+		DA259C252EA6DC3E00BF64D4 /* RealmSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DA259C222EA6DC3E00BF64D4 /* XCRemoteSwiftPackageReference "realm-swift" */;
+			productName = RealmSwift;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DA06104A2EA43819001EBA37 /* Project object */;
 }
