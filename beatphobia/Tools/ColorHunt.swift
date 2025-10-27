@@ -542,7 +542,7 @@ struct ColorHuntView: View {
         let generator = UIImpactFeedbackGenerator(style: .medium)
         generator.impactOccurred()
         
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+        _ = withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
             foundColors.insert(color.name)
         }
         

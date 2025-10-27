@@ -84,7 +84,7 @@ final class DataManager {
     }
     
     func syncJournalEntries() async {
-        await setSyncing(true)
+        setSyncing(true)
         defer { setSyncing(false) }
         
         guard let userID = await getSupabaseUserId() else { return }

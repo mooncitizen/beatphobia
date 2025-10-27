@@ -10,12 +10,17 @@ import SwiftUI
 struct HomeView: View {
     // Injecting the AuthManager for potential Sign Out functionality in the Profile tab
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
     
     // Optional: State to manage the currently selected tab
     @State private var selectedTab: Tab = .journeys
     
     // State to control tab bar visibility
     @State private var isTabBarVisible: Bool = true
+    
+    // State to show paywall on first launch
+    @AppStorage("shown_paywall") private var hasShownPaywall = false
+    @State private var showPaywall = false
     
     // Defines the tabs and their associated system images/titles
     enum Tab: String {
@@ -69,6 +74,20 @@ struct HomeView: View {
         .font(.custom(AppConstants.defaultFontName, size: 12))
         // Hide/show tab bar based on state
         .toolbar(isTabBarVisible ? .visible : .hidden, for: .tabBar)
+        .onAppear {
+            // Show paywall once on first launch if user is not already pro
+            if !hasShownPaywall && !subscriptionManager.isPro {
+                // Small delay to let the home view settle
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    showPaywall = true
+                    hasShownPaywall = true
+                }
+            }
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+                .environmentObject(subscriptionManager)
+        }
     }
 }
 

@@ -7,7 +7,7 @@
 import SwiftUI
 import Combine
 import Foundation
-import AVFoundation
+@preconcurrency import AVFoundation
 import Vision
 
 
@@ -200,10 +200,16 @@ class CameraPreviewView: UIView {
         previewLayer.session = session
         previewLayer.videoGravity = .resizeAspectFill
         
-        // Set video orientation
-        if let connection = previewLayer.connection,
-           connection.isVideoOrientationSupported {
-            connection.videoOrientation = .portrait
+        // Set video rotation angle (iOS 17+)
+        if let connection = previewLayer.connection {
+            if #available(iOS 17.0, *) {
+                connection.videoRotationAngle = 90 // Portrait orientation
+            } else {
+                // Fallback for earlier versions
+                if connection.isVideoOrientationSupported {
+                    connection.videoOrientation = .portrait
+                }
+            }
         }
     }
     

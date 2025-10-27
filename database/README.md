@@ -42,7 +42,31 @@ Follow these steps to set up the database in Supabase:
 6. Click **Run**
 7. You should see: "Success. No rows returned"
 
-### 3. Migrations (Run if needed)
+### 3. Journal Sync Setup (Required for Cloud Sync)
+
+To enable cloud syncing for journal entries:
+
+1. Open `13_journal_schema.sql`
+2. Copy **ALL** contents
+3. Paste into Supabase SQL Editor
+4. Click **Run**
+5. You should see: "Success. No rows returned"
+
+This creates:
+- `journal_entries` table for cloud storage
+- RLS policies for secure access
+- Indexes for performance
+- Automatic timestamp updates
+
+### 4. Migrations (Run if needed)
+
+#### Migration: Fix Comment Count to Exclude Deleted Comments (Important!)
+If comment counts are including deleted comments, run this:
+1. Open `12_fix_comment_count_trigger.sql`
+2. Copy **ALL** contents
+3. Paste into Supabase SQL Editor
+4. Click **Run**
+5. You should see: "Success. No rows returned" - this will recalculate all comment counts
 
 #### Migration: Fix Delete/Update Permissions (Required for Edit/Delete Features)
 If you're getting errors when trying to delete or edit posts/comments like:

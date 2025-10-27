@@ -348,10 +348,16 @@ struct SavedJourneyMapView: UIViewRepresentable {
             }
         }
         
-        // Add achievement circle overlay (the distance ring)
+        // Add achievement circle overlay (green - furthest point)
         if maxDistanceFromStart > 0 {
-            let circle = MKCircle(center: startCoordinate, radius: maxDistanceFromStart)
+            let circle = MaxDistanceCircle(center: startCoordinate, radius: maxDistanceFromStart)
             mapView.addOverlay(circle)
+        }
+        
+        // Add total distance circle overlay (blue - straight line potential)
+        if journey.distance > 0 {
+            let totalDistanceCircle = TotalDistanceCircle(center: startCoordinate, radius: journey.distance)
+            mapView.addOverlay(totalDistanceCircle)
         }
         
         // Add smoothed polyline for the route
@@ -371,17 +377,24 @@ struct SavedJourneyMapView: UIViewRepresentable {
         }
         
         // Add start point annotation
-        let startAnnotation = StartPointAnnotation(coordinate: startCoordinate)
-        mapView.addAnnotation(startAnnotation)
+        mapView.addAnnotation(StartPointAnnotation(coordinate: startCoordinate))
         
-        // Fit map to show entire route including the circle
+        // Add finish point annotation
+        if let lastPoint = coordinates.last {
+            mapView.addAnnotation(FinishPointAnnotation(coordinate: lastPoint))
+        }
+        
+        // Fit map to show entire route including both circles
         if coordinates.count > 0 {
             var coordsCopy = coordinates
             let polyline = MKPolyline(coordinates: &coordsCopy, count: coordsCopy.count)
             
-            // Calculate the map rect to include both the route and the circle
-            let circleRect = MKCircle(center: startCoordinate, radius: maxDistanceFromStart).boundingMapRect
-            let combinedRect = polyline.boundingMapRect.union(circleRect)
+            // Calculate the map rect to include the route and both circles
+            let maxCircleRect = MKCircle(center: startCoordinate, radius: maxDistanceFromStart).boundingMapRect
+            let totalDistanceRect = MKCircle(center: startCoordinate, radius: journey.distance).boundingMapRect
+            
+            var combinedRect = polyline.boundingMapRect.union(maxCircleRect)
+            combinedRect = combinedRect.union(totalDistanceRect)
             
             mapView.setVisibleMapRect(combinedRect, edgePadding: UIEdgeInsets(top: 60, left: 60, bottom: 60, right: 60), animated: false)
         }
@@ -439,14 +452,25 @@ struct SavedJourneyMapView: UIViewRepresentable {
     
     class Coordinator: NSObject, MKMapViewDelegate {
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-            if let circle = overlay as? MKCircle {
-                let renderer = MKCircleRenderer(circle: circle)
+            // Handle max distance circle (green - furthest point)
+            if overlay is MaxDistanceCircle {
+                let renderer = MKCircleRenderer(overlay: overlay)
                 renderer.fillColor = UIColor.systemGreen.withAlphaComponent(0.12)
                 renderer.strokeColor = UIColor.systemGreen.withAlphaComponent(0.4)
                 renderer.lineWidth = 2
                 renderer.lineDashPattern = [6, 4]
                 return renderer
-            } else if let polyline = overlay as? MKPolyline {
+            }
+            // Handle total distance circle (blue - straight line potential)
+            else if overlay is TotalDistanceCircle {
+                let renderer = MKCircleRenderer(overlay: overlay)
+                renderer.fillColor = UIColor.systemBlue.withAlphaComponent(0.08)
+                renderer.strokeColor = UIColor.systemBlue.withAlphaComponent(0.35)
+                renderer.lineWidth = 2
+                renderer.lineDashPattern = [8, 6]
+                return renderer
+            }
+            else if let polyline = overlay as? MKPolyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
                 renderer.strokeColor = UIColor.systemBlue.withAlphaComponent(0.85)
                 renderer.lineWidth = 5
@@ -459,44 +483,44 @@ struct SavedJourneyMapView: UIViewRepresentable {
         
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
             // Handle start point annotation
-            if let startAnnotation = annotation as? StartPointAnnotation {
+            if annotation is StartPointAnnotation {
                 let identifier = "StartPointAnnotation"
-                var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
                 
                 if annotationView == nil {
-                    annotationView = MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                    annotationView = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
                     annotationView?.canShowCallout = true
                 } else {
                     annotationView?.annotation = annotation
                 }
                 
-                // Create subtle start marker
-                let pinSize: CGFloat = 24
-                let renderer = UIGraphicsImageRenderer(size: CGSize(width: pinSize, height: pinSize))
-                let pinImage = renderer.image { context in
-                    // Soft shadow
-                    let shadow = NSShadow()
-                    shadow.shadowColor = UIColor.black.withAlphaComponent(0.15)
-                    shadow.shadowOffset = CGSize(width: 0, height: 2)
-                    shadow.shadowBlurRadius = 4
-                    
-                    // Main circle with gradient-like effect
-                    UIColor.white.setFill()
-                    let outerCircle = UIBezierPath(ovalIn: CGRect(x: 2, y: 2, width: pinSize - 4, height: pinSize - 4))
-                    outerCircle.fill()
-                    
-                    // Thin colored border
-                    UIColor.systemGreen.withAlphaComponent(0.6).setStroke()
-                    outerCircle.lineWidth = 2
-                    outerCircle.stroke()
-                    
-                    // Small inner dot
-                    UIColor.systemGreen.withAlphaComponent(0.8).setFill()
-                    let innerDot = UIBezierPath(ovalIn: CGRect(x: 8, y: 8, width: 8, height: 8))
-                    innerDot.fill()
+                // Configure as a prominent red pin with flag icon
+                annotationView?.markerTintColor = .systemRed
+                annotationView?.glyphImage = UIImage(systemName: "flag.fill")
+                annotationView?.glyphTintColor = .white
+                annotationView?.displayPriority = .required
+                
+                return annotationView
+            }
+            
+            // Handle finish point annotation
+            if annotation is FinishPointAnnotation {
+                let identifier = "FinishPointAnnotation"
+                var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+                
+                if annotationView == nil {
+                    annotationView = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                    annotationView?.canShowCallout = true
+                } else {
+                    annotationView?.annotation = annotation
                 }
                 
-                annotationView?.image = pinImage
+                // Configure as a checkered flag pin
+                annotationView?.markerTintColor = .black
+                annotationView?.glyphImage = UIImage(systemName: "flag.checkered")
+                annotationView?.glyphTintColor = .white
+                annotationView?.displayPriority = .required
+                
                 return annotationView
             }
             
@@ -558,6 +582,22 @@ class StartPointAnnotation: NSObject, MKAnnotation {
     }
 }
 
+class FinishPointAnnotation: NSObject, MKAnnotation {
+    let coordinate: CLLocationCoordinate2D
+    
+    var title: String? {
+        "Finish Point"
+    }
+    
+    var subtitle: String? {
+        "Your journey ended here"
+    }
+    
+    init(coordinate: CLLocationCoordinate2D) {
+        self.coordinate = coordinate
+    }
+}
+
 // MARK: - Saved Feeling Annotation
 class SavedFeelingAnnotation: NSObject, MKAnnotation {
     let coordinate: CLLocationCoordinate2D
@@ -583,15 +623,17 @@ class SavedFeelingAnnotation: NSObject, MKAnnotation {
 struct FullScreenMapView: View {
     let journey: JourneyRealm
     @Binding var isPresented: Bool
+    @State private var showMapInfo = false
     
     var body: some View {
         ZStack {
             SavedJourneyMapView(journey: journey)
                 .ignoresSafeArea()
             
-            // Close button - top left
+            // Top buttons
             VStack {
                 HStack {
+                    // Close button - top left
                     Button(action: {
                         isPresented = false
                     }) {
@@ -607,13 +649,161 @@ struct FullScreenMapView: View {
                         }
                     }
                     .padding(.leading, 20)
-                    .padding(.top, 10)
                     
                     Spacer()
+                    
+                    // Info button - top right
+                    Button(action: {
+                        showMapInfo = true
+                    }) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 44, height: 44)
+                                .shadow(color: Color.black.opacity(0.2), radius: 10, y: 3)
+                            
+                            Image(systemName: "info.circle.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(AppConstants.primaryColor)
+                        }
+                    }
+                    .padding(.trailing, 20)
                 }
+                .padding(.top, 10)
                 
                 Spacer()
             }
         }
+        .sheet(isPresented: $showMapInfo) {
+            MapLegendSheet()
+                .presentationDetents([.medium])
+        }
     }
 }
+
+// MARK: - Map Legend Sheet
+struct MapLegendSheet: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Map Legend")
+                    .font(.system(size: 28, weight: .bold, design: .serif))
+                    .foregroundColor(.black)
+                
+                Text("Understanding your journey visualization")
+                    .font(.system(size: 15))
+                    .foregroundColor(.black.opacity(0.6))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 16)
+            .background(AppConstants.defaultBackgroundColor)
+            
+            // Scrollable content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Green Circle
+                    LegendItem(
+                        icon: "circle.dashed",
+                        iconColor: .green,
+                        title: "Green Circle (Dashed)",
+                        description: "Shows the furthest point you reached from your starting location. This represents your maximum distance away from where you began."
+                    )
+                    
+                    // Blue Circle
+                    LegendItem(
+                        icon: "circle.dashed",
+                        iconColor: .blue,
+                        title: "Blue Circle (Dashed)",
+                        description: "Shows the total distance you traveled. If you had walked in a straight line, this is where you could have reached."
+                    )
+                    
+                    // Blue Route Line
+                    LegendItem(
+                        icon: "line.diagonal",
+                        iconColor: .blue,
+                        title: "Blue Route Line (Solid)",
+                        description: "Your actual walking path. This is the route you took during your journey."
+                    )
+                    
+                    // Feeling Checkpoints
+                    LegendItem(
+                        icon: "circle.fill",
+                        iconColor: .orange,
+                        title: "Colored Dots",
+                        description: "Your feeling checkpoints. Each dot is colored based on how you felt at that moment during your journey."
+                    )
+                    
+                    // Start Point
+                    LegendItem(
+                        icon: "flag.fill",
+                        iconColor: .red,
+                        title: "Red Flag Pin",
+                        description: "Marks where your journey started. This is the center point of both radius circles."
+                    )
+                    
+                    // Finish Point
+                    LegendItem(
+                        icon: "flag.checkered",
+                        iconColor: .black,
+                        title: "Black Checkered Flag Pin",
+                        description: "Marks where your journey ended. This is the final point of your walking path."
+                    )
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 20)
+            }
+            .background(AppConstants.defaultBackgroundColor)
+        }
+        .background(AppConstants.defaultBackgroundColor)
+    }
+}
+
+struct LegendItem: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let description: String
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            // Icon
+            ZStack {
+                Circle()
+                    .fill(iconColor.opacity(0.15))
+                    .frame(width: 50, height: 50)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(iconColor)
+            }
+            
+            // Content
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.black)
+                
+                Text(description)
+                    .font(.system(size: 15))
+                    .foregroundColor(.black.opacity(0.7))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 2)
+    }
+}
+
+// MARK: - Custom Circle Overlays
+
+// Circle representing the furthest point from start (green)
+class MaxDistanceCircle: MKCircle {}
+
+// Circle representing the total distance traveled (blue)
+class TotalDistanceCircle: MKCircle {}

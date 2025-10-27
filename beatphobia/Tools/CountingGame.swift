@@ -497,8 +497,22 @@ struct ConfettiView: View {
     private func generateConfetti() {
         let colors: [Color] = [.red, .orange, .yellow, .green, .blue, .purple, .pink]
         
+        // Get screen bounds - suppressing deprecation warning for UIScreen.main
+        #if compiler(>=6.0)
+        let bounds: CGRect
+        if #available(iOS 16.0, *) {
+            bounds = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first?.screen.bounds ?? CGRect(x: 0, y: 0, width: 400, height: 800)
+        } else {
+            bounds = UIScreen.main.bounds
+        }
+        #else
+        let bounds = UIScreen.main.bounds
+        #endif
+        
         for _ in 0..<50 {
-            let randomX = CGFloat.random(in: 0...UIScreen.main.bounds.width)
+            let randomX = CGFloat.random(in: 0...bounds.width)
             let randomY = CGFloat.random(in: -100...0)
             let randomColor = colors.randomElement() ?? .blue
             
@@ -512,7 +526,7 @@ struct ConfettiView: View {
             // Animate each piece falling
             withAnimation(.linear(duration: Double.random(in: 2...4))) {
                 if let index = confettiPieces.firstIndex(where: { $0.id == piece.id }) {
-                    confettiPieces[index].position.y = UIScreen.main.bounds.height + 100
+                    confettiPieces[index].position.y = bounds.height + 100
                     confettiPieces[index].opacity = 0
                 }
             }

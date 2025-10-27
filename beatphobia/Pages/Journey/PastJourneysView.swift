@@ -10,9 +10,21 @@ import RealmSwift
 
 struct PastJourneysView: View {
     @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
     @State private var journeys: [JourneyRealm] = []
     @AppStorage("setting.miles") private var enableMiles = false
     @State private var currentPage: Int? = 0
+    @State private var showPaywall = false
+    
+    // Computed property for displayed journeys (limited to 3 if not Pro)
+    private var displayedJourneys: [JourneyRealm] {
+        let sortedJourneys = journeys.sorted(by: { $0.startTime > $1.startTime })
+        if subscriptionManager.isPro {
+            return sortedJourneys
+        } else {
+            return Array(sortedJourneys.prefix(3))
+        }
+    }
     
     var body: some View {
         ZStack {
@@ -24,44 +36,51 @@ struct PastJourneysView: View {
             } else {
                 ScrollView {
                     VStack(spacing: 20) {
-                        // Horizontal scrolling stats cards
-                        VStack(spacing: 12) {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                LazyHStack(spacing: 16) {
-                                    // Last 7 Days Card
-                                    last7DaysStatsCard
-                                        .containerRelativeFrame(.horizontal, count: 1, spacing: 16)
-                                        .id(0)
-                                    
-                                    // Overall Stats Card
-                                    overallStatsCard
-                                        .containerRelativeFrame(.horizontal, count: 1, spacing: 16)
-                                        .id(1)
+                        // Stats cards - Only for Pro users
+                        if subscriptionManager.isPro {
+                            VStack(spacing: 12) {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    LazyHStack(spacing: 16) {
+                                        // Last 7 Days Card
+                                        last7DaysStatsCard
+                                            .containerRelativeFrame(.horizontal, count: 1, spacing: 16)
+                                            .id(0)
+                                        
+                                        // Overall Stats Card
+                                        overallStatsCard
+                                            .containerRelativeFrame(.horizontal, count: 1, spacing: 16)
+                                            .id(1)
+                                    }
+                                    .scrollTargetLayout()
                                 }
-                                .scrollTargetLayout()
-                            }
-                            .scrollTargetBehavior(.paging)
-                            .scrollPosition(id: $currentPage)
-                            .padding(.horizontal, 20)
-                            
-                            // Page indicators
-                            HStack(spacing: 8) {
-                                ForEach(0..<2, id: \.self) { index in
-                                    Circle()
-                                        .fill((currentPage ?? 0) == index ? AppConstants.primaryColor : Color.black.opacity(0.2))
-                                        .frame(width: 8, height: 8)
-                                        .animation(.easeInOut(duration: 0.2), value: currentPage)
+                                .scrollTargetBehavior(.paging)
+                                .scrollPosition(id: $currentPage)
+                                .padding(.horizontal, 20)
+                                
+                                // Page indicators
+                                HStack(spacing: 8) {
+                                    ForEach(0..<2, id: \.self) { index in
+                                        Circle()
+                                            .fill((currentPage ?? 0) == index ? AppConstants.primaryColor : Color.black.opacity(0.2))
+                                            .frame(width: 8, height: 8)
+                                            .animation(.easeInOut(duration: 0.2), value: currentPage)
+                                    }
                                 }
                             }
                         }
                         
                         // Journey list
                         VStack(spacing: 16) {
-                            ForEach(journeys.sorted(by: { $0.startTime > $1.startTime }), id: \.id) { journey in
+                            ForEach(displayedJourneys, id: \.id) { journey in
                                 NavigationLink(destination: JourneyDetailView(journey: journey)) {
                                     JourneyCard(journey: journey, enableMiles: enableMiles)
                                 }
                                 .buttonStyle(PlainButtonStyle())
+                            }
+                            
+                            // Simple upgrade button for free users
+                            if !subscriptionManager.isPro && journeys.count > 3 {
+                                simpleUpgradeButton
                             }
                         }
                         .padding(.horizontal, 20)
@@ -80,9 +99,31 @@ struct PastJourneysView: View {
             }
         }
         .toolbar(.visible, for: .tabBar)
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+                .environmentObject(subscriptionManager)
+        }
         .onAppear {
             loadJourneys()
         }
+    }
+    
+    // MARK: - Simple Upgrade Button
+    private var simpleUpgradeButton: some View {
+        Button(action: { showPaywall = true }) {
+            Text("View All \(journeys.count) Journeys")
+                .font(.system(size: 16, weight: .semibold, design: .serif))
+                .foregroundColor(AppConstants.primaryColor)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.white)
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(AppConstants.primaryColor.opacity(0.3), lineWidth: 1.5)
+                )
+        }
+        .padding(.top, 8)
     }
     
     // MARK: - Last 7 Days Stats Card

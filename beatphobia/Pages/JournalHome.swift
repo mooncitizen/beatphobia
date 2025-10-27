@@ -58,6 +58,7 @@ struct MoodPill: View {
 }
 
 struct JournalHome: View {
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
     
     @State private var selectedMood: Mood?
     private let allMoods: [Mood] = [.happy, .excited, .angry, .stressed, .sad]
@@ -197,8 +198,8 @@ struct JournalHome: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 32)
                     
-                    // Stats Section (if entries exist)
-                    if !journalEntries.isEmpty {
+                    // Stats Section (Pro only)
+                    if !journalEntries.isEmpty && subscriptionManager.isPro {
                         statsSection
                             .padding(.horizontal, 20)
                             .padding(.top, 24)
@@ -305,62 +306,7 @@ struct JournalHome: View {
                 )
             }
             
-            // Streak Card (if streak > 0)
-            if journalStats.streak > 0 {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [.orange, .red],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 40, height: 40)
-                        
-                        Image(systemName: "flame.fill")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("\(journalStats.streak) Day Streak!")
-                            .font(.system(size: 18, weight: .bold))
-                            .fontDesign(.rounded)
-                            .foregroundColor(.black)
-                        
-                        Text("Keep it going! You're building a great habit")
-                            .font(.system(size: 13))
-                            .foregroundColor(.black.opacity(0.6))
-                    }
-                    
-                    Spacer()
-                }
-                .padding(16)
-                .background(
-                    LinearGradient(
-                        colors: [
-                            Color.orange.opacity(0.1),
-                            Color.red.opacity(0.05)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .cornerRadius(16)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(
-                            LinearGradient(
-                                colors: [.orange, .red],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 2
-                        )
-                )
-            }
+            // Streak Card - Removed
         }
     }
     
@@ -503,17 +449,6 @@ struct JournalHome: View {
                     .foregroundColor(.black)
                 
                 Spacer()
-                
-                NavigationLink(destination: Text("All Entries")) {
-                    HStack(spacing: 4) {
-                        Text("View All")
-                            .font(.system(size: 14, weight: .semibold))
-                            .fontDesign(.rounded)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                    }
-                    .foregroundColor(AppConstants.primaryColor)
-                }
             }
             
             // Entry Cards
@@ -680,4 +615,5 @@ struct FlowLayout: Layout {
 
 #Preview {
     JournalHome()
+        .environmentObject(SubscriptionManager())
 }

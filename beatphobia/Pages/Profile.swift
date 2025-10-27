@@ -7,12 +7,18 @@
 
 import SwiftUI
 import Supabase
+import CoreLocation
 
 struct ProfileView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
     
     @State private var isSigningOut = false
     @State private var signOutError: String?
+    @State private var showUsernameChange = false
+    @State private var showPaywall = false
+    
+    @State private var locationStatus: CLAuthorizationStatus = .notDetermined
     
     @AppStorage("setting.notifications") private var enableNotifications = false
     @AppStorage("setting.vibrations") private var enableVibrations = false
@@ -22,6 +28,10 @@ struct ProfileView: View {
     
     private var name: String {
         return authManager.currentUserProfile?.name ?? "N/A"
+    }
+    
+    private var username: String {
+        return authManager.currentUserProfile?.username ?? ""
     }
     
     private var emailAddress: String {
@@ -65,6 +75,67 @@ struct ProfileView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
                     
+                    // Subscription Section
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Subscription")
+                            .font(.title3.bold())
+                            .fontDesign(.serif)
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 24)
+                            .padding(.bottom, 12)
+                        
+                        Button(action: {
+                            showPaywall = true
+                        }) {
+                            HStack(alignment: .center, spacing: 12) {
+                                // Icon
+                                ZStack {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: subscriptionManager.isPro ? [.green, .mint] : [.blue, .purple],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 40, height: 40)
+                                    
+                                    Image(systemName: subscriptionManager.isPro ? "checkmark.shield.fill" : "crown.fill")
+                                        .font(.system(size: 18))
+                                        .foregroundColor(.white)
+                                }
+                                
+                                // Text
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(subscriptionManager.isPro ? "Pro Member" : "Upgrade to Pro")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .fontDesign(.serif)
+                                        .foregroundColor(.black)
+                                    
+                                    Text(subscriptionManager.isPro ? subscriptionManager.subscriptionStatus.statusDescription : "Unlock all premium features")
+                                        .font(.system(size: 13))
+                                        .fontDesign(.serif)
+                                        .foregroundStyle(.gray)
+                                        .lineLimit(1)
+                                }
+                                
+                                Spacer()
+                                
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 16)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .background(Color.white)
+                        .cornerRadius(16)
+                        .padding(.horizontal, 20)
+                    }
+                    
                     // Settings Section
                     VStack(alignment: .leading, spacing: 0) {
                         Text("Settings")
@@ -76,21 +147,52 @@ struct ProfileView: View {
                             .padding(.bottom, 12)
                         
                         VStack(spacing: 0) {
+                            // Username Setting (Navigation)
+                            Button(action: {
+                                showUsernameChange = true
+                            }) {
+                                HStack(alignment: .center, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Username")
+                                            .font(.system(size: 17))
+                                            .fontDesign(.serif)
+                                            .foregroundColor(.black)
+                                        Text("@\(username.isEmpty ? "not_set" : username)")
+                                            .font(.system(size: 13))
+                                            .fontDesign(.serif)
+                                            .foregroundStyle(.gray)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.gray)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 16)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            
+                            Divider()
+                                .padding(.leading, 16)
+                            
                             // Notifications Toggle
-                            SettingToggleRow(
-                                isOn: $enableNotifications,
-                                title: "Notifications",
-                                description: "Allows us to send you notifications and reminders.",
-                                showDivider: true
-                            )
+                            // SettingToggleRow(
+                            //     isOn: $enableNotifications,
+                            //     title: "Notifications",
+                            //     description: "Allows us to send you notifications and reminders.",
+                            //     showDivider: true
+                            // )
                             
                             // Vibrations Toggle
-                            SettingToggleRow(
-                                isOn: $enableVibrations,
-                                title: "Vibrations",
-                                description: "This enables vibrations inside tools such as Focus",
-                                showDivider: true
-                            )
+                            // SettingToggleRow(
+                            //     isOn: $enableVibrations,
+                            //     title: "Vibrations",
+                            //     description: "This enables vibrations inside tools such as Focus",
+                            //     showDivider: true
+                            // )
                             
                             // Miles Toggle
                             SettingToggleRow(
@@ -98,6 +200,33 @@ struct ProfileView: View {
                                 title: enableMiles ? "Miles" : "Kilometers",
                                 description: enableMiles ? "Will display in miles/meters when displaying distances." : "Will display in kilometers/meters when displaying distances.",
                                 showDivider: false
+                            )
+                        }
+                        .background(Color.white)
+                        .cornerRadius(16)
+                        .padding(.horizontal, 20)
+                    }
+                    
+                    // Permissions Section
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Permissions")
+                            .font(.title3.bold())
+                            .fontDesign(.serif)
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 32)
+                            .padding(.bottom, 12)
+                        
+                        VStack(spacing: 0) {
+                            // Location Permission
+                            PermissionRow(
+                                icon: "location.fill",
+                                iconColor: .blue,
+                                title: "Location",
+                                description: "Required for journey tracking",
+                                status: locationAuthorizationStatusText,
+                                statusColor: locationAuthorizationStatusColor,
+                                action: openSettings
                             )
                         }
                         .background(Color.white)
@@ -131,6 +260,63 @@ struct ProfileView: View {
             .background(AppConstants.defaultBackgroundColor)
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                checkPermissions()
+            }
+            .sheet(isPresented: $showUsernameChange) {
+                UsernameSetupView(
+                    existingUsername: username,
+                    onComplete: {
+                        // Refresh profile data
+                        Task {
+                            try? await authManager.getProfile()
+                        }
+                    }
+                )
+            }
+            .sheet(isPresented: $showPaywall) {
+                PaywallView()
+                    .environmentObject(subscriptionManager)
+            }
+        }
+    }
+    
+    // MARK: - Permission Helpers
+    
+    private func checkPermissions() {
+        // Check location permission
+        locationStatus = CLLocationManager().authorizationStatus
+    }
+    
+    private var locationAuthorizationStatusText: String {
+        switch locationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            return "Allowed"
+        case .denied, .restricted:
+            return "Denied"
+        case .notDetermined:
+            return "Not Set"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+    
+    private var locationAuthorizationStatusColor: Color {
+        switch locationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            return .green
+        case .denied, .restricted:
+            return .red
+        case .notDetermined:
+            return .orange
+        @unknown default:
+            return .gray
+        }
+    }
+    
+    private func openSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
         }
     }
 }
@@ -173,8 +359,70 @@ struct SettingToggleRow: View {
     }
 }
 
+// Custom Permission Row Component
+struct PermissionRow: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let description: String
+    let status: String
+    let statusColor: Color
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: 12) {
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill(iconColor.opacity(0.15))
+                        .frame(width: 40, height: 40)
+                    
+                    Image(systemName: icon)
+                        .font(.system(size: 18))
+                        .foregroundColor(iconColor)
+                }
+                
+                // Text Content
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 17))
+                        .fontDesign(.serif)
+                        .foregroundColor(.black)
+                    Text(description)
+                        .font(.system(size: 13))
+                        .fontDesign(.serif)
+                        .foregroundStyle(.gray)
+                }
+                
+                Spacer()
+                
+                // Status Badge
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 8, height: 8)
+                    
+                    Text(status)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(statusColor)
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.gray)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
 #Preview {
     let mockAuthManager = AuthManager()
     ProfileView()
         .environmentObject(mockAuthManager)
+        .environmentObject(SubscriptionManager())
 }

@@ -9,7 +9,10 @@ import SwiftUI
 import Supabase
 
 struct UsernameSetupView: View {
+    let existingUsername: String?
     let onComplete: () -> Void
+    
+    @Environment(\.dismiss) private var dismiss
     
     @State private var username: String = ""
     @State private var isChecking = false
@@ -20,6 +23,10 @@ struct UsernameSetupView: View {
     
     private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
     private let mediumHaptic = UIImpactFeedbackGenerator(style: .medium)
+    
+    private var isEditMode: Bool {
+        existingUsername != nil && !existingUsername!.isEmpty
+    }
     
     var normalizedUsername: String {
         username.lowercased()
@@ -79,12 +86,12 @@ struct UsernameSetupView: View {
                     
                     // Header
                     VStack(spacing: 12) {
-                        Text("Choose Your Username")
+                        Text(isEditMode ? "Change Username" : "Choose Your Username")
                             .font(.system(size: 32, weight: .bold, design: .serif))
                             .foregroundColor(.black)
                             .multilineTextAlignment(.center)
                         
-                        Text("Your username is how others will see you in the community")
+                        Text(isEditMode ? "Update how others will see you in the community" : "Your username is how others will see you in the community")
                             .font(.system(size: 16))
                             .foregroundColor(.black.opacity(0.6))
                             .multilineTextAlignment(.center)
@@ -104,7 +111,7 @@ struct UsernameSetupView: View {
                                 .autocapitalization(.none)
                                 .autocorrectionDisabled()
                                 .focused($isFocused)
-                                .onChange(of: username) { _ in
+                                .onChange(of: username) {
                                     // Auto-convert to lowercase
                                     username = username.lowercased()
                                     // Reset availability check
@@ -187,9 +194,9 @@ struct UsernameSetupView: View {
                             if isSubmitting {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                Text("Creating...")
+                                Text(isEditMode ? "Updating..." : "Creating...")
                             } else {
-                                Text("Continue")
+                                Text(isEditMode ? "Update Username" : "Continue")
                             }
                         }
                         .font(.system(size: 18, weight: .semibold))
@@ -205,17 +212,32 @@ struct UsernameSetupView: View {
                 }
             }
             .background(AppConstants.defaultBackgroundColor)
-            .navigationBarHidden(true)
+            .navigationBarHidden(!isEditMode)
+            .toolbar {
+                if isEditMode {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Cancel") {
+                            dismiss()
+                        }
+                        .foregroundColor(AppConstants.primaryColor)
+                    }
+                }
+            }
         }
         .onAppear {
             lightHaptic.prepare()
             mediumHaptic.prepare()
             
+            // Pre-fill with existing username if in edit mode
+            if let existing = existingUsername, !existing.isEmpty {
+                username = existing
+            }
+            
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 isFocused = true
             }
         }
-        .interactiveDismissDisabled() // Prevent dismissal until username is set
+        .interactiveDismissDisabled(!isEditMode) // Prevent dismissal only if creating new username
     }
     
     // MARK: - Availability Check
@@ -231,39 +253,43 @@ struct UsernameSetupView: View {
         
         // Schedule new check after 0.5 second delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            checkUsernameAvailability()
+            Task { @MainActor in
+                await checkUsernameAvailability()
+            }
         }
     }
     
-    private func checkUsernameAvailability() {
+    private func checkUsernameAvailability() async {
         guard isValid else { return }
+        
+        let normalized = normalizedUsername
+        
+        // Skip check if it's the same as existing username (in edit mode)
+        if let existing = existingUsername, normalized == existing.lowercased() {
+            isAvailable = true
+            return
+        }
         
         isChecking = true
         errorMessage = nil
         
-        Task {
-            do {
-                // Check if username exists
-                let response: [Profile] = try await supabase
-                    .from("profile")
-                    .select()
-                    .eq("username", value: normalizedUsername)
-                    .execute()
-                    .value
-                
-                await MainActor.run {
-                    isChecking = false
-                    isAvailable = response.isEmpty
-                    if !response.isEmpty {
-                        errorMessage = "Username is already taken"
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    isChecking = false
-                    errorMessage = "Could not check availability"
-                }
+        do {
+            // Check if username exists
+            let response: [Profile] = try await supabase
+                .from("profile")
+                .select()
+                .eq("username", value: normalized)
+                .execute()
+                .value
+            
+            isChecking = false
+            isAvailable = response.isEmpty
+            if !response.isEmpty {
+                errorMessage = "Username is already taken"
             }
+        } catch {
+            isChecking = false
+            errorMessage = "Could not check availability"
         }
     }
     
@@ -275,7 +301,7 @@ struct UsernameSetupView: View {
         isSubmitting = true
         mediumHaptic.impactOccurred(intensity: 0.7)
         
-        Task {
+        Task { @MainActor in
             do {
                 let userId = try await supabase.auth.session.user.id
                 
@@ -286,16 +312,18 @@ struct UsernameSetupView: View {
                     .eq("id", value: userId.uuidString)
                     .execute()
                 
-                await MainActor.run {
-                    isSubmitting = false
-                    mediumHaptic.impactOccurred(intensity: 1.0)
-                    onComplete()
+                isSubmitting = false
+                mediumHaptic.impactOccurred(intensity: 1.0)
+                
+                // Dismiss sheet if in edit mode
+                if isEditMode {
+                    dismiss()
                 }
+                
+                onComplete()
             } catch {
-                await MainActor.run {
-                    isSubmitting = false
-                    errorMessage = "Failed to save username. Please try again."
-                }
+                isSubmitting = false
+                errorMessage = "Failed to save username. Please try again."
             }
         }
     }
@@ -323,7 +351,7 @@ struct GuidelineRow: View {
 // MARK: - Preview
 
 #Preview {
-    UsernameSetupView {
+    UsernameSetupView(existingUsername: nil) {
         print("Username setup complete!")
     }
 }

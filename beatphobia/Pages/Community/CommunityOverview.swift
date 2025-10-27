@@ -102,7 +102,7 @@ struct CommunityOverview: View {
                 .background(AppConstants.defaultBackgroundColor)
             } else if hasUsername == false || showUsernameSetup {
                 // Show username setup
-                UsernameSetupView {
+                UsernameSetupView(existingUsername: nil) {
                     hasUsername = true
                     showUsernameSetup = false
                 }
@@ -558,18 +558,22 @@ struct YourPostsView: View {
                             .font(.system(size: 14))
                             .foregroundColor(.black.opacity(0.5))
                     }
+                    .frame(maxWidth: .infinity)
                     .padding(.vertical, 60)
                 } else {
                     LazyVStack(spacing: 16) {
                         ForEach(posts) { post in
                             NavigationLink(destination: PostDetailView(post: post)) {
                                 PostCard(post: post, communityService: communityService)
+                                    .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
                     }
+                    .frame(maxWidth: .infinity)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
             .padding(.top, 8)
             .padding(.bottom, 24)
@@ -1072,18 +1076,22 @@ struct TrendingTopicsView: View {
                             .font(.system(size: 14))
                             .foregroundColor(.black.opacity(0.5))
                     }
+                    .frame(maxWidth: .infinity)
                     .padding(.vertical, 60)
                 } else {
                     LazyVStack(spacing: 16) {
                         ForEach(posts) { post in
                             NavigationLink(destination: PostDetailView(post: post)) {
                                 PostCard(post: post, communityService: communityService)
+                                    .frame(maxWidth: .infinity)
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
                     }
+                    .frame(maxWidth: .infinity)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
             .padding(.top, 8)
             .padding(.bottom, 24)
@@ -2035,13 +2043,14 @@ struct PostDetailView: View {
                         .font(.system(size: 14, weight: .medium))
                 }
                 
-                HStack(spacing: 6) {
-                    Image(systemName: "eye.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                    Text("\(post.viewsCount)")
-                        .font(.system(size: 14, weight: .medium))
-                }
+                // View count hidden
+                // HStack(spacing: 6) {
+                //     Image(systemName: "eye.fill")
+                //         .font(.system(size: 14))
+                //         .foregroundColor(.gray)
+                //     Text("\(post.viewsCount)")
+                //         .font(.system(size: 14, weight: .medium))
+                // }
             }
             .foregroundColor(.black.opacity(0.7))
             .padding(.top, 8)
@@ -2076,6 +2085,7 @@ struct PostDetailView: View {
             HStack(alignment: .bottom, spacing: 12) {
                 TextField(replyingTo == nil ? "Add a comment..." : "Write your reply...", text: $commentText, axis: .vertical)
                     .font(.system(size: 15))
+                    .foregroundColor(.black)
                     .padding(12)
                     .background(AppConstants.defaultBackgroundColor)
                     .cornerRadius(20)

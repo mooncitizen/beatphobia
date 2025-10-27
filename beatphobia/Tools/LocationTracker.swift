@@ -96,6 +96,10 @@ struct LocationTrackerView: View {
                             ToolbarItem(placement: .navigationBarTrailing) {
                                 Button("Done") {
                                     showJourneyResults = false
+                                    // Restore tab bar visibility
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        isTabBarVisible = true
+                                    }
                                     dismiss()
                                 }
                             }
@@ -116,11 +120,16 @@ struct LocationTrackerView: View {
             locationManager.updateDistanceDisplay()
         }
         .onDisappear {
-            // Show tab bar when view disappears
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isTabBarVisible = true
+            // Only stop tracking if not actively tracking
+            // This ensures tracking continues even when phone sleeps
+            if !locationManager.isTracking {
+                // Show tab bar when view disappears
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isTabBarVisible = true
+                }
             }
         }
+        .interactiveDismissDisabled(locationManager.isTracking) // Prevent swipe-to-dismiss while tracking
     }
     
     // MARK: - Info View
@@ -259,24 +268,26 @@ struct LocationTrackerView: View {
             
             Spacer()
             
-            // View toggle button
-            Button(action: {
-                if locationManager.hapticsEnabled {
-                    locationManager.lightHaptic.impactOccurred(intensity: 0.5)
-                }
-                withAnimation(.spring(response: 0.3)) {
-                    showMap.toggle()
-                }
-            }) {
-                ZStack {
-                    Circle()
-                        .fill(Color.white)
-                        .frame(width: 44, height: 44)
-                        .shadow(color: Color.black.opacity(0.2), radius: 10, y: 3)
-                    
-                    Image(systemName: showMap ? "chart.bar.fill" : "map.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(AppConstants.primaryColor)
+            // View toggle button - only show when tracking
+            if locationManager.isTracking {
+                Button(action: {
+                    if locationManager.hapticsEnabled {
+                        locationManager.lightHaptic.impactOccurred(intensity: 0.5)
+                    }
+                    withAnimation(.spring(response: 0.3)) {
+                        showMap.toggle()
+                    }
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 44, height: 44)
+                            .shadow(color: Color.black.opacity(0.2), radius: 10, y: 3)
+                        
+                        Image(systemName: showMap ? "chart.bar.fill" : "map.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppConstants.primaryColor)
+                    }
                 }
             }
         }

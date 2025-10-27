@@ -468,7 +468,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = beatphobia/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Menty Health";
+				INFOPLIST_KEY_CFBundleDisplayName = StillStep;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera for the Focus Training tool, which helps you practice grounding techniques by focusing on objects around you.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "";
@@ -489,7 +489,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -504,7 +504,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = beatphobia/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Menty Health";
+				INFOPLIST_KEY_CFBundleDisplayName = StillStep;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera for the Focus Training tool, which helps you practice grounding techniques by focusing on objects around you.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "";
@@ -525,7 +525,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};

@@ -48,10 +48,26 @@ struct JourneyAgorahobiaView: View {
     @EnvironmentObject var authManager: AuthManager
     @AppStorage("anxietyLevel") private var anxietyLevel: Double = 5
     @Binding var isTabBarVisible: Bool
+    @State private var showLocationTracker = false
+    @State private var showEmergencyTools = false
+    @State private var journeyCount: Int = 0
     
     private var firstName: String {
         let name: String? = authManager.currentUserProfile?.name
         return name?.split(separator: " ").first.map(String.init) ?? "there"
+    }
+    
+    private var dailyQuote: String {
+        let quotes = [
+            "One breath at a time, one step at a time.",
+            "You are stronger than your anxiety.",
+            "Progress, not perfection.",
+            "Every journey begins with courage.",
+            "You've survived 100% of your bad days.",
+            "Healing isn't linear, and that's okay."
+        ]
+        let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 1
+        return quotes[dayOfYear % quotes.count]
     }
 
     
@@ -161,23 +177,90 @@ struct JourneyAgorahobiaView: View {
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    // Header Section
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Hi \(firstName)")
-                            .font(.system(size: 34, weight: .bold, design: .serif))
-                            .foregroundColor(.black)
+            ZStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        // Header Section with Quote
+                        VStack(alignment: .leading, spacing: 16) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Hi \(firstName)")
+                                    .font(.system(size: 38, weight: .bold, design: .serif))
+                                    .foregroundColor(.black)
+                                
+                                Text("Tools to help you manage anxiety and panic")
+                                    .font(.system(size: 15, weight: .regular))
+                                    .foregroundColor(.black.opacity(0.6))
+                            }
+                            
+                            // Daily Quote Card
+                            HStack(spacing: 12) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [.purple, .pink],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                
+                                Text(dailyQuote)
+                                    .font(.system(size: 14, weight: .medium, design: .serif))
+                                    .foregroundColor(.black.opacity(0.8))
+                                    .italic()
+                            }
+                            .padding(16)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                LinearGradient(
+                                    colors: [
+                                        Color.purple.opacity(0.08),
+                                        Color.pink.opacity(0.08)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [.purple.opacity(0.2), .pink.opacity(0.2)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            )
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 8)
                         
-                        Text("Tools to help you manage anxiety and panic")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundColor(.black.opacity(0.6))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.top, 8)
+                        // Quick Stats
+                        if journeyCount > 0 {
+                            HStack(spacing: 12) {
+                                QuickStatCard(
+                                    icon: "map.fill",
+                                    value: "\(journeyCount)",
+                                    label: journeyCount == 1 ? "Journey" : "Journeys",
+                                    color: AppConstants.primaryColor
+                                )
+                                
+                                QuickStatCard(
+                                    icon: "heart.fill",
+                                    value: "\(Int(10 - anxietyLevel))/10",
+                                    label: "Wellness",
+                                    color: anxietyColorForLevel(anxietyLevel)
+                                )
+                            }
+                            .padding(.horizontal, 20)
+                        }
                     
                     // Journey Tracker CTA
-                    NavigationLink(destination: LocationTrackerView(isTabBarVisible: $isTabBarVisible)) {
+                    Button(action: {
+                        showLocationTracker = true
+                    }) {
                         ZStack(alignment: .leading) {
                             // Background gradient
                             LinearGradient(
@@ -314,66 +397,147 @@ struct JourneyAgorahobiaView: View {
                     .buttonStyle(PlainButtonStyle())
                     .padding(.horizontal, 20)
                     
-                    // Current State Card
-                    Card(backgroundColor: .white, cornerRadius: 16) {
-                        VStack(alignment: .leading, spacing: 16) {
+                    // Current State Card - Enhanced Glass Morphism
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "心.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(anxietyColorForLevel(anxietyLevel))
+                            
+                            Text("How are you feeling right now?")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.black)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 12) {
                             HStack {
-                                Image(systemName: "心.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(anxietyColorForLevel(anxietyLevel))
+                                Text("Calm")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.black.opacity(0.5))
                                 
-                                Text("How are you feeling right now?")
-                                    .font(.system(size: 17, weight: .semibold))
-                                    .foregroundColor(.black)
+                                Spacer()
+                                
+                                Text("Panicked")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.black.opacity(0.5))
                             }
                             
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Calm")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.black.opacity(0.5))
-                                    
-                                    Spacer()
-                                    
-                                    Text("Panicked")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.black.opacity(0.5))
-                                }
+                            ZStack(alignment: .leading) {
+                                // Track background gradient
+                                Capsule()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.green.opacity(0.15),
+                                                Color.yellow.opacity(0.15),
+                                                Color.orange.opacity(0.15),
+                                                Color.red.opacity(0.15)
+                                            ],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(height: 8)
                                 
                                 Slider(value: $anxietyLevel, in: 1...10, step: 1)
                                     .tint(anxietyColorForLevel(anxietyLevel))
-                                
-                                HStack(spacing: 8) {
-                                    Circle()
-                                        .fill(anxietyColorForLevel(anxietyLevel))
-                                        .frame(width: 12, height: 12)
-                                    
-                                    Text("Level: \(Int(anxietyLevel))/10")
-                                        .font(.system(size: 16, weight: .bold))
-                                        .foregroundColor(.black)
-                                }
                             }
                             
-                            Text(anxietyMessageForLevel(anxietyLevel))
-                                .font(.system(size: 14))
-                                .foregroundColor(.black.opacity(0.7))
-                                .padding(.top, 4)
+                            HStack(spacing: 12) {
+                                ZStack {
+                                    Circle()
+                                        .fill(anxietyColorForLevel(anxietyLevel).opacity(0.2))
+                                        .frame(width: 32, height: 32)
+                                    
+                                    Circle()
+                                        .fill(anxietyColorForLevel(anxietyLevel))
+                                        .frame(width: 16, height: 16)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Level \(Int(anxietyLevel))/10")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundColor(.black)
+                                    
+                                    Text(anxietyLabelForLevel(anxietyLevel))
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundColor(anxietyColorForLevel(anxietyLevel))
+                                }
+                                
+                                Spacer()
+                            }
                         }
+                        
+                        // Message card
+                        HStack(spacing: 10) {
+                            Image(systemName: "lightbulb.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(anxietyColorForLevel(anxietyLevel))
+                            
+                            Text(anxietyMessageForLevel(anxietyLevel))
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundColor(.black.opacity(0.75))
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(anxietyColorForLevel(anxietyLevel).opacity(0.08))
+                        .cornerRadius(12)
                     }
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(.white)
+                            .shadow(color: Color.black.opacity(0.06), radius: 16, y: 4)
+                    )
                     .padding(.horizontal, 20)
                     
                     // Recommended Tools
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Recommended for You")
-                            .font(.system(size: 22, weight: .bold, design: .serif))
-                            .foregroundColor(.black)
-                            .padding(.horizontal, 20)
+                        HStack(spacing: 8) {
+                            Text("Recommended for You")
+                                .font(.system(size: 22, weight: .bold, design: .serif))
+                                .foregroundColor(.black)
+                            
+                            // Smart recommendation indicator
+                            HStack(spacing: 4) {
+                                Image(systemName: "brain.head.profile")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.purple)
+                                
+                                Text("Smart")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(.purple)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.purple.opacity(0.15))
+                            .cornerRadius(8)
+                        }
+                        .padding(.horizontal, 20)
+                        
+                        // Recommendation context
+                        if anxietyLevel >= 7 {
+                            Text("Quick, easy tools for high anxiety")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.black.opacity(0.6))
+                                .padding(.horizontal, 20)
+                        } else if anxietyLevel >= 4 {
+                            Text("Balanced techniques for moderate anxiety")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.black.opacity(0.6))
+                                .padding(.horizontal, 20)
+                        } else {
+                            Text("Deep relaxation for calm moments")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.black.opacity(0.6))
+                                .padding(.horizontal, 20)
+                        }
                         
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 ForEach(recommendedTools) { tool in
                                     NavigationLink(destination: destinationForTool(tool)) {
-                                        ToolCard(tool: tool, isCompact: true)
+                                        ToolCard(tool: tool, isCompact: true, isRecommended: true)
                                     }
                                     .buttonStyle(PlainButtonStyle())
                                 }
@@ -411,7 +575,7 @@ struct JourneyAgorahobiaView: View {
                                         HStack(spacing: 12) {
                                             ForEach(categoryTools) { tool in
                                                 NavigationLink(destination: destinationForTool(tool)) {
-                                                    ToolCard(tool: tool, isCompact: false)
+                                                    ToolCard(tool: tool, isCompact: false, isRecommended: false)
                                                 }
                                                 .buttonStyle(PlainButtonStyle())
                                             }
@@ -423,14 +587,60 @@ struct JourneyAgorahobiaView: View {
                         }
                     }
                 }
-                .padding(.bottom, 24)
+                .padding(.bottom, 100) // Extra padding for floating button
             }
             .background(AppConstants.defaultBackgroundColor)
             .navigationBarHidden(true)
             .onAppear {
                 // Ensure tab bar is visible when returning to this view
+                loadJourneyCount()
             }
             .toolbar(.visible, for: .tabBar)
+            .fullScreenCover(isPresented: $showLocationTracker) {
+                LocationTrackerView(isTabBarVisible: $isTabBarVisible)
+            }
+            
+            // Floating Emergency Tools Button
+            if anxietyLevel >= 8 {
+                VStack {
+                    Spacer()
+                    
+                    Button(action: {
+                        showEmergencyTools = true
+                    }) {
+                        HStack(spacing: 10) {
+                            Image(systemName: "bolt.heart.fill")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.white)
+                            
+                            Text("Need Help Now")
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 16)
+                        .background(
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.red, Color.red.opacity(0.9)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .shadow(color: Color.red.opacity(0.4), radius: 20, y: 8)
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.bottom, 100) // Above tab bar
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(response: 0.4, dampingFraction: 0.7), value: anxietyLevel)
+            }
+            }
+            .sheet(isPresented: $showEmergencyTools) {
+                EmergencyToolsSheet(anxietyLevel: anxietyLevel)
+            }
         }
     }
     
@@ -442,6 +652,11 @@ struct JourneyAgorahobiaView: View {
             AnyView(PlaceholderToolView(tool: tool))
         }
     }
+    
+    private func loadJourneyCount() {
+        guard let realm = try? Realm() else { return }
+        journeyCount = realm.objects(JourneyRealm.self).count
+    }
 }
 
 // MARK: - Supporting Views
@@ -449,63 +664,113 @@ struct JourneyAgorahobiaView: View {
 struct ToolCard: View {
     let tool: CalmingTool
     let isCompact: Bool
+    let isRecommended: Bool
     
     var body: some View {
-        Card(backgroundColor: .white, cornerRadius: 16, padding: 16) {
-            VStack(alignment: .leading, spacing: 12) {
-                // Icon and Category
-                HStack {
-                    ZStack {
-                        Circle()
-                            .fill(tool.category.color.opacity(0.15))
-                            .frame(width: 48, height: 48)
-                        
-                        Image(systemName: tool.icon)
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(tool.category.color)
-                    }
+        VStack(alignment: .leading, spacing: 0) {
+            // Recommended ribbon
+            if isRecommended {
+                HStack(spacing: 4) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.yellow)
                     
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text(tool.duration)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.black.opacity(0.6))
-                        
-                        DifficultyBadge(difficulty: tool.difficulty)
-                    }
+                    Text("RECOMMENDED")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
                 }
-                
-                // Title
-                Text(tool.name)
-                    .font(.system(size: 17, weight: .bold, design: .serif))
-                    .foregroundColor(.black)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // Description
-                Text(tool.description)
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundColor(.black.opacity(0.7))
-                    .lineLimit(3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // Start button
-                HStack {
-                    Spacer()
-                    
-                    HStack(spacing: 4) {
-                        Text("Start")
-                            .font(.system(size: 14, weight: .semibold))
-                        
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 12, weight: .bold))
-                    }
-                    .foregroundColor(tool.category.color)
-                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    LinearGradient(
+                        colors: [.purple, .purple.opacity(0.8)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .cornerRadius(6, corners: [.topLeft, .topRight])
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(width: isCompact ? 260 : 300)
+            
+            Card(backgroundColor: .white, cornerRadius: isRecommended ? 0 : 16, padding: 16) {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Icon and Category
+                    HStack {
+                        ZStack {
+                            Circle()
+                                .fill(tool.category.color.opacity(0.15))
+                                .frame(width: 50, height: 50)
+                            
+                            Image(systemName: tool.icon)
+                                .font(.system(size: 23, weight: .semibold))
+                                .foregroundColor(tool.category.color)
+                        }
+                        
+                        Spacer()
+                        
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text(tool.duration)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.black.opacity(0.6))
+                            
+                            DifficultyBadge(difficulty: tool.difficulty)
+                        }
+                    }
+                    
+                    // Title
+                    Text(tool.name)
+                        .font(.system(size: 17, weight: .bold, design: .serif))
+                        .foregroundColor(.black)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    // Description
+                    Text(tool.description)
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundColor(.black.opacity(0.7))
+                        .lineLimit(3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    // Start button
+                    HStack {
+                        Spacer()
+                        
+                        HStack(spacing: 4) {
+                            Text("Start")
+                                .font(.system(size: 14, weight: .semibold))
+                            
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                        .foregroundColor(tool.category.color)
+                    }
+                }
+                .frame(width: isCompact ? 260 : 300)
+            }
         }
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(isRecommended ? 0.08 : 0.05), radius: isRecommended ? 12 : 8, y: 4)
+    }
+}
+
+// Helper extension for custom corner radius
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+    
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: corners,
+            cornerRadii: CGSize(width: radius, height: radius)
+        )
+        return Path(path.cgPath)
     }
 }
 
@@ -550,6 +815,23 @@ func anxietyMessageForLevel(_ level: Double) -> String {
         return "You're in a high anxiety state. Try quick, easy tools like box breathing or the focus exercise."
     default:
         return ""
+    }
+}
+
+func anxietyLabelForLevel(_ level: Double) -> String {
+    switch Int(level) {
+    case 1...2:
+        return "Very Calm"
+    case 3...4:
+        return "Calm"
+    case 5...6:
+        return "Moderate"
+    case 7...8:
+        return "Elevated"
+    case 9...10:
+        return "High"
+    default:
+        return "Unknown"
     }
 }
 
@@ -636,6 +918,226 @@ struct PMRView: View {
             difficulty: "",
             destinationView: nil
         ))
+    }
+}
+
+// MARK: - Quick Stat Card
+
+struct QuickStatCard: View {
+    let icon: String
+    let value: String
+    let label: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(color)
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.black)
+                
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.black.opacity(0.6))
+            }
+            
+            Spacer()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.white)
+                .shadow(color: Color.black.opacity(0.05), radius: 8, y: 2)
+        )
+    }
+}
+
+// MARK: - Emergency Tools Sheet
+
+struct EmergencyToolsSheet: View {
+    @Environment(\.dismiss) var dismiss
+    let anxietyLevel: Double
+    
+    let emergencyTools = [
+        CalmingTool(
+            name: "Box Breathing",
+            category: .breathing,
+            icon: "square.fill",
+            description: "4-4-4-4 breathing pattern to calm your nervous system",
+            duration: "2-3 min",
+            difficulty: "Easy",
+            destinationView: { AnyView(BoxBreathingView()) }
+        ),
+        CalmingTool(
+            name: "5-4-3-2-1 Grounding",
+            category: .grounding,
+            icon: "hand.raised.fill",
+            description: "Connect with your senses to anchor yourself in the present",
+            duration: "3-5 min",
+            difficulty: "Easy",
+            destinationView: { AnyView(GroundingView()) }
+        ),
+        CalmingTool(
+            name: "Object Hunt",
+            category: .focus,
+            icon: "viewfinder",
+            description: "Find objects around you using AI detection - a grounding game",
+            duration: "5-10 min",
+            difficulty: "Easy",
+            destinationView: { AnyView(FocusView()) }
+        )
+    ]
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header Message
+                    VStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.red.opacity(0.2), Color.red.opacity(0.1)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 80, height: 80)
+                            
+                            Image(systemName: "bolt.heart.fill")
+                                .font(.system(size: 36, weight: .bold))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.red, .red.opacity(0.8)],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                        }
+                        .padding(.top, 20)
+                        
+                        Text("Quick Relief Tools")
+                            .font(.system(size: 28, weight: .bold, design: .serif))
+                            .foregroundColor(.black)
+                        
+                        Text("These tools can help you right now")
+                            .font(.system(size: 15))
+                            .foregroundColor(.black.opacity(0.6))
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    // Emergency contact info
+                    VStack(spacing: 12) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "phone.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.blue)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Need immediate help?")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.black)
+                                
+                                Text("Call emergency services or a crisis hotline")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.black.opacity(0.7))
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(16)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    // Quick Tools
+                    VStack(spacing: 16) {
+                        ForEach(emergencyTools) { tool in
+                            NavigationLink(destination: tool.destinationView?() ?? AnyView(EmptyView())) {
+                                EmergencyToolCard(tool: tool)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+                .padding(.bottom, 40)
+            }
+            .background(AppConstants.defaultBackgroundColor)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        dismiss()
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.black.opacity(0.3))
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct EmergencyToolCard: View {
+    let tool: CalmingTool
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(tool.category.color.opacity(0.15))
+                    .frame(width: 56, height: 56)
+                
+                Image(systemName: tool.icon)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(tool.category.color)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(tool.name)
+                    .font(.system(size: 17, weight: .bold, design: .serif))
+                    .foregroundColor(.black)
+                
+                Text(tool.description)
+                    .font(.system(size: 13))
+                    .foregroundColor(.black.opacity(0.7))
+                    .lineLimit(2)
+                
+                HStack(spacing: 8) {
+                    Text(tool.duration)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.black.opacity(0.5))
+                    
+                    DifficultyBadge(difficulty: tool.difficulty)
+                }
+            }
+            
+            Spacer()
+            
+            Image(systemName: "arrow.right.circle.fill")
+                .font(.system(size: 28))
+                .foregroundColor(tool.category.color)
+        }
+        .padding(16)
+        .background(.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.06), radius: 8, y: 2)
     }
 }
 

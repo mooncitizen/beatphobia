@@ -32,7 +32,7 @@ struct CommunityTopic: Codable, Identifiable {
     }
     
     var swiftUIColor: Color {
-        Color(hex: color) ?? .blue
+        Color(hex: color)
     }
 }
 

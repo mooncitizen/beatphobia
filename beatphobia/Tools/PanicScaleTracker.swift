@@ -8,6 +8,7 @@
 import SwiftUI
 import RealmSwift
 import Auth
+import Charts
 
 // MARK: - Realm Models
 class PanicEpisode: Object, Identifiable {
@@ -72,10 +73,12 @@ enum PanicSymptomCategory: String, CaseIterable {
 struct PanicScaleView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
     @ObservedResults(PanicEpisode.self) var allEpisodes
     
     @State private var showTracker = false
     @State private var selectedEpisode: PanicEpisode?
+    @State private var showPaywall = false
     
     var userEpisodes: [PanicEpisode] {
         let userId = authManager.currentUser?.id.uuidString ?? ""
@@ -151,9 +154,18 @@ struct PanicScaleView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
                 
-                // Scrollable episode history
+                // Scrollable episode history and graphs
                 ScrollView {
                     VStack(spacing: 24) {
+                        // Graphs section (if 2+ episodes and Pro)
+                        if userEpisodes.count >= 2 {
+                            if subscriptionManager.isPro {
+                                graphsSection
+                            } else {
+                                lockedGraphsSection
+                            }
+                        }
+                        
                         // Episode history
                         if !userEpisodes.isEmpty {
                             episodeHistorySection
@@ -174,6 +186,10 @@ struct PanicScaleView: View {
         }
         .sheet(item: $selectedEpisode) { episode in
             EpisodeDetailView(episode: episode)
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+                .environmentObject(subscriptionManager)
         }
     }
     
@@ -225,6 +241,65 @@ struct PanicScaleView: View {
                 }
                 .padding(.horizontal, 20)
             }
+        }
+    }
+    
+    // MARK: - Graphs Section
+    private var graphsSection: some View {
+        VStack(spacing: 12) {
+            Text("Trends & Insights")
+                .font(.system(size: 18, weight: .bold))
+                .fontDesign(.serif)
+                .foregroundColor(.black)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+            
+            VStack(spacing: 12) {
+                // Intensity over time chart
+                IntensityOverTimeChart(episodes: Array(userEpisodes.prefix(20)))
+                    .padding(.horizontal, 20)
+                
+                // Symptom breakdown chart
+                SymptomBreakdownChart(episodes: userEpisodes)
+                    .padding(.horizontal, 20)
+                
+                // Episode frequency by day of week
+                EpisodeFrequencyChart(episodes: userEpisodes)
+                    .padding(.horizontal, 20)
+                
+                // Trigger analysis (if triggers exist)
+                if userEpisodes.contains(where: { !$0.trigger.isEmpty }) {
+                    TriggerAnalysisChart(episodes: userEpisodes)
+                        .padding(.horizontal, 20)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Locked Graphs Section
+    private var lockedGraphsSection: some View {
+        VStack(spacing: 12) {
+            Text("Trends & Insights")
+                .font(.system(size: 18, weight: .bold))
+                .fontDesign(.serif)
+                .foregroundColor(.black)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+            
+            Button(action: { showPaywall = true }) {
+                Text("View Analytics")
+                    .font(.system(size: 16, weight: .semibold, design: .serif))
+                    .foregroundColor(AppConstants.primaryColor)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.white)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(AppConstants.primaryColor.opacity(0.3), lineWidth: 1.5)
+                    )
+            }
+            .padding(.horizontal, 20)
         }
     }
     
@@ -1530,8 +1605,331 @@ struct DetailRow: View {
     }
 }
 
+// MARK: - Chart: Intensity Over Time
+struct IntensityOverTimeChart: View {
+    let episodes: [PanicEpisode]
+    
+    var sortedEpisodes: [PanicEpisode] {
+        episodes.sorted(by: { $0.timestamp < $1.timestamp })
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 16))
+                    .foregroundColor(.purple)
+                
+                Text("Intensity Trends")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.black)
+                
+                Spacer()
+            }
+            
+            Chart {
+                ForEach(sortedEpisodes, id: \.id) { episode in
+                    LineMark(
+                        x: .value("Date", episode.timestamp),
+                        y: .value("Peak", episode.peakIntensity)
+                    )
+                    .foregroundStyle(Color.purple)
+                    .interpolationMethod(.catmullRom)
+                    
+                    AreaMark(
+                        x: .value("Date", episode.timestamp),
+                        y: .value("Peak", episode.peakIntensity)
+                    )
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color.purple.opacity(0.3), Color.purple.opacity(0.05)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .interpolationMethod(.catmullRom)
+                    
+                    PointMark(
+                        x: .value("Date", episode.timestamp),
+                        y: .value("Peak", episode.peakIntensity)
+                    )
+                    .foregroundStyle(Color.purple)
+                    .symbolSize(30)
+                }
+            }
+            .chartYScale(domain: 0...10)
+            .chartYAxis {
+                AxisMarks(position: .leading, values: [0, 5, 10])
+            }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .day, count: sortedEpisodes.count > 10 ? 7 : 1)) { _ in
+                    AxisValueLabel(format: .dateTime.month().day())
+                }
+            }
+            .frame(height: 200)
+            
+            Text("Peak intensity levels over time")
+                .font(.system(size: 12))
+                .foregroundColor(.black.opacity(0.5))
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+    }
+}
+
+// MARK: - Chart: Symptom Breakdown
+struct SymptomBreakdownChart: View {
+    let episodes: [PanicEpisode]
+    
+    struct SymptomData: Identifiable {
+        let id = UUID()
+        let name: String
+        let average: Double
+        let category: String
+    }
+    
+    var symptomAverages: [SymptomData] {
+        guard !episodes.isEmpty else { return [] }
+        let count = Double(episodes.count)
+        
+        return [
+            // Physical symptoms
+            SymptomData(
+                name: "Heart Rate",
+                average: Double(episodes.reduce(0) { $0 + $1.heartRate }) / count,
+                category: "Physical"
+            ),
+            SymptomData(
+                name: "Breathing",
+                average: Double(episodes.reduce(0) { $0 + $1.breathingDifficulty }) / count,
+                category: "Physical"
+            ),
+            SymptomData(
+                name: "Chest Pain",
+                average: Double(episodes.reduce(0) { $0 + $1.chestTightness }) / count,
+                category: "Physical"
+            ),
+            SymptomData(
+                name: "Trembling",
+                average: Double(episodes.reduce(0) { $0 + $1.trembling }) / count,
+                category: "Physical"
+            ),
+            // Mental symptoms
+            SymptomData(
+                name: "Fear of Dying",
+                average: Double(episodes.reduce(0) { $0 + $1.fearOfDying }) / count,
+                category: "Mental"
+            ),
+            SymptomData(
+                name: "Loss of Control",
+                average: Double(episodes.reduce(0) { $0 + $1.fearOfLosingControl }) / count,
+                category: "Mental"
+            ),
+            SymptomData(
+                name: "Derealization",
+                average: Double(episodes.reduce(0) { $0 + $1.derealization }) / count,
+                category: "Mental"
+            ),
+            SymptomData(
+                name: "Racing Thoughts",
+                average: Double(episodes.reduce(0) { $0 + $1.racingThoughts }) / count,
+                category: "Mental"
+            )
+        ]
+        .filter { $0.average > 0 }
+        .sorted { $0.average > $1.average }
+        .prefix(6)
+        .map { $0 }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "heart.text.square.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.purple)
+                
+                Text("Most Common Symptoms")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.black)
+                
+                Spacer()
+            }
+            
+            Chart(symptomAverages) { symptom in
+                BarMark(
+                    x: .value("Average", symptom.average),
+                    y: .value("Symptom", symptom.name)
+                )
+                .foregroundStyle(symptom.category == "Physical" ? Color.red : Color.orange)
+                .cornerRadius(4)
+            }
+            .chartXScale(domain: 0...10)
+            .chartXAxis {
+                AxisMarks(position: .bottom, values: [0, 5, 10])
+            }
+            .frame(height: CGFloat(symptomAverages.count * 40 + 20))
+            
+            HStack(spacing: 16) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                    Text("Physical")
+                        .font(.system(size: 11))
+                        .foregroundColor(.black.opacity(0.6))
+                }
+                
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.orange)
+                        .frame(width: 8, height: 8)
+                    Text("Mental")
+                        .font(.system(size: 11))
+                        .foregroundColor(.black.opacity(0.6))
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+    }
+}
+
+// MARK: - Chart: Episode Frequency
+struct EpisodeFrequencyChart: View {
+    let episodes: [PanicEpisode]
+    
+    struct DayData: Identifiable {
+        let id = UUID()
+        let dayName: String
+        let count: Int
+        let dayOrder: Int
+    }
+    
+    var frequencyByDay: [DayData] {
+        let calendar = Calendar.current
+        let dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        
+        var dayCounts: [Int: Int] = [:]
+        for episode in episodes {
+            let weekday = calendar.component(.weekday, from: episode.timestamp) - 1 // 0-6
+            dayCounts[weekday, default: 0] += 1
+        }
+        
+        return (0..<7).map { day in
+            DayData(
+                dayName: dayNames[day],
+                count: dayCounts[day] ?? 0,
+                dayOrder: day
+            )
+        }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "calendar")
+                    .font(.system(size: 16))
+                    .foregroundColor(.purple)
+                
+                Text("Episodes by Day of Week")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.black)
+                
+                Spacer()
+            }
+            
+            Chart(frequencyByDay) { day in
+                BarMark(
+                    x: .value("Day", day.dayName),
+                    y: .value("Count", day.count)
+                )
+                .foregroundStyle(Color.blue)
+                .cornerRadius(4)
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading)
+            }
+            .frame(height: 150)
+            
+            Text("When episodes typically occur")
+                .font(.system(size: 12))
+                .foregroundColor(.black.opacity(0.5))
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+    }
+}
+
+// MARK: - Chart: Trigger Analysis
+struct TriggerAnalysisChart: View {
+    let episodes: [PanicEpisode]
+    
+    struct TriggerData: Identifiable {
+        let id = UUID()
+        let trigger: String
+        let count: Int
+    }
+    
+    var triggerCounts: [TriggerData] {
+        let triggers = episodes.compactMap { $0.trigger.isEmpty ? nil : $0.trigger }
+        let counts = triggers.reduce(into: [:]) { counts, trigger in
+            counts[trigger, default: 0] += 1
+        }
+        
+        return counts.map { TriggerData(trigger: $0.key, count: $0.value) }
+            .sorted { $0.count > $1.count }
+            .prefix(5)
+            .map { $0 }
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.purple)
+                
+                Text("Most Common Triggers")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.black)
+                
+                Spacer()
+            }
+            
+            Chart(triggerCounts) { trigger in
+                BarMark(
+                    x: .value("Count", trigger.count),
+                    y: .value("Trigger", trigger.trigger)
+                )
+                .foregroundStyle(Color.purple)
+                .cornerRadius(4)
+            }
+            .chartXAxis {
+                AxisMarks(position: .bottom)
+            }
+            .frame(height: CGFloat(triggerCounts.count * 40 + 20))
+            
+            Text("Identify patterns to prepare")
+                .font(.system(size: 12))
+                .foregroundColor(.black.opacity(0.5))
+        }
+        .padding(16)
+        .background(Color.white)
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+    }
+}
+
 #Preview {
     PanicScaleView()
         .environmentObject(AuthManager())
+        .environmentObject(SubscriptionManager())
 }
 

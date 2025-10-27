@@ -62,11 +62,20 @@ final class JournalEntryModel: Object, ObjectKeyIdentifiable {
     @Persisted var mood: Mood = .none
     @Persisted var text: String = ""
     @Persisted var date: Date = Date()
+    
+    // Sync metadata
+    @Persisted var isSynced: Bool = false // Has been synced to cloud
+    @Persisted var needsSync: Bool = false // Needs to be synced (create/update)
+    @Persisted var isDeleted: Bool = false // Soft delete flag
+    @Persisted var lastSyncedAt: Date? = nil // Last successful sync timestamp
+    @Persisted var updatedAt: Date = Date() // Last local update
 }
 
 func fetchSortedJournalEntries() -> Results<JournalEntryModel> {
     let realm = try! Realm()
-    let sortedEntries = realm.objects(JournalEntryModel.self).sorted(byKeyPath: "date", ascending: false)
+    let sortedEntries = realm.objects(JournalEntryModel.self)
+        .filter("isDeleted == false")
+        .sorted(byKeyPath: "date", ascending: false)
     return sortedEntries
 }
 
