@@ -12,45 +12,68 @@ import SwiftUI
 struct LocationLiveActivityLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: LocationTrackingAttributes.self) { context in
-            // Lock screen/banner UI goes here
-            HStack(spacing: 16) {
-                Image(systemName: "location.fill")
-                    .font(.system(size: 24))
-                    .foregroundColor(.blue)
+            // Lock screen/banner UI goes here - Full width stats layout
+            VStack(spacing: 10) {
+                // Header
+                HStack(spacing: 4) {
+                    Image(systemName: "location.fill")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    Text("Still Step - Tracking Journey")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
                 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Tracking Journey")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                    
-                    HStack(spacing: 12) {
+                // Stats Row - Spread across full width
+                HStack(spacing: 0) {
+                    // Duration
+                    VStack(spacing: 4) {
+                        Text(context.state.duration)
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
                         HStack(spacing: 4) {
                             Image(systemName: "clock.fill")
                                 .font(.caption2)
-                            Text(context.state.duration)
+                            Text("duration")
                                 .font(.caption2)
-                                .fontWeight(.medium)
                         }
+                        .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    
+                    Divider()
+                        .frame(height: 30)
+                    
+                    // Distance
+                    VStack(spacing: 4) {
+                        Text(context.state.distance)
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.green)
                         HStack(spacing: 4) {
                             Image(systemName: "figure.walk")
                                 .font(.caption2)
-                            Text(context.state.distance)
+                            Text("distance")
                                 .font(.caption2)
-                                .fontWeight(.medium)
                         }
-                        HStack(spacing: 4) {
-                            Image(systemName: "gauge.high")
-                                .font(.caption2)
-                            Text(context.state.pace)
-                                .font(.caption2)
-                                .fontWeight(.medium)
-                        }
+                        .foregroundColor(.secondary)
                     }
-                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    
+                    Divider()
+                        .frame(height: 30)
                 }
+                
+                // Location name
+                Text(context.state.locationName)
+                    .font(.caption)
+                    .foregroundColor(.secondary.opacity(0.9))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
             }
             .padding()
-            .activityBackgroundTint(Color.blue.opacity(0.1))
+            .activityBackgroundTint(Color.black.opacity(0.05))
 
         } dynamicIsland: { context in
             DynamicIsland {
@@ -62,6 +85,7 @@ struct LocationLiveActivityLiveActivity: Widget {
                         Text(context.state.duration)
                             .font(.title3)
                             .fontWeight(.semibold)
+                            .foregroundColor(.primary)
                     }
                 }
                 
@@ -73,24 +97,29 @@ struct LocationLiveActivityLiveActivity: Widget {
                         Text(context.state.distance)
                             .font(.title3)
                             .fontWeight(.semibold)
+                            .foregroundColor(.green)
                     }
                 }
                 
                 DynamicIslandExpandedRegion(.bottom) {
-                    HStack(spacing: 20) {
+                    VStack(spacing: 6) {
+                        // Location name
+                        Text(context.state.locationName)
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                        
+                        // Pace display
                         HStack(spacing: 6) {
                             Image(systemName: "gauge.high")
-                                .font(.caption2)
+                                .font(.caption)
                             Text(context.state.pace)
-                                .font(.subheadline)
+                                .font(.caption)
+                                .fontWeight(.medium)
                         }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "location.fill")
-                            .foregroundColor(.blue)
+                        .foregroundColor(.secondary)
                     }
-                    .foregroundColor(.secondary)
                 }
             } compactLeading: {
                 Image(systemName: "location.fill")
@@ -103,7 +132,7 @@ struct LocationLiveActivityLiveActivity: Widget {
                 Image(systemName: "location.fill")
                     .foregroundColor(.blue)
             }
-            .widgetURL(URL(string: "http://www.apple.com"))
+            .widgetURL(URL(string: "beatphobia://location-tracker"))
             .keylineTint(Color.blue)
         }
     }

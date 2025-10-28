@@ -583,6 +583,8 @@
 				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Still Step requires always location access to provide continuous anxiety journey tracking and safety monitoring during exposure therapy. This enables comprehensive progress analysis and ensures you receive support notifications when needed, even when not actively using the app.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Still Step uses location tracking to help you overcome anxiety by recording your journeys outside your comfort zone. This enables progress visualization and safe exposure therapy tracking during active app use.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Still Step uses your device motion data to help you overcome anxiety by recording your journeys outside your comfort zone. This enables progress visualization and safe ";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -624,6 +626,8 @@
 				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Still Step requires always location access to provide continuous anxiety journey tracking and safety monitoring during exposure therapy. This enables comprehensive progress analysis and ensures you receive support notifications when needed, even when not actively using the app.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Still Step uses location tracking to help you overcome anxiety by recording your journeys outside your comfort zone. This enables progress visualization and safe exposure therapy tracking during active app use.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Still Step uses your device motion data to help you overcome anxiety by recording your journeys outside your comfort zone. This enables progress visualization and safe ";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
+				INFOPLIST_KEY_NSSupportsLiveActivitiesFrequentUpdates = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -738,6 +742,7 @@
 				INFOPLIST_FILE = LocationLiveActivity/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = LocationLiveActivity;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -768,6 +773,7 @@
 				INFOPLIST_FILE = LocationLiveActivity/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = LocationLiveActivity;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

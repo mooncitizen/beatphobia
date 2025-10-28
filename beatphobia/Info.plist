@@ -16,5 +16,7 @@
 		<string>processing</string>
 		<string>activitykit</string>
 	</array>
+	<key>UILaunchImageFile</key>
+	<string></string>
 </dict>
 </plist>

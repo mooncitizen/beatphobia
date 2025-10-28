@@ -1206,6 +1206,8 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
     private var saveTimer: Timer?
     private var distanceMeters: Double = 0
     var currentJourneyId: UUID? // Made public to access after journey ends
+    private let geocoder = CLGeocoder()
+    private var currentLocationName: String = "Finding location..."
     
     // Live Activity
     @available(iOS 16.1, *)
@@ -1331,12 +1333,30 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
     // MARK: - Live Activity Methods
     @available(iOS 16.1, *)
     private func startLiveActivity() {
+        print("🔵 Attempting to start Live Activity...")
+        
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            print("❌ Live Activities are disabled in system settings")
+            return
+        }
+        
+        if !ActivityAuthorizationInfo().frequentPushesEnabled {
+            print("⏸️ Frequent pushes are disabled (not critical)")
+        }
+        
         let attributes = LocationTrackingAttributes(startTime: startTime!)
+        let location = trackingPoints.last ?? CLLocation(latitude: 0, longitude: 0)
         let contentState = LocationTrackingAttributes.ContentState(
             duration: trackingDuration,
             distance: totalDistance,
-            pace: averagePace
+            pace: averagePace,
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude,
+            altitude: location.altitude,
+            locationName: currentLocationName
         )
+        
+        print("📍 Content State: \(contentState.duration), \(contentState.distance), \(contentState.pace)")
         
         do {
             liveActivity = try Activity<LocationTrackingAttributes>.request(
@@ -1344,9 +1364,10 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
                 contentState: contentState,
                 pushType: nil
             )
-            print("✅ Live Activity started")
+            print("✅ Live Activity started successfully: \(liveActivity?.id ?? "unknown")")
         } catch {
-            print("❌ Failed to start Live Activity: \(error)")
+            print("❌ Failed to start Live Activity: \(error.localizedDescription)")
+            print("   Error details: \(error)")
         }
     }
     
@@ -1354,10 +1375,15 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
     private func updateLiveActivity() {
         guard let activity = liveActivity else { return }
         
+        let location = trackingPoints.last ?? CLLocation(latitude: 0, longitude: 0)
         let contentState = LocationTrackingAttributes.ContentState(
             duration: trackingDuration,
             distance: totalDistance,
-            pace: averagePace
+            pace: averagePace,
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude,
+            altitude: location.altitude,
+            locationName: currentLocationName
         )
         
         Task {
@@ -1495,6 +1521,30 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
             if location.horizontalAccuracy < 50 { // Only add accurate locations
                 trackingPoints.append(location)
                 calculateDistance()
+                
+                // Reverse geocode to get street name (every 5th update to avoid overuse)
+                if trackingPoints.count % 5 == 0 {
+                    geocodeLocation(location)
+                }
+            }
+        }
+    }
+    
+    private func geocodeLocation(_ location: CLLocation) {
+        geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                print("Geocoding error: \(error.localizedDescription)")
+                return
+            }
+            
+            if let placemark = placemarks?.first {
+                // Get street name or fallback to locality
+                let name = placemark.thoroughfare ?? placemark.locality ?? "Unknown location"
+                DispatchQueue.main.async {
+                    self.currentLocationName = name
+                }
             }
         }
     }

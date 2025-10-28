@@ -14,6 +14,10 @@ struct LocationTrackingAttributes: ActivityAttributes {
         var duration: String
         var distance: String
         var pace: String
+        var latitude: Double
+        var longitude: Double
+        var altitude: Double
+        var locationName: String
     }
     
     var startTime: Date
