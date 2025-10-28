@@ -13,6 +13,7 @@ struct UsernameSetupView: View {
     let onComplete: () -> Void
     
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) var colorScheme
     
     @State private var username: String = ""
     @State private var isChecking = false
@@ -76,24 +77,24 @@ struct UsernameSetupView: View {
                     // Icon
                     ZStack {
                         Circle()
-                            .fill(AppConstants.primaryColor.opacity(0.1))
+                            .fill(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.1))
                             .frame(width: 100, height: 100)
                         
                         Image(systemName: "at")
                             .font(.system(size: 48, weight: .semibold))
-                            .foregroundColor(AppConstants.primaryColor)
+                            .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                     }
                     
                     // Header
                     VStack(spacing: 12) {
                         Text(isEditMode ? "Change Username" : "Choose Your Username")
                             .font(.system(size: 32, weight: .bold, design: .serif))
-                            .foregroundColor(.black)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                             .multilineTextAlignment(.center)
                         
                         Text(isEditMode ? "Update how others will see you in the community" : "Your username is how others will see you in the community")
                             .font(.system(size: 16))
-                            .foregroundColor(.black.opacity(0.6))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 20)
                     }
@@ -103,11 +104,11 @@ struct UsernameSetupView: View {
                         HStack(spacing: 12) {
                             Text("@")
                                 .font(.system(size: 24, weight: .semibold))
-                                .foregroundColor(.black.opacity(0.3))
+                                .foregroundColor(AppConstants.tertiaryTextColor(for: colorScheme))
                             
                             TextField("username", text: $username)
                                 .font(.system(size: 20, weight: .medium))
-                                .foregroundColor(AppConstants.primaryColor)
+                                .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                                 .autocapitalization(.none)
                                 .autocorrectionDisabled()
                                 .focused($isFocused)
@@ -131,15 +132,15 @@ struct UsernameSetupView: View {
                             }
                         }
                         .padding(16)
-                        .background(Color.white)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .cornerRadius(16)
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
                                 .stroke(
                                     isAvailable == true ? Color.green :
                                     isAvailable == false ? Color.red :
-                                    isFocused ? AppConstants.primaryColor :
-                                    Color.black.opacity(0.1),
+                                    isFocused ? AppConstants.adaptivePrimaryColor(for: colorScheme) :
+                                    AppConstants.borderColor(for: colorScheme),
                                     lineWidth: 2
                                 )
                         )
@@ -177,12 +178,12 @@ struct UsernameSetupView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Username Guidelines")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.black.opacity(0.7))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         
-                        GuidelineRow(icon: "checkmark", text: "3-30 characters long")
-                        GuidelineRow(icon: "checkmark", text: "Lowercase letters (a-z)")
-                        GuidelineRow(icon: "checkmark", text: "Numbers (0-9)")
-                        GuidelineRow(icon: "checkmark", text: "Underscores (_) and hyphens (-)")
+                        GuidelineRow(icon: "checkmark", text: "3-30 characters long", colorScheme: colorScheme)
+                        GuidelineRow(icon: "checkmark", text: "Lowercase letters (a-z)", colorScheme: colorScheme)
+                        GuidelineRow(icon: "checkmark", text: "Numbers (0-9)", colorScheme: colorScheme)
+                        GuidelineRow(icon: "checkmark", text: "Underscores (_) and hyphens (-)", colorScheme: colorScheme)
                     }
                     .padding(.horizontal, 20)
                     
@@ -203,7 +204,7 @@ struct UsernameSetupView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(canSubmit ? AppConstants.primaryColor : Color.gray)
+                        .background(canSubmit ? AppConstants.adaptivePrimaryColor(for: colorScheme) : Color.gray)
                         .cornerRadius(16)
                     }
                     .disabled(!canSubmit)
@@ -211,7 +212,7 @@ struct UsernameSetupView: View {
                     .padding(.bottom, 20)
                 }
             }
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
             .navigationBarHidden(!isEditMode)
             .toolbar {
                 if isEditMode {
@@ -219,7 +220,7 @@ struct UsernameSetupView: View {
                         Button("Cancel") {
                             dismiss()
                         }
-                        .foregroundColor(AppConstants.primaryColor)
+                        .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                     }
                 }
             }
@@ -334,16 +335,17 @@ struct UsernameSetupView: View {
 struct GuidelineRow: View {
     let icon: String
     let text: String
+    let colorScheme: ColorScheme
     
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: icon + ".circle.fill")
                 .font(.system(size: 12))
-                .foregroundColor(AppConstants.primaryColor.opacity(0.7))
+                .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.7))
             
             Text(text)
                 .font(.system(size: 13))
-                .foregroundColor(.black.opacity(0.6))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
         }
     }
 }

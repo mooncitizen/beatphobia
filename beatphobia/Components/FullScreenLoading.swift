@@ -7,6 +7,7 @@
 import SwiftUI
 
 struct FullScreenLoading: View {
+    @Environment(\.colorScheme) var colorScheme
     
     private static let loadingMessages = [
         "You are capable of amazing things.",
@@ -33,6 +34,8 @@ struct FullScreenLoading: View {
     
     @State private var loadingText: String
     @State private var displayedText: String = loadingMessages.randomElement()!
+    @State private var isAnimating = false
+    @State private var isPulsing = false
     private let shouldCycleMessages: Bool = true
     
     init(text: String?) {
@@ -45,25 +48,77 @@ struct FullScreenLoading: View {
     }
     
     var body: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-            Text(loadingText)
-                .font(.system(size:32, design: .serif))
-                .fontWeight(.bold)
-                .foregroundStyle(Color(.black))
-            Text(displayedText)
-                .font(.system(size: 16, design: .serif))
-                .foregroundStyle(Color(.black).opacity(0.7))
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                .id(displayedText)
+        ZStack {
+            AppConstants.backgroundColor(for: colorScheme)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 32) {
+                // Animated loading icon
+                animatedLoadingIcon
+                
+                VStack(spacing: 12) {
+                    Text(loadingText)
+                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                    
+                    Text(displayedText)
+                        .font(.system(size: 16, design: .serif))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                        .id(displayedText)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AppConstants.defaultBackgroundColor.ignoresSafeArea())
-        .foregroundColor(.white)
         .task {
             if shouldCycleMessages {
                 await startMessageCycling()
             }
+        }
+    }
+    
+    // MARK: - Animated Loading Icon
+    private var animatedLoadingIcon: some View {
+        ZStack {
+            // Outer rotating circle
+            Circle()
+                .stroke(
+                    AppConstants.primaryColor.opacity(0.2),
+                    style: StrokeStyle(lineWidth: 4, lineCap: .round)
+                )
+                .frame(width: 80, height: 80)
+                .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                .animation(
+                    .linear(duration: 2)
+                    .repeatForever(autoreverses: false),
+                    value: isAnimating
+                )
+            
+            // Inner pulsing circle
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AppConstants.primaryColor,
+                            AppConstants.primaryColor.opacity(0.6)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 60, height: 60)
+                .scaleEffect(isPulsing ? 0.8 : 1.0)
+                .opacity(isPulsing ? 0.6 : 1.0)
+                .animation(
+                    .easeInOut(duration: 1.5)
+                    .repeatForever(autoreverses: true),
+                    value: isPulsing
+                )
+        }
+        .onAppear {
+            isAnimating = true
+            isPulsing = true
         }
     }
     

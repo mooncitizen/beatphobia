@@ -10,6 +10,7 @@ import RealmSwift
 
 struct JournalEntryView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     
     let mood: Mood
     
@@ -30,7 +31,7 @@ struct JournalEntryView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                AppConstants.defaultBackgroundColor
+                AppConstants.backgroundColor(for: colorScheme)
                     .ignoresSafeArea()
                 
                 ScrollView {
@@ -50,7 +51,7 @@ struct JournalEntryView: View {
                             Spacer()
                             Text("\(characterCount) characters")
                                 .font(.system(size: 13))
-                                .foregroundColor(AppConstants.primaryColor.opacity(0.5))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
@@ -78,7 +79,7 @@ struct JournalEntryView: View {
                             Text("Back")
                                 .font(.system(size: 16))
                         }
-                        .foregroundColor(AppConstants.primaryColor)
+                        .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                     }
                 }
             }
@@ -113,11 +114,11 @@ struct JournalEntryView: View {
                 Text("Feeling \(mood.text)")
                     .font(.system(size: 28, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(AppConstants.primaryColor)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Text("Take a moment to express your thoughts and feelings")
                     .font(.system(size: 15))
-                    .foregroundColor(AppConstants.primaryColor.opacity(0.7))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
             }
@@ -134,11 +135,11 @@ struct JournalEntryView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("What's on your mind?")
                             .font(.system(size: 16))
-                            .foregroundColor(.gray.opacity(0.6))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         
                         Text("Write about your day, your feelings, or anything you'd like to remember...")
                             .font(.system(size: 14))
-                            .foregroundColor(.gray.opacity(0.5))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                     }
                     .padding(.horizontal, 18)
                     .padding(.vertical, 16)
@@ -149,14 +150,14 @@ struct JournalEntryView: View {
                 TextEditor(text: $journalText)
                     .font(.system(size: 16))
                     .fontDesign(.serif)
-                    .foregroundColor(AppConstants.primaryColor)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     .scrollContentBackground(.hidden)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .frame(minHeight: 300)
                     .focused($isTextEditorFocused)
             }
-            .background(Color.white)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .cornerRadius(20)
             .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
         }
@@ -168,8 +169,8 @@ struct JournalEntryView: View {
             // Gradient fade at top
             LinearGradient(
                 colors: [
-                    AppConstants.defaultBackgroundColor.opacity(0),
-                    AppConstants.defaultBackgroundColor
+                    AppConstants.backgroundColor(for: colorScheme).opacity(0),
+                    AppConstants.backgroundColor(for: colorScheme)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -185,10 +186,10 @@ struct JournalEntryView: View {
                     Text("Cancel")
                         .font(.system(size: 17, weight: .semibold))
                         .fontDesign(.serif)
-                        .foregroundColor(AppConstants.primaryColor)
+                        .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                         .frame(maxWidth: .infinity)
                         .frame(height: 54)
-                        .background(AppConstants.primaryColor.opacity(0.1))
+                        .background(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.1))
                         .cornerRadius(27)
                 }
                 
@@ -214,7 +215,7 @@ struct JournalEntryView: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
         }
     }
     

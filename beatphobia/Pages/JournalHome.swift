@@ -11,6 +11,7 @@ struct MoodPill: View {
     let mood: Mood
     let isSelected: Bool
     let action: () -> Void
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         Button(action: action) {
@@ -39,7 +40,7 @@ struct MoodPill: View {
                 Text(mood.text)
                     .font(.system(size: 11, weight: .semibold))
                     .fontDesign(.rounded)
-                    .foregroundStyle(.black.opacity(0.8))
+                    .foregroundStyle(AppConstants.primaryTextColor(for: colorScheme))
                     .lineLimit(1)
             }
             .frame(width: 60)
@@ -59,6 +60,7 @@ struct MoodPill: View {
 
 struct JournalHome: View {
     @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @Environment(\.colorScheme) var colorScheme
     
     @State private var selectedMood: Mood?
     private let allMoods: [Mood] = [.happy, .excited, .angry, .stressed, .sad]
@@ -161,7 +163,7 @@ struct JournalHome: View {
                             Text(greeting)
                                 .font(.system(size: 16, weight: .semibold))
                                 .fontDesign(.serif)
-                                .foregroundColor(.black.opacity(0.8))
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.9))
                         }
                         .padding(.top, 60)
                         
@@ -169,12 +171,12 @@ struct JournalHome: View {
                         Text("How are you\nfeeling today?")
                             .font(.system(size: 40, weight: .bold))
                             .fontDesign(.serif)
-                            .foregroundColor(.black)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                             .lineSpacing(4)
                         
                         Text("Take a moment to check in with yourself")
                             .font(.system(size: 15))
-                            .foregroundColor(.black.opacity(0.6))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
@@ -192,9 +194,9 @@ struct JournalHome: View {
                     .padding(.vertical, 16)
                     .padding(.horizontal, 12)
                     .frame(maxWidth: .infinity)
-                    .background(Color.white)
+                    .background(AppConstants.cardBackgroundColor(for: colorScheme))
                     .cornerRadius(24)
-                    .shadow(color: Color.black.opacity(0.06), radius: 12, y: 4)
+                    .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 12, y: 4)
                     .padding(.horizontal, 20)
                     .padding(.top, 32)
                     
@@ -234,7 +236,7 @@ struct JournalHome: View {
                 }
                 .padding(.bottom, 80)
             }
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
             .navigationBarHidden(true)
             .sheet(item: $selectedMood) { mood in
                 JournalEntryView(mood: mood)
@@ -259,13 +261,13 @@ struct JournalHome: View {
                 Text("Journal Prompt")
                     .font(.system(size: 18, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
             }
             
             Text(journalPrompts.randomElement() ?? journalPrompts[0])
                 .font(.system(size: 16, weight: .medium))
                 .fontDesign(.serif)
-                .foregroundColor(.black.opacity(0.8))
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.9))
                 .lineSpacing(4)
         }
         .padding(20)
@@ -324,17 +326,17 @@ struct JournalHome: View {
             
             Text(value)
                 .font(.system(size: 32, weight: .bold, design: .rounded))
-                .foregroundColor(.black)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
             
             Text(title)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.black.opacity(0.6))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 2)
     }
     
     // MARK: - Mood Insights Section
@@ -343,7 +345,7 @@ struct JournalHome: View {
             Text("Mood Insights")
                 .font(.system(size: 20, weight: .bold))
                 .fontDesign(.serif)
-                .foregroundColor(.black)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
             
             VStack(spacing: 12) {
                 ForEach(moodDistribution.filter { $0.count > 0 }.prefix(3), id: \.mood) { item in
@@ -352,9 +354,9 @@ struct JournalHome: View {
             }
         }
         .padding(20)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(20)
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 2)
     }
     
     private func moodInsightRow(mood: Mood, count: Int, total: Int) -> some View {
@@ -370,18 +372,18 @@ struct JournalHome: View {
                 Text(mood.text)
                     .font(.system(size: 15, weight: .medium))
                     .fontDesign(.rounded)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Spacer()
                 
                 Text("\(count)")
                     .font(.system(size: 15, weight: .bold))
                     .fontDesign(.monospaced)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Text("(\(Int(percentage * 100))%)")
                     .font(.system(size: 13))
-                    .foregroundColor(.black.opacity(0.5))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
             
             GeometryReader { geometry in
@@ -425,11 +427,11 @@ struct JournalHome: View {
                 Text("Start Your Journal")
                     .font(.system(size: 26, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Text("Select a mood above to create your first entry and start tracking your emotional journey")
                     .font(.system(size: 15))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
                     .lineSpacing(4)
@@ -446,7 +448,7 @@ struct JournalHome: View {
                 Text("Recent Entries")
                     .font(.system(size: 24, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Spacer()
             }
@@ -481,7 +483,7 @@ struct JournalHome: View {
                     Text(entry.mood.text)
                         .font(.system(size: 15, weight: .bold))
                         .fontDesign(.rounded)
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 }
                 
                 Spacer()
@@ -489,11 +491,11 @@ struct JournalHome: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(entry.date.formatted(.dateTime.month(.abbreviated).day()))
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.black.opacity(0.8))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.9))
                     
                     Text(entry.date.formatted(.relative(presentation: .named)))
                         .font(.system(size: 11))
-                        .foregroundColor(.black.opacity(0.5))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
             }
             
@@ -501,15 +503,15 @@ struct JournalHome: View {
             Text(entry.text)
                 .font(.system(size: 15))
                 .fontDesign(.serif)
-                .foregroundColor(.black.opacity(0.8))
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.9))
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(16)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 2)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(entry.mood.color.opacity(0.2), lineWidth: 1)
@@ -536,11 +538,11 @@ struct JournalHome: View {
                             Text(entry.mood.text)
                                 .font(.system(size: 22, weight: .bold))
                                 .fontDesign(.rounded)
-                                .foregroundColor(.black)
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                             
                             Text(entry.date.formatted(.dateTime.month().day().year().hour().minute()))
                                 .font(.system(size: 14))
-                                .foregroundColor(.black.opacity(0.6))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         }
                     }
                 }
@@ -551,14 +553,14 @@ struct JournalHome: View {
                 Text(entry.text)
                     .font(.system(size: 17))
                     .fontDesign(.serif)
-                    .foregroundColor(.black.opacity(0.9))
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     .lineSpacing(6)
                 
                 Spacer()
             }
             .padding(20)
         }
-        .background(AppConstants.defaultBackgroundColor)
+        .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationTitle("Journal Entry")
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -10,11 +10,11 @@ import RealmSwift
 
 struct PastJourneysView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var subscriptionManager: SubscriptionManager
     @State private var journeys: [JourneyRealm] = []
     @AppStorage("setting.miles") private var enableMiles = false
     @State private var currentPage: Int? = 0
-    @State private var showPaywall = false
     
     // Computed property for displayed journeys (limited to 3 if not Pro)
     private var displayedJourneys: [JourneyRealm] {
@@ -28,7 +28,7 @@ struct PastJourneysView: View {
     
     var body: some View {
         ZStack {
-            AppConstants.defaultBackgroundColor
+            AppConstants.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
             
             if journeys.isEmpty {
@@ -61,7 +61,7 @@ struct PastJourneysView: View {
                                 HStack(spacing: 8) {
                                     ForEach(0..<2, id: \.self) { index in
                                         Circle()
-                                            .fill((currentPage ?? 0) == index ? AppConstants.primaryColor : Color.black.opacity(0.2))
+                                            .fill((currentPage ?? 0) == index ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.borderColor(for: colorScheme).opacity(0.4))
                                             .frame(width: 8, height: 8)
                                             .animation(.easeInOut(duration: 0.2), value: currentPage)
                                     }
@@ -89,20 +89,9 @@ struct PastJourneysView: View {
                 }
             }
         }
+        .navigationTitle("Past Journeys")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text("Past Journeys")
-                    .font(.system(size: 24, weight: .bold))
-                    .fontDesign(.serif)
-                    .foregroundColor(.black)
-            }
-        }
         .toolbar(.visible, for: .tabBar)
-        .sheet(isPresented: $showPaywall) {
-            PaywallView()
-                .environmentObject(subscriptionManager)
-        }
         .onAppear {
             loadJourneys()
         }
@@ -110,17 +99,17 @@ struct PastJourneysView: View {
     
     // MARK: - Simple Upgrade Button
     private var simpleUpgradeButton: some View {
-        Button(action: { showPaywall = true }) {
+        NavigationLink(destination: PaywallView().environmentObject(subscriptionManager).navigationBarTitleDisplayMode(.inline)) {
             Text("View All \(journeys.count) Journeys")
                 .font(.system(size: 16, weight: .semibold, design: .serif))
-                .foregroundColor(AppConstants.primaryColor)
+                .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(Color.white)
+                .background(AppConstants.cardBackgroundColor(for: colorScheme))
                 .cornerRadius(12)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(AppConstants.primaryColor.opacity(0.3), lineWidth: 1.5)
+                        .stroke(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.3), lineWidth: 1.5)
                 )
         }
         .padding(.top, 8)
@@ -139,15 +128,15 @@ struct PastJourneysView: View {
                     Text("Last 7 Days")
                         .font(.system(size: 20, weight: .bold))
                         .fontDesign(.serif)
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     Text("Your recent progress")
                         .font(.system(size: 13))
-                        .foregroundColor(.black.opacity(0.5))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
                 Spacer()
                 Image(systemName: "calendar")
                     .font(.system(size: 24))
-                    .foregroundColor(AppConstants.primaryColor.opacity(0.3))
+                    .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.3))
             }
             
             HStack(spacing: 12) {
@@ -183,11 +172,11 @@ struct PastJourneysView: View {
             }
         }
         .padding(20)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.08), radius: 10, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 10, y: 4)
     }
-    
+
     // MARK: - Overall Stats Card
     private var overallStatsCard: some View {
         VStack(spacing: 16) {
@@ -196,15 +185,15 @@ struct PastJourneysView: View {
                     Text("All Time")
                         .font(.system(size: 20, weight: .bold))
                         .fontDesign(.serif)
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     Text("Your total progress")
                         .font(.system(size: 13))
-                        .foregroundColor(.black.opacity(0.5))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
                 Spacer()
                 Image(systemName: "chart.bar.fill")
                     .font(.system(size: 24))
-                    .foregroundColor(AppConstants.primaryColor.opacity(0.3))
+                    .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.3))
             }
             
             HStack(spacing: 12) {
@@ -240,31 +229,31 @@ struct PastJourneysView: View {
             }
         }
         .padding(20)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.08), radius: 10, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 10, y: 4)
     }
-    
+
     private func summaryStatBox(title: String, value: String, icon: String, color: Color) -> some View {
         VStack(spacing: 8) {
             ZStack {
                 Circle()
                     .fill(color.opacity(0.15))
                     .frame(width: 44, height: 44)
-                
+
                 Image(systemName: icon)
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(color)
             }
-            
+
             Text(value)
                 .font(.system(size: 18, weight: .bold))
                 .fontDesign(.monospaced)
-                .foregroundColor(.black)
-            
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
             Text(title)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.black.opacity(0.5))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -277,23 +266,23 @@ struct PastJourneysView: View {
         VStack(spacing: 24) {
             ZStack {
                 Circle()
-                    .fill(AppConstants.primaryColor.opacity(0.1))
+                    .fill(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.1))
                     .frame(width: 120, height: 120)
-                
+
                 Image(systemName: "map.circle.fill")
                     .font(.system(size: 60))
-                    .foregroundColor(AppConstants.primaryColor.opacity(0.5))
+                    .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.5))
             }
-            
+
             VStack(spacing: 12) {
                 Text("No Journeys Yet")
                     .font(.system(size: 28, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
-                
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                 Text("Start your first journey to track your progress and feelings as you explore outside your safe space.")
                     .font(.system(size: 16))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
             }
@@ -344,6 +333,7 @@ struct PastJourneysView: View {
 
 // MARK: - Journey Card
 struct JourneyCard: View {
+    @Environment(\.colorScheme) var colorScheme
     let journey: JourneyRealm
     let enableMiles: Bool
     
@@ -355,15 +345,15 @@ struct JourneyCard: View {
                     Text(journey.startTime.formatted(date: .abbreviated, time: .omitted))
                         .font(.system(size: 20, weight: .bold))
                         .fontDesign(.serif)
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     HStack(spacing: 4) {
                         Image(systemName: "clock")
                             .font(.system(size: 12))
                         Text(journey.startTime.formatted(date: .omitted, time: .shortened))
                             .font(.system(size: 14))
                     }
-                    .foregroundColor(.black.opacity(0.5))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
                 
                 Spacer()
@@ -372,15 +362,15 @@ struct JourneyCard: View {
                 VStack(spacing: 4) {
                     Image(systemName: "timer")
                         .font(.system(size: 18))
-                        .foregroundColor(AppConstants.primaryColor)
+                        .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                     Text(formatDuration(journey.duration))
                         .font(.system(size: 14, weight: .semibold))
                         .fontDesign(.monospaced)
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(AppConstants.primaryColor.opacity(0.1))
+                .background(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.1))
                 .cornerRadius(10)
             }
             
@@ -414,8 +404,8 @@ struct JourneyCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Emotional Journey")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.black.opacity(0.5))
-                    
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
                     HStack(spacing: 8) {
                         ForEach(Array(journey.checkpoints.prefix(6)), id: \.id) { checkpoint in
                             emotionBadge(feeling: checkpoint.feeling)
@@ -423,10 +413,10 @@ struct JourneyCard: View {
                         if journey.checkpoints.count > 6 {
                             Text("+\(journey.checkpoints.count - 6)")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.black.opacity(0.4))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 6)
-                                .background(Color.black.opacity(0.05))
+                                .background(AppConstants.borderColor(for: colorScheme).opacity(0.3))
                                 .cornerRadius(8)
                         }
                     }
@@ -434,21 +424,21 @@ struct JourneyCard: View {
             }
         }
         .padding(20)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.08), radius: 10, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 10, y: 4)
     }
-    
+
     private func journeyStatPill(icon: String, value: String, color: Color) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(color)
-            
+
             Text(value)
                 .font(.system(size: 14, weight: .bold))
                 .fontDesign(.monospaced)
-                .foregroundColor(.black)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

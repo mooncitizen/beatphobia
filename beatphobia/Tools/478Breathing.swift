@@ -10,12 +10,13 @@ import Combine
 
 struct Breathing478View: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @StateObject private var breathingManager = Breathing478Manager()
     
     var body: some View {
         ZStack {
             // Background
-            AppConstants.defaultBackgroundColor
+            AppConstants.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
@@ -24,13 +25,17 @@ struct Breathing478View: View {
                 
                 Spacer()
                 
-                // Main breathing animation
-                breathingAnimationView
+                // Main content
+                if breathingManager.showStartCountdown {
+                    startCountdownView
+                } else {
+                    mainBreathingView
+                }
                 
                 Spacer()
                 
-                // Controls
-                controlsView
+                // Bottom controls - Always visible
+                bottomControlsView
                     .padding(.bottom, 40)
             }
         }
@@ -45,161 +50,208 @@ struct Breathing478View: View {
     private var headerView: some View {
         HStack {
             Button(action: {
+                breathingManager.pauseBreathing()
                 if breathingManager.hapticsEnabled {
                     breathingManager.lightHaptic.impactOccurred(intensity: 0.5)
                 }
                 dismiss()
             }) {
                 ZStack {
-                    Circle()
-                        .fill(AppConstants.primaryColor.opacity(0.3))
-                        .frame(width: 40, height: 40)
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppConstants.cardBackgroundColor(for: colorScheme))
+                        .frame(width: 44, height: 44)
+                        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 4, y: 2)
                     
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "xmark")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(AppConstants.primaryColor)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 }
             }
+            .opacity(breathingManager.isBreathing ? 0.3 : 1.0)
             
             Spacer()
             
             VStack(spacing: 4) {
                 Text("4-7-8 Breathing")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(AppConstants.primaryColor)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
-                Text("\(breathingManager.cyclesCompleted) cycles completed")
-                    .font(.system(size: 12))
-                    .foregroundColor(AppConstants.primaryColor.opacity(0.6))
+                if breathingManager.cyclesCompleted > 0 {
+                    Text("Cycle \(breathingManager.cyclesCompleted)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                }
             }
             
             Spacer()
             
-            // Spacer for balance
-            Color.clear
-                .frame(width: 40, height: 40)
+            // Stop button - minimal style
+            if breathingManager.isBreathing {
+                Button(action: {
+                    breathingManager.pauseBreathing()
+                }) {
+                    Text("Stop")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.7))
+                }
+            } else {
+                Color.clear
+                    .frame(width: 44, height: 44)
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 60)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
     }
     
-    // MARK: - Breathing Animation
-    private var breathingAnimationView: some View {
-        ZStack {
-            // Outer glow ring
-            Circle()
-                .stroke(
-                    breathingManager.currentPhaseColor.opacity(0.2),
-                    lineWidth: 2
-                )
-                .frame(width: 320, height: 320)
-                .blur(radius: 15)
+    // MARK: - Start Countdown View
+    private var startCountdownView: some View {
+        VStack(spacing: 32) {
+            Text("Get Ready")
+                .font(.system(size: 32, weight: .bold, design: .serif))
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
             
-            // Progress ring
-            Circle()
-                .trim(from: 0, to: breathingManager.progress)
-                .stroke(
-                    breathingManager.currentPhaseColor,
-                    style: StrokeStyle(lineWidth: 3, lineCap: .round)
-                )
-                .frame(width: 300, height: 300)
-                .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 0.1), value: breathingManager.progress)
-            
-            // Animated circle (expanding/contracting)
-            Circle()
-                .stroke(
-                    breathingManager.currentPhaseColor,
-                    lineWidth: 3
-                )
-                .frame(
-                    width: breathingManager.circleSize,
-                    height: breathingManager.circleSize
-                )
-                .shadow(color: breathingManager.currentPhaseColor.opacity(0.3), radius: 15)
-            
-            // Inner pulse circle
-            Circle()
-                .fill(breathingManager.currentPhaseColor.opacity(0.1))
-                .frame(
-                    width: breathingManager.circleSize * 0.7,
-                    height: breathingManager.circleSize * 0.7
-                )
-                .blur(radius: 5)
-            
-            // Center content
-            VStack(spacing: 16) {
-                // Phase icon
-                Image(systemName: breathingManager.currentPhase.icon)
-                    .font(.system(size: 44, weight: .light))
-                    .foregroundColor(AppConstants.primaryColor)
-                    .scaleEffect(breathingManager.iconScale)
+            ZStack {
+                // Background circle
+                Circle()
+                    .fill(breathingManager.currentPhaseColor.opacity(0.15))
+                    .frame(width: 280, height: 280)
                 
-                // Phase text
-                Text(breathingManager.currentPhase.title)
-                    .font(.system(size: 28, weight: .semibold))
-                    .fontDesign(.serif)
-                    .foregroundColor(AppConstants.primaryColor)
-                
-                // Timer
-                Text("\(breathingManager.secondsRemaining)")
-                    .font(.system(size: 72, weight: .bold, design: .rounded))
-                    .foregroundColor(AppConstants.primaryColor)
+                // Countdown number
+                Text("\(breathingManager.startCountdown)")
+                    .font(.system(size: 120, weight: .bold, design: .rounded))
+                    .foregroundColor(breathingManager.currentPhaseColor)
                     .monospacedDigit()
-                
-                // Duration indicator
-                Text(breathingManager.currentPhase.durationText)
-                    .font(.system(size: 14))
-                    .foregroundColor(AppConstants.primaryColor.opacity(0.5))
+                    .contentTransition(.numericText())
+                    .animation(.default, value: breathingManager.startCountdown)
             }
         }
     }
     
-    // MARK: - Controls
-    private var controlsView: some View {
-        VStack(spacing: 24) {
-            // Start/Pause button
-            Button(action: {
-                withAnimation(.spring(response: 0.3)) {
-                    breathingManager.toggleBreathing()
-                }
-            }) {
-                HStack(spacing: 12) {
-                    Image(systemName: breathingManager.isBreathing ? "pause.fill" : "play.fill")
-                        .font(.system(size: 20, weight: .semibold))
+    // MARK: - Main Breathing View
+    private var mainBreathingView: some View {
+        VStack(spacing: 40) {
+            // Instruction Card
+            VStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: breathingManager.currentPhase.icon)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(breathingManager.currentPhaseColor)
                     
-                    Text(breathingManager.isBreathing ? "Pause" : "Start")
+                    Text(breathingManager.currentPhase.title)
                         .font(.system(size: 18, weight: .semibold))
                         .fontDesign(.serif)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(breathingManager.currentPhaseColor)
-                .cornerRadius(28)
-                .shadow(color: breathingManager.currentPhaseColor.opacity(0.3), radius: 10, y: 5)
+                
+                Text("For \(breathingManager.currentPhase.duration) seconds")
+                    .font(.system(size: 14))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .padding(.horizontal, 20)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
+            .cornerRadius(16)
+            .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
+            .padding(.horizontal, 24)
+            
+            // Breathing circle - animated
+            ZStack {
+                // Outer glow ring
+                Circle()
+                    .fill(breathingManager.currentPhaseColor.opacity(0.1))
+                    .frame(width: breathingManager.circleSize, height: breathingManager.circleSize)
+                    .blur(radius: 20)
+                
+                // Main circle
+                Circle()
+                    .fill(LinearGradient(
+                        colors: [breathingManager.currentPhaseColor.opacity(0.9), breathingManager.currentPhaseColor.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+                    .frame(width: breathingManager.circleSize, height: breathingManager.circleSize)
+                    .shadow(color: breathingManager.currentPhaseColor.opacity(0.4), radius: 15, y: 8)
+                
+                // Center content
+                VStack(spacing: 8) {
+                    Text("\(breathingManager.secondsRemaining)")
+                        .font(.system(size: 72, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.default, value: breathingManager.secondsRemaining)
+                    
+                    Text("seconds")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+            }
+            .frame(height: 280)
+            .animation(.easeInOut(duration: Double(breathingManager.currentPhase.duration)), value: breathingManager.circleSize)
+        }
+    }
+    
+    // MARK: - Bottom Controls
+    private var bottomControlsView: some View {
+        VStack(spacing: 12) {
+            // Only show start button when NOT breathing
+            if !breathingManager.isBreathing {
+                Button(action: {
+                    withAnimation(.spring(response: 0.3)) {
+                        breathingManager.toggleBreathing()
+                    }
+                }) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 22, weight: .semibold))
+                        
+                        Text("Start Breathing")
+                            .font(.system(size: 18, weight: .semibold))
+                            .fontDesign(.serif)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 60)
+                    .background(
+                        LinearGradient(
+                            colors: [breathingManager.currentPhaseColor, breathingManager.currentPhaseColor.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(30)
+                    .shadow(color: breathingManager.currentPhaseColor.opacity(0.4), radius: 12, y: 6)
+                }
+                .disabled(breathingManager.showStartCountdown)
+                .opacity(breathingManager.showStartCountdown ? 0.6 : 1.0)
+                .padding(.horizontal, 32)
             }
             
             // Reset button
             if breathingManager.cyclesCompleted > 0 {
                 Button(action: {
-                    withAnimation {
+                    withAnimation(.spring(response: 0.4)) {
                         breathingManager.reset()
                     }
                 }) {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.counterclockwise")
-                            .font(.system(size: 16))
+                            .font(.system(size: 16, weight: .medium))
                         Text("Reset")
                             .font(.system(size: 16, weight: .medium))
                             .fontDesign(.serif)
                     }
-                    .foregroundColor(AppConstants.primaryColor.opacity(0.7))
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.7))
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 24)
                 }
+                .disabled(breathingManager.showStartCountdown)
+                .opacity(breathingManager.showStartCountdown ? 0.3 : 1.0)
             }
         }
-        .padding(.horizontal, 32)
     }
 }
 
@@ -210,13 +262,16 @@ class Breathing478Manager: ObservableObject {
     @Published var isBreathing: Bool = false
     @Published var cyclesCompleted: Int = 0
     @Published var hapticsEnabled: Bool = true
+    @Published var showStartCountdown: Bool = false
+    @Published var startCountdown: Int = 3
     
     // Animation properties
     @Published var progress: Double = 0
-    @Published var circleSize: CGFloat = 140
-    @Published var iconScale: CGFloat = 1.0
+    @Published var circleSize: CGFloat = 160
+    @Published var isInBreak: Bool = false
     
     private var timer: Timer?
+    private var startCountdownTimer: Timer?
     let lightHaptic = UIImpactFeedbackGenerator(style: .light)
     let mediumHaptic = UIImpactFeedbackGenerator(style: .medium)
     let heavyHaptic = UIImpactFeedbackGenerator(style: .heavy)
@@ -234,26 +289,42 @@ class Breathing478Manager: ObservableObject {
     }
     
     func toggleBreathing() {
-        isBreathing.toggle()
-        
-        // Haptic feedback for button press
-        if hapticsEnabled {
-            if isBreathing {
-                // Starting - uplifting double tap
-                mediumHaptic.impactOccurred(intensity: 0.7)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                    self.mediumHaptic.impactOccurred(intensity: 0.7)
-                }
-            } else {
-                // Pausing - single gentle tap
-                lightHaptic.impactOccurred(intensity: 0.6)
+        showStartCountdown = true
+        startCountdown = 3
+        startCountdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
+            
+            self.mediumHaptic.impactOccurred(intensity: 0.7)
+            self.startCountdown -= 1
+            
+            if self.startCountdown <= 0 {
+                timer.invalidate()
+                self.startCountdownTimer = nil
+                self.showStartCountdown = false
+                self.isBreathing = true
+                self.startBreathing()
             }
         }
+    }
+    
+    func pauseBreathing() {
+        // Stop all timers
+        timer?.invalidate()
+        timer = nil
+        startCountdownTimer?.invalidate()
+        startCountdownTimer = nil
         
-        if isBreathing {
-            startBreathing()
-        } else {
-            pauseBreathing()
+        // Reset state
+        showStartCountdown = false
+        isBreathing = false
+        isInBreak = false
+        
+        // Stop haptics
+        if hapticsEnabled {
+            lightHaptic.impactOccurred(intensity: 0.5)
         }
     }
     
@@ -263,12 +334,13 @@ class Breathing478Manager: ObservableObject {
         }
     }
     
-    private func pauseBreathing() {
-        timer?.invalidate()
-        timer = nil
-    }
-    
     private func tick() {
+        // Don't tick during breaks - the timer should be paused
+        guard !isInBreak else { 
+            // If in break, just return without doing anything
+            return 
+        }
+        
         secondsRemaining -= 1
         
         // Update progress
@@ -276,19 +348,13 @@ class Breathing478Manager: ObservableObject {
         let elapsed = totalSeconds - Double(secondsRemaining)
         progress = elapsed / totalSeconds
         
-        // Animate properties based on phase
+        // Animate circle based on phase
         animateForCurrentPhase()
         
-        // Haptic feedback during countdown
+        // Haptic feedback
         if hapticsEnabled {
-            // Light pulse on each second (except the last)
             if secondsRemaining > 0 {
                 lightHaptic.impactOccurred(intensity: 0.4)
-            }
-            
-            // Stronger haptics for countdown (3, 2, 1)
-            if secondsRemaining <= 3 && secondsRemaining > 0 {
-                mediumHaptic.impactOccurred(intensity: 0.6)
             }
         }
         
@@ -301,80 +367,88 @@ class Breathing478Manager: ObservableObject {
         withAnimation(.easeInOut(duration: 1.0)) {
             switch currentPhase {
             case .inhale:
-                // Expand from 140 to 240 over 4 seconds
-                let progress = CGFloat(4 - secondsRemaining) / 4.0
-                circleSize = 140 + (100 * progress)
-                iconScale = 1.0 + (0.3 * Double(progress))
+                // Grow from 160 to 280 over 4 seconds
+                let progress = Double(currentPhase.duration - secondsRemaining) / Double(currentPhase.duration)
+                circleSize = 160 + CGFloat(progress * 120)
             case .hold:
-                // Keep size steady at maximum
-                circleSize = 240
-                iconScale = 1.3
+                // Hold at max size 280 - no change, just stay
+                circleSize = 280
             case .exhale:
-                // Contract from 240 to 140 over 8 seconds
-                let progress = CGFloat(8 - secondsRemaining) / 8.0
-                circleSize = 240 - (100 * progress)
-                iconScale = 1.3 - (0.3 * Double(progress))
+                // Shrink from 280 to 160 over 8 seconds
+                let progress = Double(currentPhase.duration - secondsRemaining) / Double(currentPhase.duration)
+                circleSize = 280 - CGFloat(progress * 120)
             }
         }
     }
     
     private func moveToNextPhase() {
-        // Trigger haptics based on phase transition
         if hapticsEnabled {
             switch currentPhase {
             case .inhale:
-                // Start of hold - medium haptic
                 mediumHaptic.impactOccurred(intensity: 0.8)
             case .hold:
-                // Start of exhale - heavier haptic (important transition)
                 heavyHaptic.impactOccurred(intensity: 0.9)
             case .exhale:
-                // Completed full cycle - success haptic!
                 successHaptic.notificationOccurred(.success)
-                // Add a secondary haptic for emphasis
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     self.heavyHaptic.impactOccurred(intensity: 1.0)
                 }
             }
         }
         
-        // Move to next phase
-        withAnimation(.easeInOut(duration: 0.5)) {
-            switch currentPhase {
-            case .inhale:
-                currentPhase = .hold
-                circleSize = 240
-            case .hold:
-                currentPhase = .exhale
-            case .exhale:
-                currentPhase = .inhale
-                circleSize = 140
-                cyclesCompleted += 1
+        // Add breaks between steps and STOP the timer
+        // Inhale -> Hold: 1s, Hold -> Exhale: 1s, Exhale -> Inhale: 1s
+        let breakDuration: Double = 1.0
+        
+        // Stop the timer during the break
+        timer?.invalidate()
+        timer = nil
+        
+        isInBreak = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + breakDuration) {
+            self.isInBreak = false
+            
+            // Switch phase first
+            withAnimation(.easeInOut(duration: 0.3)) {
+                switch self.currentPhase {
+                case .inhale:
+                    self.currentPhase = .hold
+                    self.circleSize = 280
+                case .hold:
+                    self.currentPhase = .exhale
+                    self.circleSize = 280
+                case .exhale:
+                    self.currentPhase = .inhale
+                    self.cyclesCompleted += 1
+                    self.circleSize = 160
+                }
+                
+                // Reset for new phase
+                self.secondsRemaining = self.currentPhase.duration
+                self.progress = 0
             }
             
-            // Reset for new phase
-            secondsRemaining = currentPhase.duration
-            progress = 0
-            iconScale = 1.0
+            // Restart the timer after the break
+            self.timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                self?.tick()
+            }
         }
     }
     
     func reset() {
         pauseBreathing()
         
-        // Haptic feedback for reset
         if hapticsEnabled {
             lightHaptic.impactOccurred(intensity: 0.5)
         }
         
-        withAnimation {
+        withAnimation(.spring(response: 0.5)) {
             currentPhase = .inhale
             secondsRemaining = currentPhase.duration
-            isBreathing = false
             cyclesCompleted = 0
             progress = 0
-            circleSize = 140
-            iconScale = 1.0
+            circleSize = 160
+            isInBreak = false
         }
     }
 }
@@ -401,23 +475,19 @@ enum Breathing478Phase {
         }
     }
     
-    var durationText: String {
-        return "\(duration) seconds"
-    }
-    
     var icon: String {
         switch self {
-        case .inhale: return "arrow.down.circle"
-        case .hold: return "pause.circle"
-        case .exhale: return "arrow.up.circle"
+        case .inhale: return "arrow.down.circle.fill"
+        case .hold: return "pause.circle.fill"
+        case .exhale: return "arrow.up.circle.fill"
         }
     }
     
     var color: Color {
         switch self {
-        case .inhale: return AppConstants.primaryColor // Blue
-        case .hold: return Color(hex: "9BA8B8") // Soft gray-blue
-        case .exhale: return Color(hex: "8B7355") // Warm brown
+        case .inhale: return AppConstants.primaryColor
+        case .hold: return Color(red: 90/255, green: 159/255, blue: 212/255)
+        case .exhale: return Color(red: 159/255, green: 127/255, blue: 169/255)
         }
     }
 }

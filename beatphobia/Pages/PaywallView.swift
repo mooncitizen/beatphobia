@@ -11,6 +11,8 @@ import StoreKit
 struct PaywallView: View {
     @EnvironmentObject var subscriptionManager: SubscriptionManager
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.openURL) var openURL
     
     @State private var selectedTier: SubscriptionTier = .proYearly
     @State private var isPurchasing = false
@@ -18,22 +20,13 @@ struct PaywallView: View {
     @State private var errorMessage = ""
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                // Background gradient
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color.blue.opacity(0.1),
-                        Color.purple.opacity(0.1)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+        ZStack {
+            // Background
+            AppConstants.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Header
+
+            ScrollView {
+                VStack(spacing: 24) {
                         VStack(spacing: 12) {
                             Image(systemName: "crown.fill")
                                 .font(.system(size: 60))
@@ -44,18 +37,18 @@ struct PaywallView: View {
                                         endPoint: .bottomTrailing
                                     )
                                 )
-                                .padding(.top, 20)
                             
                             Text("Upgrade to Pro")
                                 .font(.system(size: 32, weight: .bold, design: .serif))
                                 .multilineTextAlignment(.center)
                             
-                            Text("Unlock advanced features for your journey")
+                            Text("Unlock advanced features for your journey. We only charge based on usage that requires storage or computation in the cloud.")
                                 .font(.system(size: 17, design: .serif))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
                         }
+                        .padding(.top, 40)
                         .padding(.bottom, 8)
                         
                         // Pro Features - Full Width
@@ -81,9 +74,10 @@ struct PaywallView: View {
                                 gradient: [.orange, .red]
                             )
                         }
-                        .background(Color.white)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .cornerRadius(16)
-                        .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 4)
+                        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 12, x: 0, y: 4)
+                        .padding(.horizontal, 20)
                         
                         // Pricing Cards
                         VStack(spacing: 12) {
@@ -161,18 +155,22 @@ struct PaywallView: View {
                         VStack(spacing: 8) {
                             Text("Subscription automatically renews unless auto-renew is turned off at least 24 hours before the end of the current period.")
                                 .font(.system(size: 11, design: .serif))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                 .multilineTextAlignment(.center)
                             
                             HStack(spacing: 16) {
                                 Button("Terms of Service") {
-                                    // Open terms
+                                    if let url = URL(string: "https://stillstep.com/terms") {
+                                        openURL(url)
+                                    }
                                 }
                                 .font(.system(size: 12, design: .serif))
                                 .foregroundColor(.blue)
                                 
                                 Button("Privacy Policy") {
-                                    // Open privacy
+                                    if let url = URL(string: "https://stillstep.com/privacy") {
+                                        openURL(url)
+                                    }
                                 }
                                 .font(.system(size: 12, design: .serif))
                                 .foregroundColor(.blue)
@@ -180,20 +178,11 @@ struct PaywallView: View {
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 40)
-                    }
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.gray.opacity(0.6))
-                    }
                 }
             }
         }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .alert("Purchase Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -261,6 +250,7 @@ struct ProFeatureCard: View {
     let title: String
     let description: String
     let gradient: [Color]
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         HStack(alignment: .center, spacing: 20) {
@@ -289,9 +279,8 @@ struct ProFeatureCard: View {
                 
                 Text(description)
                     .font(.system(size: 15, design: .serif))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
-                    .lineLimit(2)
             }
             
             Spacer(minLength: 0)
@@ -299,10 +288,9 @@ struct ProFeatureCard: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 24)
         .padding(.vertical, 20)
-        .background(Color.white)
         .overlay(
             Rectangle()
-                .fill(Color.gray.opacity(0.1))
+                .fill(AppConstants.dividerColor(for: colorScheme))
                 .frame(height: 1),
             alignment: .bottom
         )
@@ -317,6 +305,7 @@ struct PricingCard: View {
     let savingsPercentage: Int?
     let pricePerMonth: String?
     let onSelect: () -> Void
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         Button(action: onSelect) {
@@ -365,17 +354,17 @@ struct PricingCard: View {
                         if let pricePerMonth = pricePerMonth {
                             Text("\(pricePerMonth)/month")
                                 .font(.system(size: 15, design: .serif))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         }
                         
                         if tier == .proYearly {
                             Text("Billed annually at \(product.displayPrice)")
                                 .font(.system(size: 13, design: .serif))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         } else {
                             Text("Billed monthly")
                                 .font(.system(size: 13, design: .serif))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         }
                     }
                     
@@ -383,21 +372,21 @@ struct PricingCard: View {
                     
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 28))
-                        .foregroundColor(isSelected ? .blue : .gray.opacity(0.3))
+                        .foregroundColor(isSelected ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
                 }
                 .padding(20)
             }
-            .background(Color.white)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(
-                        isSelected ? Color.blue : Color.gray.opacity(0.2),
+                        isSelected ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.borderColor(for: colorScheme).opacity(0.4),
                         lineWidth: isSelected ? 2 : 1
                     )
             )
             .cornerRadius(16)
             .shadow(
-                color: isSelected ? .blue.opacity(0.2) : .clear,
+                color: isSelected ? AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.2) : .clear,
                 radius: 8,
                 x: 0,
                 y: 4

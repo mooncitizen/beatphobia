@@ -16,6 +16,7 @@ struct AlertItem: Identifiable {
 
 struct InitialProfileView: View {
     @EnvironmentObject var authManager: AuthManager
+    @Environment(\.colorScheme) var colorScheme
     
     @State private var name: String = ""
     @State private var isSaving: Bool = false
@@ -79,7 +80,7 @@ struct InitialProfileView: View {
             }
                 .buttonStyle(PillButtonStyle(style: .success)).padding(.leading, 10)
                 .disabled(isSaving)
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(AppConstants.defaultBackgroundColor)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(AppConstants.backgroundColor(for: colorScheme))
     }
 }
 

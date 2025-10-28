@@ -46,12 +46,12 @@ struct Card<Content: View>: View {
 #Preview {
     // Create a ZStack with a light gray background to see the cards clearly
     ZStack {
-        Color(.systemGroupedBackground).ignoresSafeArea()
+        Color.gray.opacity(0.1).ignoresSafeArea()
         
         VStack(spacing: 20) {
             
             // Example 1: Standard Card (like "Statistics")
-            Card(backgroundColor: Color(.systemBackground)) {
+            Card(backgroundColor: .white) {
                 VStack(alignment: .leading) {
                     Image(systemName: "chart.bar.xaxis")
                         .font(.title.weight(.bold))
@@ -65,7 +65,7 @@ struct Card<Content: View>: View {
             }
             
             // Example 2: Colored Card (like "Current tasks")
-            Card(backgroundColor: Color(.systemGreen).opacity(0.2)) {
+            Card(backgroundColor: .green.opacity(0.2)) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Current tasks")
                         .font(.subheadline)
@@ -80,7 +80,7 @@ struct Card<Content: View>: View {
             }
             
             // Example 3: Edge-to-Edge Card (like "Community")
-            Card(backgroundColor: Color(.systemBackground), padding: 0) {
+            Card(backgroundColor: .white, padding: 0) {
                 VStack(alignment: .leading, spacing: 0) {
                     // 1. Top text content with its own padding
                     VStack(alignment: .leading) {

@@ -10,6 +10,7 @@ import UIKit
 
 struct CountingGameView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @State private var selectedMode: CountingMode = .countUp
     @State private var currentNumber: Int = 0
     @State private var targetNumber: Int = 100
@@ -52,7 +53,7 @@ struct CountingGameView: View {
     
     var body: some View {
         ZStack {
-            AppConstants.defaultBackgroundColor
+            AppConstants.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
@@ -63,7 +64,7 @@ struct CountingGameView: View {
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 28))
-                            .foregroundColor(.black.opacity(0.3))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
                     }
                     
                     Spacer()
@@ -73,7 +74,7 @@ struct CountingGameView: View {
                     }) {
                         Image(systemName: showInstructions ? "info.circle.fill" : "info.circle")
                             .font(.system(size: 28))
-                            .foregroundColor(AppConstants.primaryColor)
+                            .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                     }
                 }
                 .padding(.horizontal, 20)
@@ -87,11 +88,11 @@ struct CountingGameView: View {
                             Text("Counting Game")
                                 .font(.system(size: 36, weight: .bold))
                                 .fontDesign(.serif)
-                                .foregroundColor(.black)
-                            
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                             Text("Redirect your thoughts through simple counting")
                                 .font(.system(size: 15))
-                                .foregroundColor(.black.opacity(0.6))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 40)
                         }

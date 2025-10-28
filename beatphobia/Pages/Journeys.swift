@@ -10,11 +10,14 @@ import RealmSwift
 
 struct JourneysView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var journalSyncService: JournalSyncService
     @Binding var isTabBarVisible: Bool
-    
+    @State private var navigationPath = NavigationPath()
+
     var body: some View {
-        NavigationView {
+        NavigationStack(path: $navigationPath) {
             JourneyAgorahobiaView(isTabBarVisible: $isTabBarVisible)
+                .environmentObject(journalSyncService)
         }
     }
 }
@@ -22,7 +25,9 @@ struct JourneysView: View {
 #Preview {
     @Previewable @State var isTabBarVisible = true
     let mockAuthManager = AuthManager()
-    
+    let mockJournalSyncService = JournalSyncService()
+
     JourneysView(isTabBarVisible: $isTabBarVisible)
         .environmentObject(mockAuthManager)
+        .environmentObject(mockJournalSyncService)
 }

@@ -11,13 +11,13 @@ import RealmSwift
 
 struct JourneyDetailView: View {
     let journey: JourneyRealm
-    @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @AppStorage("setting.miles") private var enableMiles = false
     @State private var showFullScreenMap = false
     
     var body: some View {
         ZStack {
-            AppConstants.defaultBackgroundColor
+            AppConstants.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
             
             ScrollView {
@@ -38,25 +38,12 @@ struct JourneyDetailView: View {
                     // Journey summary
                     summarySection
                         .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
+                        .padding(.bottom, 100)
                 }
             }
         }
+        .navigationTitle(journey.startTime.formatted(date: .abbreviated, time: .omitted))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                VStack(spacing: 2) {
-                    Text(journey.startTime.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: 16, weight: .bold))
-                        .fontDesign(.serif)
-                        .foregroundColor(.black)
-                    
-                    Text(journey.startTime.formatted(date: .omitted, time: .shortened))
-                        .font(.system(size: 12))
-                        .foregroundColor(.black.opacity(0.6))
-                }
-            }
-        }
         .toolbar(.hidden, for: .tabBar)
         .fullScreenCover(isPresented: $showFullScreenMap) {
             FullScreenMapView(journey: journey, isPresented: $showFullScreenMap)
@@ -159,18 +146,18 @@ struct JourneyDetailView: View {
                 Text(value)
                     .font(.system(size: 20, weight: .bold))
                     .fontDesign(.monospaced)
-                    .foregroundColor(.black)
-                
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                 Text(title)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.black.opacity(0.5))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.08), radius: 8, y: 3)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
     }
     
     private var timelineSection: some View {
@@ -178,17 +165,17 @@ struct JourneyDetailView: View {
             Text("Emotional Timeline")
                 .font(.system(size: 20, weight: .bold))
                 .fontDesign(.serif)
-                .foregroundColor(.black)
-            
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
             VStack(spacing: 12) {
                 ForEach(Array(journey.checkpoints.enumerated()), id: \.element.id) { index, checkpoint in
                     timelineItem(checkpoint: checkpoint, isLast: index == journey.checkpoints.count - 1)
                 }
             }
             .padding(16)
-            .background(Color.white)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.08), radius: 8, y: 3)
+            .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
         }
     }
     
@@ -214,23 +201,23 @@ struct JourneyDetailView: View {
                 
                 if !isLast {
                     Rectangle()
-                        .fill(Color.black.opacity(0.1))
+                        .fill(AppConstants.borderColor(for: colorScheme).opacity(0.3))
                         .frame(width: 2, height: 40)
                 }
             }
-            
+
             // Content
             VStack(alignment: .leading, spacing: 6) {
                 let feeling = FeelingLevel(rawValue: checkpoint.feeling) ?? .okay
-                
+
                 Text(feeling.title)
                     .font(.system(size: 16, weight: .semibold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
-                
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                 Text(checkpoint.timestamp.formatted(date: .omitted, time: .complete))
                     .font(.system(size: 13))
-                    .foregroundColor(.black.opacity(0.5))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
             
             Spacer()
@@ -242,17 +229,17 @@ struct JourneyDetailView: View {
             Text("Journey Summary")
                 .font(.system(size: 20, weight: .bold))
                 .fontDesign(.serif)
-                .foregroundColor(.black)
-            
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
             VStack(alignment: .leading, spacing: 12) {
                 summaryRow(icon: "calendar", label: "Date", value: journey.startTime.formatted(date: .long, time: .omitted))
                 summaryRow(icon: "clock", label: "Started", value: journey.startTime.formatted(date: .omitted, time: .shortened))
                 summaryRow(icon: "clock.badge.checkmark", label: "Ended", value: journey.endTime.formatted(date: .omitted, time: .shortened))
             }
             .padding(16)
-            .background(Color.white)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.08), radius: 8, y: 3)
+            .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
         }
     }
     
@@ -260,19 +247,19 @@ struct JourneyDetailView: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(AppConstants.primaryColor)
+                .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                 .frame(width: 24)
-            
+
             Text(label)
                 .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.black.opacity(0.6))
-            
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
             Spacer()
-            
+
             Text(value)
                 .font(.system(size: 14, weight: .semibold))
                 .fontDesign(.monospaced)
-                .foregroundColor(.black)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
         }
     }
     
@@ -683,24 +670,25 @@ struct FullScreenMapView: View {
 
 // MARK: - Map Legend Sheet
 struct MapLegendSheet: View {
+    @Environment(\.colorScheme) var colorScheme
     var body: some View {
         VStack(spacing: 0) {
             // Header
             VStack(alignment: .leading, spacing: 8) {
                 Text("Map Legend")
                     .font(.system(size: 28, weight: .bold, design: .serif))
-                    .foregroundColor(.black)
-                
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                 Text("Understanding your journey visualization")
                     .font(.system(size: 15))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 20)
             .padding(.top, 24)
             .padding(.bottom, 16)
-            .background(AppConstants.defaultBackgroundColor)
-            
+            .background(AppConstants.backgroundColor(for: colorScheme))
+
             // Scrollable content
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -756,18 +744,19 @@ struct MapLegendSheet: View {
                 .padding(.top, 8)
                 .padding(.bottom, 20)
             }
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
         }
-        .background(AppConstants.defaultBackgroundColor)
+        .background(AppConstants.backgroundColor(for: colorScheme))
     }
 }
 
 struct LegendItem: View {
+    @Environment(\.colorScheme) var colorScheme
     let icon: String
     let iconColor: Color
     let title: String
     let description: String
-    
+
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             // Icon
@@ -775,28 +764,28 @@ struct LegendItem: View {
                 Circle()
                     .fill(iconColor.opacity(0.15))
                     .frame(width: 50, height: 50)
-                
+
                 Image(systemName: icon)
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundColor(iconColor)
             }
-            
+
             // Content
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.black)
-                
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                 Text(description)
                     .font(.system(size: 15))
-                    .foregroundColor(.black.opacity(0.7))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(16)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 2)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 2)
     }
 }
 

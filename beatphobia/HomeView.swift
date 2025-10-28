@@ -11,6 +11,7 @@ struct HomeView: View {
     // Injecting the AuthManager for potential Sign Out functionality in the Profile tab
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @Environment(\.colorScheme) var colorScheme
     
     // Optional: State to manage the currently selected tab
     @State private var selectedTab: Tab = .journeys
@@ -40,54 +41,109 @@ struct HomeView: View {
     }
     
     var body: some View {
-        // MARK: - Main TabView Container (iOS 26 Best Practice)
-        TabView(selection: $selectedTab) {
+        ZStack {
+            Group {
+                switch selectedTab {
+                case .journeys:
+                    JourneysView(isTabBarVisible: $isTabBarVisible)
+                case .community:
+                    CommunityOverview()
+                case .journal:
+                    JournalHome()
+                case .profile:
+                    ProfileView()
+                }
+            }
             
-            // 1. Phobia Journeys Tab
-            JourneysView(isTabBarVisible: $isTabBarVisible)
-                .tabItem {
-                    Image(systemName: Tab.journeys.systemImage)
+            VStack {
+                Spacer()
+                
+                if isTabBarVisible {
+                    customTabBar.padding(.bottom, 15)
                 }
-                .tag(Tab.journeys)
-            
-            CommunityOverview()
-                .tabItem {
-                    Image(systemName: Tab.community.systemImage)
+            }
+            .ignoresSafeArea(edges: .bottom)
+            .onAppear {
+                // Show paywall once on first launch if user is not already pro
+                if !hasShownPaywall && !subscriptionManager.isPro {
+                    // Small delay to let the home view settle
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        showPaywall = true
+                        hasShownPaywall = true
+                    }
                 }
-                .tag(Tab.community)
-
-            // 2. Journal Tab
-            JournalHome()
-                .tabItem {
-                    Image(systemName: Tab.journal.systemImage)
-                }
-                .tag(Tab.journal)
-            
-            // 3. Profile Tab
-            ProfileView()
-                .tabItem {
-                    Image(systemName: Tab.profile.systemImage)
-                }
-                .tag(Tab.profile)
-        }
-        // Apply custom font globally to all tab items for consistency
-        .font(.custom(AppConstants.defaultFontName, size: 12))
-        // Hide/show tab bar based on state
-        .toolbar(isTabBarVisible ? .visible : .hidden, for: .tabBar)
-        .onAppear {
-            // Show paywall once on first launch if user is not already pro
-            if !hasShownPaywall && !subscriptionManager.isPro {
-                // Small delay to let the home view settle
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    showPaywall = true
-                    hasShownPaywall = true
+            }
+            .sheet(isPresented: $showPaywall) {
+                NavigationStack {
+                    PaywallView()
+                        .environmentObject(subscriptionManager)
                 }
             }
         }
-        .sheet(isPresented: $showPaywall) {
-            PaywallView()
-                .environmentObject(subscriptionManager)
+    }
+    
+    // MARK: - Custom Tab Bar
+    private var customTabBar: some View {
+        HStack(spacing: 0) {
+            tabButton(tab: .journeys, icon: "brain.head.profile")
+            tabButton(tab: .community, icon: "bubble.left.and.bubble.right")
+            tabButton(tab: .journal, icon: "book.pages")
+            tabButton(tab: .profile, icon: "person.crop.circle")
         }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+        .background(
+            Group {
+                // Custom background for dark mode - slightly whiter
+                // let bgColor = colorScheme == .dark 
+                //     ? Color(red: 38/255, green: 38/255, blue: 42/255) // Slightly whiter dark gray
+                //     : AppConstants.cardBackgroundColor(for: colorScheme)
+                
+                // bgColor
+                //     .opacity(0.75)
+                
+                // Blur effect for depth
+                // VisualEffectView(effect: UIBlurEffect(style: colorScheme == .dark ? .systemThinMaterialDark : .systemThinMaterialLight))
+                //     .opacity(colorScheme == .dark ? 0.5 : 0.6)
+            }
+        )
+        .glassEffect()
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 10, y: -5)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 0)
+    }
+    
+    private func tabButton(tab: Tab, icon: String) -> some View {
+        Button(action: {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selectedTab = tab
+            }
+            // Haptic feedback
+            let generator = UIImpactFeedbackGenerator(style: .light)
+            generator.impactOccurred()
+        }) {
+            Image(systemName: icon)
+                .font(.system(size: 26, weight: selectedTab == tab ? .semibold : .regular))
+                .foregroundColor(selectedTab == tab ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.secondaryTextColor(for: colorScheme))
+                .scaleEffect(selectedTab == tab ? 1.1 : 1.0)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Visual Effect View
+struct VisualEffectView: UIViewRepresentable {
+    var effect: UIVisualEffect?
+    
+    func makeUIView(context: UIViewRepresentableContext<Self>) -> UIVisualEffectView {
+        UIVisualEffectView()
+    }
+    
+    func updateUIView(_ uiView: UIVisualEffectView, context: UIViewRepresentableContext<Self>) {
+        uiView.effect = effect
     }
 }
 
@@ -108,4 +164,6 @@ struct ForumView: View {
         
     HomeView()
         .environmentObject(mockAuthManager)
+        .environmentObject(SubscriptionManager())
+        .environmentObject(ThemeManager())
 }

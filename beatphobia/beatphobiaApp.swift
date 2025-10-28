@@ -13,6 +13,7 @@ struct beatphobiaApp: App {
     @StateObject private var authManager: AuthManager
     @StateObject private var journalSyncService: JournalSyncService
     @StateObject private var subscriptionManager: SubscriptionManager
+    @StateObject private var themeManager: ThemeManager
     
     init() {
         // Configure Realm before any Realm operations
@@ -27,6 +28,7 @@ struct beatphobiaApp: App {
             "setting.backup": true,
             "setting.miles": true,
             "shown_paywall": false, // Track if paywall has been shown once
+            "app_theme": ThemeOption.system.rawValue, // Default theme preference
         ]
         UserDefaults.standard.register(defaults: defaults)
         
@@ -34,6 +36,7 @@ struct beatphobiaApp: App {
         _authManager = StateObject(wrappedValue: AuthManager())
         _journalSyncService = StateObject(wrappedValue: JournalSyncService())
         _subscriptionManager = StateObject(wrappedValue: SubscriptionManager())
+        _themeManager = StateObject(wrappedValue: ThemeManager())
     }
     
     var body: some Scene {
@@ -42,6 +45,8 @@ struct beatphobiaApp: App {
                 .environmentObject(authManager)
                 .environmentObject(journalSyncService)
                 .environmentObject(subscriptionManager)
+                .environmentObject(themeManager)
+                .preferredColorScheme(themeManager.selectedTheme.colorScheme)
                 .onAppear {
                     // Connect subscription manager to journal sync service
                     journalSyncService.setSubscriptionManager(subscriptionManager)

@@ -11,24 +11,25 @@ import Supabase
 
 struct SignInView: View {
     @EnvironmentObject var authManager: AuthManager
+    @Environment(\.colorScheme) var colorScheme
     @State private var currentPage: Int = 0
     
     var body: some View {
         ZStack {
-            AppConstants.defaultBackgroundColor
+            AppConstants.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
             
             TabView(selection: $currentPage) {
-                WelcomeScreen(currentPage: $currentPage)
+                WelcomeScreen(currentPage: $currentPage, colorScheme: colorScheme)
                     .tag(0)
                 
-                AboutAppScreen(currentPage: $currentPage)
+                AboutAppScreen(currentPage: $currentPage, colorScheme: colorScheme)
                     .tag(1)
                 
-                DisclaimerScreen(currentPage: $currentPage)
+                DisclaimerScreen(currentPage: $currentPage, colorScheme: colorScheme)
                     .tag(2)
                 
-                AuthScreen()
+                AuthScreen(colorScheme: colorScheme)
                     .tag(3)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
@@ -40,7 +41,7 @@ struct SignInView: View {
                 HStack(spacing: 8) {
                     ForEach(0..<4, id: \.self) { index in
                         Circle()
-                            .fill(currentPage == index ? AppConstants.primaryColor : Color.black.opacity(0.2))
+                            .fill(currentPage == index ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.3))
                             .frame(width: 8, height: 8)
                             .animation(.easeInOut(duration: 0.3), value: currentPage)
                     }
@@ -54,6 +55,7 @@ struct SignInView: View {
 // MARK: - Welcome Screen
 struct WelcomeScreen: View {
     @Binding var currentPage: Int
+    let colorScheme: ColorScheme
     
     var body: some View {
         VStack(spacing: 40) {
@@ -65,8 +67,8 @@ struct WelcomeScreen: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                AppConstants.primaryColor.opacity(0.2),
-                                AppConstants.primaryColor.opacity(0.05)
+                                AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.2),
+                                AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.05)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -78,8 +80,8 @@ struct WelcomeScreen: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                AppConstants.primaryColor.opacity(0.3),
-                                AppConstants.primaryColor.opacity(0.1)
+                                AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.3),
+                                AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.1)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -89,22 +91,22 @@ struct WelcomeScreen: View {
                 
                 Image(systemName: "heart.circle.fill")
                     .font(.system(size: 70, weight: .semibold))
-                    .foregroundColor(AppConstants.primaryColor)
+                    .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
             }
             
             VStack(spacing: 16) {
                 Text("Welcome to")
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 
                 Text(AppConstants.appName)
                     .font(.system(size: 48, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Text("Your journey to overcome anxiety starts here")
                     .font(.system(size: 17))
-                    .foregroundColor(.black.opacity(0.7))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
                     .lineSpacing(4)
@@ -131,15 +133,15 @@ struct WelcomeScreen: View {
                 .background(
                     LinearGradient(
                         colors: [
-                            AppConstants.primaryColor,
-                            AppConstants.primaryColor.opacity(0.8)
+                            AppConstants.adaptivePrimaryColor(for: colorScheme),
+                            AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.8)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .cornerRadius(16)
-                .shadow(color: AppConstants.primaryColor.opacity(0.4), radius: 15, y: 8)
+                .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 15, y: 8)
             }
             .padding(.horizontal, 40)
             .padding(.bottom, 80)
@@ -150,6 +152,7 @@ struct WelcomeScreen: View {
 // MARK: - About App Screen
 struct AboutAppScreen: View {
     @Binding var currentPage: Int
+    let colorScheme: ColorScheme
     
     var body: some View {
         ScrollView {
@@ -161,13 +164,13 @@ struct AboutAppScreen: View {
                     Text("Tools to Help You Thrive")
                         .font(.system(size: 36, weight: .bold))
                         .fontDesign(.serif)
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 30)
                     
                     Text("Everything you need to manage anxiety and track your progress")
                         .font(.system(size: 16))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
                 }
@@ -177,28 +180,32 @@ struct AboutAppScreen: View {
                         icon: "map.fill",
                         color: .blue,
                         title: "Journey Tracker",
-                        description: "Track your location and emotions as you face your fears"
+                        description: "Track your location and emotions as you face your fears",
+                        colorScheme: colorScheme
                     )
                     
                     FeatureCard(
                         icon: "wind",
                         color: .green,
                         title: "Breathing Exercises",
-                        description: "Calm your nervous system with guided techniques"
+                        description: "Calm your nervous system with guided techniques",
+                        colorScheme: colorScheme
                     )
                     
                     FeatureCard(
                         icon: "book.fill",
                         color: .orange,
                         title: "Daily Journal",
-                        description: "Record your thoughts and track emotional patterns"
+                        description: "Record your thoughts and track emotional patterns",
+                        colorScheme: colorScheme
                     )
                     
                     FeatureCard(
                         icon: "person.3.fill",
                         color: .purple,
                         title: "Community Support",
-                        description: "Connect with others on the same journey"
+                        description: "Connect with others on the same journey",
+                        colorScheme: colorScheme
                     )
                 }
                 .padding(.horizontal, 30)
@@ -222,15 +229,15 @@ struct AboutAppScreen: View {
                     .background(
                         LinearGradient(
                             colors: [
-                                AppConstants.primaryColor,
-                                AppConstants.primaryColor.opacity(0.8)
+                                AppConstants.adaptivePrimaryColor(for: colorScheme),
+                                AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.8)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .cornerRadius(16)
-                    .shadow(color: AppConstants.primaryColor.opacity(0.4), radius: 15, y: 8)
+                    .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 15, y: 8)
                 }
                 .padding(.horizontal, 40)
                 .padding(.top, 20)
@@ -243,6 +250,7 @@ struct AboutAppScreen: View {
 // MARK: - Disclaimer Screen
 struct DisclaimerScreen: View {
     @Binding var currentPage: Int
+    let colorScheme: ColorScheme
     
     var body: some View {
         VStack(spacing: 0) {
@@ -264,12 +272,12 @@ struct DisclaimerScreen: View {
                     Text("Important Notice")
                         .font(.system(size: 32, weight: .bold))
                         .fontDesign(.serif)
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         .multilineTextAlignment(.center)
                     
                     Text("This app is designed to support you, but it does not replace professional medical advice, diagnosis, or treatment.")
                         .font(.system(size: 17))
-                        .foregroundColor(.black.opacity(0.7))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                         .padding(.horizontal, 30)
@@ -278,17 +286,20 @@ struct DisclaimerScreen: View {
                 VStack(spacing: 16) {
                     DisclaimerPoint(
                         icon: "cross.case.fill",
-                        text: "Always consult with qualified healthcare professionals"
+                        text: "Always consult with qualified healthcare professionals",
+                        colorScheme: colorScheme
                     )
                     
                     DisclaimerPoint(
                         icon: "phone.arrow.up.right.fill",
-                        text: "If experiencing a crisis, contact emergency services immediately"
+                        text: "If experiencing a crisis, contact emergency services immediately",
+                        colorScheme: colorScheme
                     )
                     
                     DisclaimerPoint(
                         icon: "heart.text.square.fill",
-                        text: "Use this app as a complementary tool alongside professional care"
+                        text: "Use this app as a complementary tool alongside professional care",
+                        colorScheme: colorScheme
                     )
                 }
                 .padding(.horizontal, 30)
@@ -315,15 +326,15 @@ struct DisclaimerScreen: View {
                 .background(
                     LinearGradient(
                         colors: [
-                            AppConstants.primaryColor,
-                            AppConstants.primaryColor.opacity(0.8)
+                            AppConstants.adaptivePrimaryColor(for: colorScheme),
+                            AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.8)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .cornerRadius(16)
-                .shadow(color: AppConstants.primaryColor.opacity(0.3), radius: 15, y: 8)
+                .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 15, y: 8)
             }
             .padding(.horizontal, 30)
             .padding(.bottom, 80)
@@ -334,30 +345,32 @@ struct DisclaimerScreen: View {
 struct DisclaimerPoint: View {
     let icon: String
     let text: String
+    let colorScheme: ColorScheme
     
     var body: some View {
         HStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.system(size: 24))
-                .foregroundColor(AppConstants.primaryColor)
+                .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                 .frame(width: 40)
             
             Text(text)
                 .font(.system(size: 15))
-                .foregroundColor(.black.opacity(0.8))
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.9))
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
     }
 }
 
 // MARK: - Auth Screen
 struct AuthScreen: View {
     @EnvironmentObject var authManager: AuthManager
+    let colorScheme: ColorScheme
     @State private var email = ""
     @State private var password = ""
     @State private var isSigningUp = false
@@ -374,11 +387,11 @@ struct AuthScreen: View {
                     Text(isSigningUp ? "Create Account" : "Welcome Back")
                         .font(.system(size: 36, weight: .bold))
                         .fontDesign(.serif)
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     
                     Text(isSigningUp ? "Start your journey today" : "Sign in to continue")
                         .font(.system(size: 16))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
                 
                 VStack(spacing: 16) {
@@ -386,38 +399,38 @@ struct AuthScreen: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Email")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.black.opacity(0.7))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         
                         TextField("your@email.com", text: $email)
                             .font(.system(size: 16))
                             .padding(16)
-                            .background(Color.white)
+                            .background(AppConstants.cardBackgroundColor(for: colorScheme))
                             .cornerRadius(12)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                                    .stroke(AppConstants.borderColor(for: colorScheme), lineWidth: 1)
                             )
                             .keyboardType(.emailAddress)
                             .autocapitalization(.none)
-                            .foregroundColor(.black)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     }
                     
                     // Password Field
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Password")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.black.opacity(0.7))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         
                         SecureField("Enter your password", text: $password)
                             .font(.system(size: 16))
                             .padding(16)
-                            .background(Color.white)
+                            .background(AppConstants.cardBackgroundColor(for: colorScheme))
                             .cornerRadius(12)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                                    .stroke(AppConstants.borderColor(for: colorScheme), lineWidth: 1)
                             )
-                            .foregroundColor(.black)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     }
                 }
                 .padding(.horizontal, 30)
@@ -451,15 +464,15 @@ struct AuthScreen: View {
                         .background(
                             LinearGradient(
                                 colors: [
-                                    AppConstants.primaryColor,
-                                    AppConstants.primaryColor.opacity(0.8)
+                                    AppConstants.adaptivePrimaryColor(for: colorScheme),
+                                    AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.8)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .cornerRadius(16)
-                        .shadow(color: AppConstants.primaryColor.opacity(0.4), radius: 15, y: 8)
+                        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 15, y: 8)
                 }
                 .padding(.horizontal, 30)
                 .padding(.top, 10)
@@ -475,11 +488,11 @@ struct AuthScreen: View {
                     HStack(spacing: 4) {
                         Text(isSigningUp ? "Already have an account?" : "Don't have an account?")
                             .font(.system(size: 15))
-                            .foregroundColor(.black.opacity(0.6))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         
                         Text(isSigningUp ? "Sign In" : "Create One")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(AppConstants.primaryColor)
+                            .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                     }
                 }
                 .padding(.top, 10)
@@ -524,6 +537,7 @@ struct FeatureCard: View {
     let color: Color
     let title: String
     let description: String
+    let colorScheme: ColorScheme
     
     var body: some View {
         HStack(spacing: 16) {
@@ -541,24 +555,25 @@ struct FeatureCard: View {
                 Text(title)
                     .font(.system(size: 17, weight: .bold))
                     .fontDesign(.rounded)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Text(description)
                     .font(.system(size: 14))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .lineLimit(2)
             }
             
             Spacer()
         }
         .padding(20)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 10, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 10, y: 4)
     }
 }
 
 #Preview {
     SignInView()
         .environmentObject(AuthManager())
+        .environmentObject(ThemeManager())
 }

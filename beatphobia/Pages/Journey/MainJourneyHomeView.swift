@@ -31,7 +31,7 @@ enum ToolCategory: String, CaseIterable {
     }
 }
 
-struct CalmingTool: Identifiable {
+struct CalmingTool: Identifiable, Equatable {
     let id = UUID()
     let name: String
     let category: ToolCategory
@@ -40,17 +40,24 @@ struct CalmingTool: Identifiable {
     let duration: String
     let difficulty: String // "Easy", "Medium", "Advanced"
     let destinationView: (() -> AnyView)?
+    
+    static func == (lhs: CalmingTool, rhs: CalmingTool) -> Bool {
+        lhs.id == rhs.id
+    }
 }
 
 // MARK: - Main View
 
 struct JourneyAgorahobiaView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var journalSyncService: JournalSyncService
+    @Environment(\.colorScheme) var colorScheme
     @AppStorage("anxietyLevel") private var anxietyLevel: Double = 5
     @Binding var isTabBarVisible: Bool
-    @State private var showLocationTracker = false
     @State private var showEmergencyTools = false
     @State private var journeyCount: Int = 0
+    @State private var selectedToolForSheet: CalmingTool?
+    @State private var showToolSheet = false
     
     private var firstName: String {
         let name: String? = authManager.currentUserProfile?.name
@@ -154,6 +161,15 @@ struct JourneyAgorahobiaView: View {
             destinationView: { AnyView(ColorHuntView()) }
         ),
         CalmingTool(
+            name: "Tapper",
+            category: .distraction,
+            icon: "hand.tap.fill",
+            description: "Tap the targets quickly in this Whack-a-Mole style game",
+            duration: "1-2 min",
+            difficulty: "Easy",
+            destinationView: { AnyView(TapperView()) }
+        ),
+        CalmingTool(
             name: "Positive Affirmations",
             category: .affirmation,
             icon: "heart.text.square.fill",
@@ -185,11 +201,11 @@ struct JourneyAgorahobiaView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Hi \(firstName)")
                                     .font(.system(size: 38, weight: .bold, design: .serif))
-                                    .foregroundColor(.black)
+                                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                                 
                                 Text("Tools to help you manage anxiety and panic")
                                     .font(.system(size: 15, weight: .regular))
-                                    .foregroundColor(.black.opacity(0.6))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             }
                             
                             // Daily Quote Card
@@ -206,7 +222,7 @@ struct JourneyAgorahobiaView: View {
                                 
                                 Text(dailyQuote)
                                     .font(.system(size: 14, weight: .medium, design: .serif))
-                                    .foregroundColor(.black.opacity(0.8))
+                                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.9))
                                     .italic()
                             }
                             .padding(16)
@@ -258,9 +274,7 @@ struct JourneyAgorahobiaView: View {
                         }
                     
                     // Journey Tracker CTA
-                    Button(action: {
-                        showLocationTracker = true
-                    }) {
+                    NavigationLink(destination: LocationTrackerView(isTabBarVisible: $isTabBarVisible)) {
                         ZStack(alignment: .leading) {
                             // Background gradient
                             LinearGradient(
@@ -286,16 +300,20 @@ struct JourneyAgorahobiaView: View {
                                 
                                 // Content
                                 VStack(alignment: .leading, spacing: 6) {
-                                    Text("Tracker")
+                                    Text("Location Tracker")
                                         .font(.system(size: 22, weight: .bold))
                                         .fontDesign(.serif)
                                         .foregroundColor(.white)
+                                        .minimumScaleFactor(0.7)
+                                        .lineLimit(1)
                                     
                                     Text("Record your location and feelings as you explore.")
                                         .font(.system(size: 14))
                                         .foregroundColor(.white.opacity(0.9))
                                         .lineLimit(2)
+                                        .minimumScaleFactor(0.8)
                                 }
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 
                                 Spacer()
                                 
@@ -313,32 +331,6 @@ struct JourneyAgorahobiaView: View {
                     .buttonStyle(PlainButtonStyle())
                     .padding(.horizontal, 20)
                     
-                    // View Past Journeys Button
-                    NavigationLink(destination: PastJourneysView()) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(AppConstants.primaryColor)
-                            
-                            Text("View Past Journeys")
-                                .font(.system(size: 15, weight: .semibold))
-                                .fontDesign(.serif)
-                                .foregroundColor(AppConstants.primaryColor)
-                            
-                            Spacer()
-                            
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(AppConstants.primaryColor.opacity(0.5))
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 14)
-                        .background(Color.white)
-                        .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .padding(.horizontal, 20)
                     
                     // Panic Scale Tracker CTA
                     NavigationLink(destination: PanicScaleView()) {
@@ -403,25 +395,25 @@ struct JourneyAgorahobiaView: View {
                             Image(systemName: "心.fill")
                                 .font(.system(size: 22))
                                 .foregroundColor(anxietyColorForLevel(anxietyLevel))
-                            
+
                             Text("How are you feeling right now?")
                                 .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.black)
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         }
-                        
+
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Text("Calm")
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.black.opacity(0.5))
-                                
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
                                 Spacer()
-                                
+
                                 Text("Panicked")
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(.black.opacity(0.5))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             }
-                            
+
                             ZStack(alignment: .leading) {
                                 // Track background gradient
                                 Capsule()
@@ -438,45 +430,45 @@ struct JourneyAgorahobiaView: View {
                                         )
                                     )
                                     .frame(height: 8)
-                                
+
                                 Slider(value: $anxietyLevel, in: 1...10, step: 1)
                                     .tint(anxietyColorForLevel(anxietyLevel))
                             }
-                            
+
                             HStack(spacing: 12) {
                                 ZStack {
                                     Circle()
                                         .fill(anxietyColorForLevel(anxietyLevel).opacity(0.2))
                                         .frame(width: 32, height: 32)
-                                    
+
                                     Circle()
                                         .fill(anxietyColorForLevel(anxietyLevel))
                                         .frame(width: 16, height: 16)
                                 }
-                                
+
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Level \(Int(anxietyLevel))/10")
                                         .font(.system(size: 18, weight: .bold))
-                                        .foregroundColor(.black)
-                                    
+                                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                                     Text(anxietyLabelForLevel(anxietyLevel))
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundColor(anxietyColorForLevel(anxietyLevel))
                                 }
-                                
+
                                 Spacer()
                             }
                         }
-                        
+
                         // Message card
                         HStack(spacing: 10) {
                             Image(systemName: "lightbulb.fill")
                                 .font(.system(size: 14))
                                 .foregroundColor(anxietyColorForLevel(anxietyLevel))
-                            
+
                             Text(anxietyMessageForLevel(anxietyLevel))
                                 .font(.system(size: 14, weight: .regular))
-                                .foregroundColor(.black.opacity(0.75))
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         }
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -486,8 +478,8 @@ struct JourneyAgorahobiaView: View {
                     .padding(20)
                     .background(
                         RoundedRectangle(cornerRadius: 20)
-                            .fill(.white)
-                            .shadow(color: Color.black.opacity(0.06), radius: 16, y: 4)
+                            .fill(AppConstants.cardBackgroundColor(for: colorScheme))
+                            .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 16, y: 4)
                     )
                     .padding(.horizontal, 20)
                     
@@ -496,14 +488,14 @@ struct JourneyAgorahobiaView: View {
                         HStack(spacing: 8) {
                             Text("Recommended for You")
                                 .font(.system(size: 22, weight: .bold, design: .serif))
-                                .foregroundColor(.black)
-                            
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                             // Smart recommendation indicator
                             HStack(spacing: 4) {
                                 Image(systemName: "brain.head.profile")
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(.purple)
-                                
+
                                 Text("Smart")
                                     .font(.system(size: 11, weight: .bold))
                                     .foregroundColor(.purple)
@@ -514,29 +506,31 @@ struct JourneyAgorahobiaView: View {
                             .cornerRadius(8)
                         }
                         .padding(.horizontal, 20)
-                        
+
                         // Recommendation context
                         if anxietyLevel >= 7 {
                             Text("Quick, easy tools for high anxiety")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.black.opacity(0.6))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                 .padding(.horizontal, 20)
                         } else if anxietyLevel >= 4 {
                             Text("Balanced techniques for moderate anxiety")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.black.opacity(0.6))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                 .padding(.horizontal, 20)
                         } else {
                             Text("Deep relaxation for calm moments")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.black.opacity(0.6))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                 .padding(.horizontal, 20)
                         }
                         
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 ForEach(recommendedTools) { tool in
-                                    NavigationLink(destination: destinationForTool(tool)) {
+                                    Button(action: {
+                                        selectedToolForSheet = tool
+                                    }) {
                                         ToolCard(tool: tool, isCompact: true, isRecommended: true)
                                     }
                                     .buttonStyle(PlainButtonStyle())
@@ -550,12 +544,12 @@ struct JourneyAgorahobiaView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("All Tools")
                             .font(.system(size: 22, weight: .bold, design: .serif))
-                            .foregroundColor(.black)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                             .padding(.horizontal, 20)
-                        
+
                         ForEach(ToolCategory.allCases, id: \.self) { category in
                             let categoryTools = tools.filter { $0.category == category }
-                            
+
                             if !categoryTools.isEmpty {
                                 VStack(alignment: .leading, spacing: 12) {
                                     // Category Header
@@ -563,10 +557,10 @@ struct JourneyAgorahobiaView: View {
                                         Circle()
                                             .fill(category.color)
                                             .frame(width: 8, height: 8)
-                                        
+
                                         Text(category.rawValue)
                                             .font(.system(size: 18, weight: .semibold))
-                                            .foregroundColor(.black)
+                                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                                     }
                                     .padding(.horizontal, 20)
                                     
@@ -574,7 +568,9 @@ struct JourneyAgorahobiaView: View {
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         HStack(spacing: 12) {
                                             ForEach(categoryTools) { tool in
-                                                NavigationLink(destination: destinationForTool(tool)) {
+                                                Button(action: {
+                                                    selectedToolForSheet = tool
+                                                }) {
                                                     ToolCard(tool: tool, isCompact: false, isRecommended: false)
                                                 }
                                                 .buttonStyle(PlainButtonStyle())
@@ -589,15 +585,23 @@ struct JourneyAgorahobiaView: View {
                 }
                 .padding(.bottom, 100) // Extra padding for floating button
             }
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
             .navigationBarHidden(true)
             .onAppear {
                 // Ensure tab bar is visible when returning to this view
                 loadJourneyCount()
             }
             .toolbar(.visible, for: .tabBar)
-            .fullScreenCover(isPresented: $showLocationTracker) {
-                LocationTrackerView(isTabBarVisible: $isTabBarVisible)
+            .onChange(of: selectedToolForSheet) { oldValue, newValue in
+                showToolSheet = newValue != nil
+            }
+            .fullScreenCover(isPresented: $showToolSheet) {
+                if let tool = selectedToolForSheet {
+                    destinationForTool(tool)
+                        .onDisappear {
+                            selectedToolForSheet = nil
+                        }
+                }
             }
             
             // Floating Emergency Tools Button
@@ -638,7 +642,7 @@ struct JourneyAgorahobiaView: View {
                 .animation(.spring(response: 0.4, dampingFraction: 0.7), value: anxietyLevel)
             }
             }
-            .sheet(isPresented: $showEmergencyTools) {
+            .fullScreenCover(isPresented: $showEmergencyTools) {
                 EmergencyToolsSheet(anxietyLevel: anxietyLevel)
             }
         }
@@ -662,10 +666,11 @@ struct JourneyAgorahobiaView: View {
 // MARK: - Supporting Views
 
 struct ToolCard: View {
+    @Environment(\.colorScheme) var colorScheme
     let tool: CalmingTool
     let isCompact: Bool
     let isRecommended: Bool
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Recommended ribbon
@@ -692,7 +697,7 @@ struct ToolCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             
-            Card(backgroundColor: .white, cornerRadius: isRecommended ? 0 : 16, padding: 16) {
+            Card(backgroundColor: AppConstants.cardBackgroundColor(for: colorScheme), cornerRadius: isRecommended ? 0 : 16, padding: 16) {
                 VStack(alignment: .leading, spacing: 12) {
                     // Icon and Category
                     HStack {
@@ -700,34 +705,34 @@ struct ToolCard: View {
                             Circle()
                                 .fill(tool.category.color.opacity(0.15))
                                 .frame(width: 50, height: 50)
-                            
+
                             Image(systemName: tool.icon)
                                 .font(.system(size: 23, weight: .semibold))
                                 .foregroundColor(tool.category.color)
                         }
-                        
+
                         Spacer()
-                        
+
                         VStack(alignment: .trailing, spacing: 4) {
                             Text(tool.duration)
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.black.opacity(0.6))
-                            
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
                             DifficultyBadge(difficulty: tool.difficulty)
                         }
                     }
-                    
+
                     // Title
                     Text(tool.name)
                         .font(.system(size: 17, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    
+
                     // Description
                     Text(tool.description)
                         .font(.system(size: 13, weight: .regular))
-                        .foregroundColor(.black.opacity(0.7))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         .lineLimit(3)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
@@ -749,7 +754,7 @@ struct ToolCard: View {
             }
         }
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(isRecommended ? 0.08 : 0.05), radius: isRecommended ? 12 : 8, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: isRecommended ? 12 : 8, y: 4)
     }
 }
 
@@ -838,71 +843,72 @@ func anxietyLabelForLevel(_ level: Double) -> String {
 // MARK: - Placeholder Tool Views
 
 struct PlaceholderToolView: View {
+    @Environment(\.colorScheme) var colorScheme
     let tool: CalmingTool
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
                 Spacer()
                     .frame(height: 60)
-                
+
                 // Icon
                 ZStack {
                     Circle()
                         .fill(tool.category.color.opacity(0.15))
                         .frame(width: 120, height: 120)
-                    
+
                     Image(systemName: tool.icon)
                         .font(.system(size: 50, weight: .semibold))
                         .foregroundColor(tool.category.color)
                 }
-                
+
                 VStack(spacing: 12) {
                     Text(tool.name)
                         .font(.system(size: 32, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         .multilineTextAlignment(.center)
-                    
+
                     HStack(spacing: 12) {
                         Label(tool.duration, systemImage: "clock.fill")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.black.opacity(0.6))
-                        
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
                         DifficultyBadge(difficulty: tool.difficulty)
                     }
                 }
-                
+
                 Text(tool.description)
                     .font(.system(size: 16))
-                    .foregroundColor(.black.opacity(0.7))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
-                
+
                 Divider()
                     .padding(.vertical, 12)
-                
+
                 VStack(spacing: 16) {
                     HStack(spacing: 8) {
                         Image(systemName: "hammer.fill")
                             .foregroundColor(.orange)
-                        
+
                         Text("Coming Soon")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     }
-                    
+
                     Text("This tool is currently under development and will be available in a future update.")
                         .font(.system(size: 14))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                 }
-                
+
                 Spacer()
             }
             .padding()
         }
-        .background(AppConstants.defaultBackgroundColor)
+        .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -924,11 +930,12 @@ struct PMRView: View {
 // MARK: - Quick Stat Card
 
 struct QuickStatCard: View {
+    @Environment(\.colorScheme) var colorScheme
     let icon: String
     let value: String
     let label: String
     let color: Color
-    
+
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
@@ -944,21 +951,21 @@ struct QuickStatCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
                     .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(.black)
-                
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                 Text(label)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
-            
+
             Spacer()
         }
         .padding(16)
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 8, y: 2)
+                .fill(AppConstants.cardBackgroundColor(for: colorScheme))
+                .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 2)
         )
     }
 }
@@ -967,7 +974,10 @@ struct QuickStatCard: View {
 
 struct EmergencyToolsSheet: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     let anxietyLevel: Double
+    @State private var selectedTool: CalmingTool?
+    @State private var showTool = false
     
     let emergencyTools = [
         CalmingTool(
@@ -1000,9 +1010,8 @@ struct EmergencyToolsSheet: View {
     ]
     
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 24) {
+        ScrollView {
+            VStack(spacing: 24) {
                     // Header Message
                     VStack(spacing: 12) {
                         ZStack {
@@ -1030,32 +1039,32 @@ struct EmergencyToolsSheet: View {
                         
                         Text("Quick Relief Tools")
                             .font(.system(size: 28, weight: .bold, design: .serif))
-                            .foregroundColor(.black)
-                        
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                         Text("These tools can help you right now")
                             .font(.system(size: 15))
-                            .foregroundColor(.black.opacity(0.6))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             .multilineTextAlignment(.center)
                     }
                     .padding(.horizontal, 20)
-                    
+
                     // Emergency contact info
                     VStack(spacing: 12) {
                         HStack(spacing: 12) {
                             Image(systemName: "phone.fill")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.blue)
-                            
+
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Need immediate help?")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.black)
-                                
+                                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                                 Text("Call emergency services or a crisis hotline")
                                     .font(.system(size: 12))
-                                    .foregroundColor(.black.opacity(0.7))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             }
-                            
+
                             Spacer()
                         }
                         .padding(16)
@@ -1067,7 +1076,9 @@ struct EmergencyToolsSheet: View {
                     // Quick Tools
                     VStack(spacing: 16) {
                         ForEach(emergencyTools) { tool in
-                            NavigationLink(destination: tool.destinationView?() ?? AnyView(EmptyView())) {
+                            Button(action: {
+                                selectedTool = tool
+                            }) {
                                 EmergencyToolCard(tool: tool)
                             }
                             .buttonStyle(PlainButtonStyle())
@@ -1077,7 +1088,7 @@ struct EmergencyToolsSheet: View {
                 }
                 .padding(.bottom, 40)
             }
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -1086,58 +1097,69 @@ struct EmergencyToolsSheet: View {
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 24))
-                            .foregroundColor(.black.opacity(0.3))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     }
+                }
+            }
+            .onChange(of: selectedTool) { oldValue, newValue in
+                showTool = newValue != nil
+            }
+            .fullScreenCover(isPresented: $showTool) {
+                if let tool = selectedTool, let viewBuilder = tool.destinationView {
+                    viewBuilder()
+                        .onDisappear {
+                            selectedTool = nil
+                        }
                 }
             }
         }
     }
-}
 
 struct EmergencyToolCard: View {
+    @Environment(\.colorScheme) var colorScheme
     let tool: CalmingTool
-    
+
     var body: some View {
         HStack(spacing: 16) {
             ZStack {
                 Circle()
                     .fill(tool.category.color.opacity(0.15))
                     .frame(width: 56, height: 56)
-                
+
                 Image(systemName: tool.icon)
                     .font(.system(size: 24, weight: .semibold))
                     .foregroundColor(tool.category.color)
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(tool.name)
                     .font(.system(size: 17, weight: .bold, design: .serif))
-                    .foregroundColor(.black)
-                
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                 Text(tool.description)
                     .font(.system(size: 13))
-                    .foregroundColor(.black.opacity(0.7))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .lineLimit(2)
-                
+
                 HStack(spacing: 8) {
                     Text(tool.duration)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.black.opacity(0.5))
-                    
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
                     DifficultyBadge(difficulty: tool.difficulty)
                 }
             }
-            
+
             Spacer()
-            
+
             Image(systemName: "arrow.right.circle.fill")
                 .font(.system(size: 28))
                 .foregroundColor(tool.category.color)
         }
         .padding(16)
-        .background(.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.06), radius: 8, y: 2)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 2)
     }
 }
 
@@ -1146,7 +1168,9 @@ struct EmergencyToolCard: View {
 #Preview {
     @Previewable @State var isTabBarVisible = true
     let mockAuthManager = AuthManager()
-    
+    let mockJournalSyncService = JournalSyncService()
+
     JourneyAgorahobiaView(isTabBarVisible: $isTabBarVisible)
         .environmentObject(mockAuthManager)
+        .environmentObject(mockJournalSyncService)
 }

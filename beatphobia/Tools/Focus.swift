@@ -226,6 +226,7 @@ class CameraPreviewView: UIView {
 // MARK: - Focus View
 
 struct FocusView: View {
+    @Environment(\.colorScheme) var colorScheme
     @StateObject private var cameraManager = CameraManager()
     @StateObject private var objectDetection = ObjectDetectionManager()
     @State private var permissionStatus: PermissionManager.PermissionStatus = .unknown

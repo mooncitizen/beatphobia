@@ -12,6 +12,8 @@ import CoreLocation
 struct ProfileView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @EnvironmentObject var themeManager: ThemeManager
+    @Environment(\.colorScheme) var colorScheme
     
     @State private var isSigningOut = false
     @State private var signOutError: String?
@@ -60,17 +62,17 @@ struct ProfileView: View {
                             Text(name)
                                 .font(.title2.bold())
                                 .fontDesign(.serif)
-                                .foregroundColor(.black)
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                             Text(emailAddress)
                                 .font(.subheadline)
-                                .foregroundStyle(.gray)
+                                .foregroundStyle(AppConstants.secondaryTextColor(for: colorScheme))
                                 .fontDesign(.serif)
                         }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 32)
                     .padding(.horizontal, 20)
-                    .background(Color.white.opacity(0.5))
+                    .background(AppConstants.cardBackgroundColor(for: colorScheme).opacity(0.5))
                     .cornerRadius(16)
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
@@ -80,7 +82,7 @@ struct ProfileView: View {
                         Text("Subscription")
                             .font(.title3.bold())
                             .fontDesign(.serif)
-                            .foregroundColor(.black)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                             .padding(.horizontal, 20)
                             .padding(.top, 24)
                             .padding(.bottom, 12)
@@ -111,12 +113,12 @@ struct ProfileView: View {
                                     Text(subscriptionManager.isPro ? "Pro Member" : "Upgrade to Pro")
                                         .font(.system(size: 17, weight: .semibold))
                                         .fontDesign(.serif)
-                                        .foregroundColor(.black)
+                                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                                     
                                     Text(subscriptionManager.isPro ? subscriptionManager.subscriptionStatus.statusDescription : "Unlock all premium features")
                                         .font(.system(size: 13))
                                         .fontDesign(.serif)
-                                        .foregroundStyle(.gray)
+                                        .foregroundStyle(AppConstants.secondaryTextColor(for: colorScheme))
                                         .lineLimit(1)
                                 }
                                 
@@ -124,14 +126,70 @@ struct ProfileView: View {
                                 
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             }
                             .padding(.horizontal, 16)
                             .padding(.vertical, 16)
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .background(Color.white)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                        .cornerRadius(16)
+                        .padding(.horizontal, 20)
+                    }
+                    
+                    // Appearance Section
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("Appearance")
+                            .font(.title3.bold())
+                            .fontDesign(.serif)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                            .padding(.horizontal, 20)
+                            .padding(.top, 24)
+                            .padding(.bottom, 12)
+                        
+                        VStack(spacing: 0) {
+                            ForEach(ThemeOption.allCases, id: \.self) { theme in
+                                Button(action: {
+                                    withAnimation {
+                                        themeManager.selectedTheme = theme
+                                    }
+                                }) {
+                                    HStack(alignment: .center, spacing: 12) {
+                                        // Theme icon
+                                        Image(systemName: themeIcon(for: theme))
+                                            .font(.system(size: 20))
+                                            .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
+                                            .frame(width: 30)
+                                        
+                                        // Theme name
+                                        Text(theme.rawValue)
+                                            .font(.system(size: 17))
+                                            .fontDesign(.serif)
+                                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                                        
+                                        Spacer()
+                                        
+                                        // Checkmark if selected
+                                        if themeManager.selectedTheme == theme {
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 16)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                
+                                if theme != ThemeOption.allCases.last {
+                                    Divider()
+                                        .padding(.leading, 16)
+                                }
+                            }
+                        }
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .cornerRadius(16)
                         .padding(.horizontal, 20)
                     }
@@ -141,7 +199,7 @@ struct ProfileView: View {
                         Text("Settings")
                             .font(.title3.bold())
                             .fontDesign(.serif)
-                            .foregroundColor(.black)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                             .padding(.horizontal, 20)
                             .padding(.top, 32)
                             .padding(.bottom, 12)
@@ -156,18 +214,18 @@ struct ProfileView: View {
                                         Text("Username")
                                             .font(.system(size: 17))
                                             .fontDesign(.serif)
-                                            .foregroundColor(.black)
+                                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                                         Text("@\(username.isEmpty ? "not_set" : username)")
                                             .font(.system(size: 13))
                                             .fontDesign(.serif)
-                                            .foregroundStyle(.gray)
+                                            .foregroundStyle(AppConstants.secondaryTextColor(for: colorScheme))
                                     }
                                     
                                     Spacer()
                                     
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 16)
@@ -199,10 +257,11 @@ struct ProfileView: View {
                                 isOn: $enableMiles,
                                 title: enableMiles ? "Miles" : "Kilometers",
                                 description: enableMiles ? "Will display in miles/meters when displaying distances." : "Will display in kilometers/meters when displaying distances.",
-                                showDivider: false
+                                showDivider: false,
+                                colorScheme: colorScheme
                             )
                         }
-                        .background(Color.white)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .cornerRadius(16)
                         .padding(.horizontal, 20)
                     }
@@ -212,7 +271,7 @@ struct ProfileView: View {
                         Text("Permissions")
                             .font(.title3.bold())
                             .fontDesign(.serif)
-                            .foregroundColor(.black)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                             .padding(.horizontal, 20)
                             .padding(.top, 32)
                             .padding(.bottom, 12)
@@ -226,10 +285,11 @@ struct ProfileView: View {
                                 description: "Required for journey tracking",
                                 status: locationAuthorizationStatusText,
                                 statusColor: locationAuthorizationStatusColor,
-                                action: openSettings
+                                action: openSettings,
+                                colorScheme: colorScheme
                             )
                         }
-                        .background(Color.white)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .cornerRadius(16)
                         .padding(.horizontal, 20)
                     }
@@ -248,7 +308,7 @@ struct ProfileView: View {
                             Spacer()
                         }
                         .padding()
-                        .background(Color.white)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .foregroundColor(.red)
                         .cornerRadius(12)
                     }
@@ -257,7 +317,7 @@ struct ProfileView: View {
                     .padding(.bottom, 40)
                 }
             }
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
@@ -275,8 +335,10 @@ struct ProfileView: View {
                 )
             }
             .sheet(isPresented: $showPaywall) {
-                PaywallView()
-                    .environmentObject(subscriptionManager)
+                NavigationStack {
+                    PaywallView()
+                        .environmentObject(subscriptionManager)
+                }
             }
         }
     }
@@ -319,6 +381,17 @@ struct ProfileView: View {
             UIApplication.shared.open(url)
         }
     }
+    
+    private func themeIcon(for theme: ThemeOption) -> String {
+        switch theme {
+        case .light:
+            return "sun.max.fill"
+        case .dark:
+            return "moon.fill"
+        case .system:
+            return "iphone"
+        }
+    }
 }
 
 // Custom Setting Toggle Row Component
@@ -327,6 +400,7 @@ struct SettingToggleRow: View {
     let title: String
     let description: String
     let showDivider: Bool
+    let colorScheme: ColorScheme
     
     var body: some View {
         VStack(spacing: 0) {
@@ -335,11 +409,11 @@ struct SettingToggleRow: View {
                     Text(title)
                         .font(.system(size: 17))
                         .fontDesign(.serif)
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     Text(description)
                         .font(.system(size: 13))
                         .fontDesign(.serif)
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(AppConstants.secondaryTextColor(for: colorScheme))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 
@@ -368,6 +442,7 @@ struct PermissionRow: View {
     let status: String
     let statusColor: Color
     let action: () -> Void
+    let colorScheme: ColorScheme
     
     var body: some View {
         Button(action: action) {
@@ -388,11 +463,11 @@ struct PermissionRow: View {
                     Text(title)
                         .font(.system(size: 17))
                         .fontDesign(.serif)
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     Text(description)
                         .font(.system(size: 13))
                         .fontDesign(.serif)
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(AppConstants.secondaryTextColor(for: colorScheme))
                 }
                 
                 Spacer()
@@ -409,7 +484,7 @@ struct PermissionRow: View {
                     
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
             }
             .padding(.horizontal, 16)
@@ -425,4 +500,5 @@ struct PermissionRow: View {
     ProfileView()
         .environmentObject(mockAuthManager)
         .environmentObject(SubscriptionManager())
+        .environmentObject(ThemeManager())
 }

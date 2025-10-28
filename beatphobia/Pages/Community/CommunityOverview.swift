@@ -27,6 +27,7 @@ enum CommunityDestination {
 // MARK: - Main View
 
 struct CommunityOverview: View {
+    @Environment(\.colorScheme) var colorScheme
     @State private var showNotifications = false
     @State private var unreadMessages = 3
     @State private var newForumPosts = 12
@@ -92,14 +93,7 @@ struct CommunityOverview: View {
         Group {
             if hasUsername == nil {
                 // Checking username status
-                VStack(spacing: 20) {
-                    ProgressView()
-                    Text("Loading Community...")
-                        .font(.system(size: 16))
-                        .foregroundColor(.black.opacity(0.6))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(AppConstants.defaultBackgroundColor)
+                FullScreenLoading(text: "Loading Community")
             } else if hasUsername == false || showUsernameSetup {
                 // Show username setup
                 UsernameSetupView(existingUsername: nil) {
@@ -126,11 +120,11 @@ struct CommunityOverview: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Community")
                                     .font(.system(size: 40, weight: .bold, design: .serif))
-                                    .foregroundColor(.black)
-                                
+                                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                                 Text("Connect, share, and grow together")
                                     .font(.system(size: 16, weight: .regular))
-                                    .foregroundColor(.black.opacity(0.6))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             }
                             
                             Spacer()
@@ -208,7 +202,7 @@ struct CommunityOverview: View {
                 .padding(.top, 8)
                 .padding(.bottom, 24)
             }
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
             .navigationBarHidden(true)
         }
         .onAppear {
@@ -267,10 +261,11 @@ struct CommunityOverview: View {
 // MARK: - Supporting Views
 
 struct CommunityNavigationCard: View {
+    @Environment(\.colorScheme) var colorScheme
     let section: CommunitySection
-    
+
     var body: some View {
-        Card(backgroundColor: .white, cornerRadius: 16, padding: 0) {
+        Card(backgroundColor: AppConstants.cardBackgroundColor(for: colorScheme), cornerRadius: 16, padding: 0) {
             HStack(spacing: 16) {
                 // Icon
                 ZStack {
@@ -287,11 +282,11 @@ struct CommunityNavigationCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(section.title)
                         .font(.system(size: 18, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text(section.subtitle)
                         .font(.system(size: 14))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
                 
                 Spacer()
@@ -319,25 +314,26 @@ struct CommunityNavigationCard: View {
 }
 
 struct CommunityStatCard: View {
+    @Environment(\.colorScheme) var colorScheme
     let icon: String
     let value: String
     let label: String
     let color: Color
-    
+
     var body: some View {
-        Card(backgroundColor: .white, cornerRadius: 12, padding: 0) {
+        Card(backgroundColor: AppConstants.cardBackgroundColor(for: colorScheme), cornerRadius: 12, padding: 0) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.system(size: 24))
                     .foregroundColor(color)
-                
+
                 Text(value)
                     .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundColor(.black)
-                
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                 Text(label)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
@@ -348,10 +344,11 @@ struct CommunityStatCard: View {
 // MARK: - Destination Views
 
 struct CommunityForumView: View {
+    @Environment(\.colorScheme) var colorScheme
     @StateObject private var communityService = CommunityService()
     @State private var topics: [CommunityTopic] = []
     @State private var searchText = ""
-    
+
     var filteredTopics: [CommunityTopic] {
         if searchText.isEmpty {
             return topics
@@ -362,7 +359,7 @@ struct CommunityForumView: View {
             }
         }
     }
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -370,50 +367,50 @@ struct CommunityForumView: View {
                 VStack(spacing: 8) {
                     Text("Choose a Topic")
                         .font(.system(size: 28, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text("Join discussions and share your experiences")
                         .font(.system(size: 15))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
                 .padding(.top, 8)
                 
                 // Search Bar
                 HStack {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                    
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
                     TextField("Search topics...", text: $searchText)
                         .font(.system(size: 15))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 }
                 .padding(12)
-                .background(Color.white)
+                .background(AppConstants.cardBackgroundColor(for: colorScheme))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                        .stroke(AppConstants.borderColor(for: colorScheme), lineWidth: 1)
                 )
                 
                 // Topics Grid
                 if communityService.isLoading {
-                    ProgressView()
-                        .padding(.top, 40)
+                    FullScreenLoading(text: "Loading Community")
                 } else if let error = communityService.error {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.system(size: 48))
                             .foregroundColor(.orange)
-                        
+
                         Text("Error Loading Topics")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black)
-                        
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                         Text(error)
                             .font(.system(size: 14))
-                            .foregroundColor(.black.opacity(0.6))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 40)
-                        
+
                         Button("Try Again") {
                             Task {
                                 await loadTopics()
@@ -421,7 +418,7 @@ struct CommunityForumView: View {
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
-                        .background(AppConstants.primaryColor)
+                        .background(AppConstants.adaptivePrimaryColor(for: colorScheme))
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
@@ -455,7 +452,7 @@ struct CommunityForumView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
-        .background(AppConstants.defaultBackgroundColor)
+        .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationTitle("Forum")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -482,9 +479,10 @@ struct CommunityForumView: View {
 }
 
 struct YourPostsView: View {
+    @Environment(\.colorScheme) var colorScheme
     @StateObject private var communityService = CommunityService()
     @State private var posts: [PostDisplayModel] = []
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -494,19 +492,19 @@ struct YourPostsView: View {
                         Circle()
                             .fill(Color.blue.opacity(0.1))
                             .frame(width: 80, height: 80)
-                        
+
                         Image(systemName: "doc.text.fill")
                             .font(.system(size: 32, weight: .semibold))
                             .foregroundColor(.blue)
                     }
-                    
+
                     Text("Your Posts")
                         .font(.system(size: 28, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text("View and manage all your community contributions")
                         .font(.system(size: 15))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
                 }
@@ -514,24 +512,23 @@ struct YourPostsView: View {
                 
                 // Posts List
                 if communityService.isLoading && posts.isEmpty {
-                    ProgressView()
-                        .padding(.top, 40)
+                    FullScreenLoading(text: "Loading Your Posts")
                 } else if let error = communityService.error {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.system(size: 48))
                             .foregroundColor(.orange)
-                        
+
                         Text("Error Loading Posts")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black)
-                        
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                         Text(error)
                             .font(.system(size: 14))
-                            .foregroundColor(.black.opacity(0.6))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 40)
-                        
+
                         Button("Try Again") {
                             Task {
                                 await loadUserPosts()
@@ -539,7 +536,7 @@ struct YourPostsView: View {
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
-                        .background(AppConstants.primaryColor)
+                        .background(AppConstants.adaptivePrimaryColor(for: colorScheme))
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
@@ -548,15 +545,15 @@ struct YourPostsView: View {
                     VStack(spacing: 16) {
                         Image(systemName: "doc.text")
                             .font(.system(size: 48))
-                            .foregroundColor(.gray.opacity(0.5))
-                        
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
+
                         Text("No posts yet")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black.opacity(0.7))
-                        
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
                         Text("Start sharing your thoughts with the community!")
                             .font(.system(size: 14))
-                            .foregroundColor(.black.opacity(0.5))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 60)
@@ -581,7 +578,7 @@ struct YourPostsView: View {
         .refreshable {
             await loadUserPosts()
         }
-        .background(AppConstants.defaultBackgroundColor)
+        .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationTitle("Your Posts")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -605,13 +602,14 @@ struct YourPostsView: View {
 // MARK: - Topic Detail View
 
 struct TopicDetailView: View {
+    @Environment(\.colorScheme) var colorScheme
     let topic: CommunityTopic
     @StateObject private var communityService = CommunityService()
     @State private var selectedCategory: PostCategory = .all
     @State private var searchText = ""
     @State private var showNewPostSheet = false
     @State private var posts: [PostDisplayModel] = []
-    
+
     var filteredPosts: [PostDisplayModel] {
         posts.filter { post in
             (selectedCategory == .all || post.category == selectedCategory) &&
@@ -621,7 +619,7 @@ struct TopicDetailView: View {
              post.tags.contains { $0.localizedCaseInsensitiveContains(searchText) })
         }
     }
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -631,19 +629,19 @@ struct TopicDetailView: View {
                         Circle()
                             .fill(topic.swiftUIColor.opacity(0.1))
                             .frame(width: 80, height: 80)
-                        
+
                         Image(systemName: topic.icon)
                             .font(.system(size: 32, weight: .semibold))
                             .foregroundColor(topic.swiftUIColor)
                     }
-                    
+
                     Text(topic.name)
                         .font(.system(size: 28, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text(topic.description)
                         .font(.system(size: 15))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
                 }
@@ -652,17 +650,18 @@ struct TopicDetailView: View {
                 // Search Bar
                 HStack {
                     Image(systemName: "magnifyingglass")
-                        .foregroundColor(.gray)
-                    
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
                     TextField("Search posts...", text: $searchText)
                         .font(.system(size: 15))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 }
                 .padding(12)
-                .background(Color.white)
+                .background(AppConstants.cardBackgroundColor(for: colorScheme))
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                        .stroke(AppConstants.borderColor(for: colorScheme), lineWidth: 1)
                 )
                 
                 // Category Filter Pills
@@ -683,24 +682,23 @@ struct TopicDetailView: View {
                 
                 // Posts List
                 if communityService.isLoading {
-                    ProgressView()
-                        .padding(.top, 40)
+                    FullScreenLoading(text: "Loading Posts")
                 } else if let error = communityService.error {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.system(size: 48))
                             .foregroundColor(.orange)
-                        
+
                         Text("Error Loading Posts")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black)
-                        
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                         Text(error)
                             .font(.system(size: 14))
-                            .foregroundColor(.black.opacity(0.6))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 40)
-                        
+
                         Button("Try Again") {
                             Task {
                                 await loadPosts()
@@ -708,7 +706,7 @@ struct TopicDetailView: View {
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
-                        .background(AppConstants.primaryColor)
+                        .background(AppConstants.adaptivePrimaryColor(for: colorScheme))
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
@@ -717,15 +715,15 @@ struct TopicDetailView: View {
                     VStack(spacing: 16) {
                         Image(systemName: searchText.isEmpty ? "doc.text" : "magnifyingglass")
                             .font(.system(size: 48))
-                            .foregroundColor(.gray.opacity(0.5))
-                        
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
+
                         Text(searchText.isEmpty ? "No posts yet" : "No results found")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black.opacity(0.7))
-                        
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
                         Text(searchText.isEmpty ? "Be the first to start a discussion!" : "Try a different search term")
                             .font(.system(size: 14))
-                            .foregroundColor(.black.opacity(0.5))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                     }
                     .padding(.vertical, 60)
                 } else {
@@ -743,7 +741,7 @@ struct TopicDetailView: View {
             .padding(.top, 8)
             .padding(.bottom, 24)
         }
-        .background(AppConstants.defaultBackgroundColor)
+        .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -752,7 +750,7 @@ struct TopicDetailView: View {
                 }) {
                     Image(systemName: "square.and.pencil")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(AppConstants.primaryColor)
+                        .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                 }
             }
         }
@@ -788,6 +786,7 @@ struct TopicDetailView: View {
 }
 
 struct FriendsListView: View {
+    @Environment(\.colorScheme) var colorScheme
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -796,22 +795,22 @@ struct FriendsListView: View {
                     Circle()
                         .fill(Color.pink.opacity(0.1))
                         .frame(width: 100, height: 100)
-                    
+
                     Image(systemName: "person.2.fill")
                         .font(.system(size: 40, weight: .semibold))
                         .foregroundColor(.pink)
                 }
                 .padding(.top, 40)
-                
+
                 // Title and Description
                 VStack(spacing: 12) {
                     Text("Your Friends")
                         .font(.system(size: 32, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text("Connect with supporters on your journey")
                         .font(.system(size: 16))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
                 }
@@ -866,7 +865,7 @@ struct FriendsListView: View {
             }
             .padding(.bottom, 40)
         }
-        .background(AppConstants.defaultBackgroundColor)
+        .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationTitle("Friends")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -875,37 +874,38 @@ struct FriendsListView: View {
 // MARK: - Feature Info Card
 
 struct FeatureInfoCard: View {
+    @Environment(\.colorScheme) var colorScheme
     let icon: String
     let title: String
     let description: String
     let color: Color
-    
+
     var body: some View {
-        Card(backgroundColor: .white, cornerRadius: 16, padding: 0) {
+        Card(backgroundColor: AppConstants.cardBackgroundColor(for: colorScheme), cornerRadius: 16, padding: 0) {
             HStack(spacing: 16) {
                 // Icon
                 ZStack {
                     Circle()
                         .fill(color.opacity(0.1))
                         .frame(width: 50, height: 50)
-                    
+
                     Image(systemName: icon)
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundColor(color)
                 }
-                
+
                 // Content
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text(description)
                         .font(.system(size: 13))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         .lineLimit(2)
                 }
-                
+
                 Spacer()
             }
             .padding(16)
@@ -914,6 +914,7 @@ struct FeatureInfoCard: View {
 }
 
 struct ChatsListView: View {
+    @Environment(\.colorScheme) var colorScheme
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -922,22 +923,22 @@ struct ChatsListView: View {
                     Circle()
                         .fill(Color.green.opacity(0.1))
                         .frame(width: 100, height: 100)
-                    
+
                     Image(systemName: "message.fill")
                         .font(.system(size: 40, weight: .semibold))
                         .foregroundColor(.green)
                 }
                 .padding(.top, 40)
-                
+
                 // Title and Description
                 VStack(spacing: 12) {
                     Text("Your Chats")
                         .font(.system(size: 32, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text("Private conversations with community members")
                         .font(.system(size: 16))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
                 }
@@ -992,17 +993,18 @@ struct ChatsListView: View {
             }
             .padding(.bottom, 40)
         }
-        .background(AppConstants.defaultBackgroundColor)
+        .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationTitle("Chats")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
 
 struct TrendingTopicsView: View {
+    @Environment(\.colorScheme) var colorScheme
     @StateObject private var communityService = CommunityService()
     @State private var posts: [PostDisplayModel] = []
     @State private var isRefreshing = false
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -1012,19 +1014,19 @@ struct TrendingTopicsView: View {
                         Circle()
                             .fill(Color.orange.opacity(0.1))
                             .frame(width: 80, height: 80)
-                        
+
                         Image(systemName: "flame.fill")
                             .font(.system(size: 32, weight: .semibold))
                             .foregroundColor(.orange)
                     }
-                    
+
                     Text("Trending Topics")
                         .font(.system(size: 28, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text("Popular discussions and hot topics right now")
                         .font(.system(size: 15))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
                 }
@@ -1032,24 +1034,23 @@ struct TrendingTopicsView: View {
                 
                 // Posts List
                 if communityService.isLoading && posts.isEmpty {
-                    ProgressView()
-                        .padding(.top, 40)
+                    FullScreenLoading(text: "Loading Trending Posts")
                 } else if let error = communityService.error {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.system(size: 48))
                             .foregroundColor(.orange)
-                        
+
                         Text("Error Loading Posts")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black)
-                        
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                         Text(error)
                             .font(.system(size: 14))
-                            .foregroundColor(.black.opacity(0.6))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 40)
-                        
+
                         Button("Try Again") {
                             Task {
                                 await loadTrendingPosts()
@@ -1057,7 +1058,7 @@ struct TrendingTopicsView: View {
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
-                        .background(AppConstants.primaryColor)
+                        .background(AppConstants.adaptivePrimaryColor(for: colorScheme))
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
@@ -1066,15 +1067,15 @@ struct TrendingTopicsView: View {
                     VStack(spacing: 16) {
                         Image(systemName: "flame")
                             .font(.system(size: 48))
-                            .foregroundColor(.gray.opacity(0.5))
-                        
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
+
                         Text("No trending posts")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.black.opacity(0.7))
-                        
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
                         Text("Check back later for hot topics!")
                             .font(.system(size: 14))
-                            .foregroundColor(.black.opacity(0.5))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 60)
@@ -1099,7 +1100,7 @@ struct TrendingTopicsView: View {
         .refreshable {
             await loadTrendingPosts()
         }
-        .background(AppConstants.defaultBackgroundColor)
+        .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationTitle("Trending")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -1121,17 +1122,18 @@ struct TrendingTopicsView: View {
 }
 
 struct GuidelinesView: View {
+    @Environment(\.colorScheme) var colorScheme
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Community Guidelines")
                         .font(.system(size: 28, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text("Creating a safe and supportive space for everyone")
                         .font(.system(size: 16))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
                 
                 GuidelineSection(
@@ -1164,21 +1166,21 @@ struct GuidelinesView: View {
                     description: "Keep discussions relevant to anxiety, panic, and mental health support."
                 )
                 
-                Card(backgroundColor: AppConstants.primaryColor.opacity(0.1), cornerRadius: 16, padding: 0) {
+                Card(backgroundColor: AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.1), cornerRadius: 16, padding: 0) {
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
                             Image(systemName: "questionmark.circle.fill")
                                 .font(.system(size: 24))
-                                .foregroundColor(AppConstants.primaryColor)
-                            
+                                .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
+
                             Text("Need Help?")
                                 .font(.system(size: 18, weight: .bold, design: .serif))
-                                .foregroundColor(.black)
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         }
-                        
+
                         Text("If you see content that violates these guidelines, please report it to our moderation team.")
                             .font(.system(size: 14))
-                            .foregroundColor(.black.opacity(0.7))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     }
                     .padding(20)
                 }
@@ -1187,33 +1189,34 @@ struct GuidelinesView: View {
             .padding(.top, 8)
             .padding(.bottom, 24)
         }
-        .background(AppConstants.defaultBackgroundColor)
+        .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationTitle("Guidelines")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
 
 struct GuidelineSection: View {
+    @Environment(\.colorScheme) var colorScheme
     let icon: String
     let title: String
     let description: String
-    
+
     var body: some View {
-        Card(backgroundColor: .white, cornerRadius: 12, padding: 0) {
+        Card(backgroundColor: AppConstants.cardBackgroundColor(for: colorScheme), cornerRadius: 12, padding: 0) {
             HStack(alignment: .top, spacing: 16) {
                 Image(systemName: icon)
                     .font(.system(size: 24))
-                    .foregroundColor(AppConstants.primaryColor)
+                    .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                     .frame(width: 32)
-                
+
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.system(size: 16, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text(description)
                         .font(.system(size: 14))
-                        .foregroundColor(.black.opacity(0.7))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
             }
             .padding(16)
@@ -1223,6 +1226,7 @@ struct GuidelineSection: View {
 
 struct NotificationsView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         NavigationView {
@@ -1230,20 +1234,20 @@ struct NotificationsView: View {
                 VStack(spacing: 20) {
                     Image(systemName: "bell.fill")
                         .font(.system(size: 64))
-                        .foregroundColor(.gray.opacity(0.5))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
                     
                     Text("No new notifications")
                         .font(.system(size: 20, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text("We'll notify you when there's activity")
                         .font(.system(size: 14))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.top, 100)
             }
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
             .navigationTitle("Notifications")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1259,27 +1263,28 @@ struct NotificationsView: View {
 }
 
 struct CategoryPill: View {
+    @Environment(\.colorScheme) var colorScheme
     let category: PostCategory
     let isSelected: Bool
     let action: () -> Void
-    
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: category.icon)
                     .font(.system(size: 12, weight: .semibold))
-                
+
                 Text(category.rawValue)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(isSelected ? category.color : Color.white)
-            .foregroundColor(isSelected ? .white : .black.opacity(0.7))
+            .background(isSelected ? category.color : AppConstants.cardBackgroundColor(for: colorScheme))
+            .foregroundColor(isSelected ? .white : AppConstants.secondaryTextColor(for: colorScheme))
             .clipShape(Capsule())
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? Color.clear : Color.black.opacity(0.15), lineWidth: 1.5)
+                    .stroke(isSelected ? Color.clear : AppConstants.borderColor(for: colorScheme), lineWidth: 1.5)
             )
             .shadow(color: isSelected ? category.color.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
         }
@@ -1289,40 +1294,41 @@ struct CategoryPill: View {
 // MARK: - Topic Card
 
 struct TopicCard: View {
+    @Environment(\.colorScheme) var colorScheme
     let topic: CommunityTopic
-    
+
     var body: some View {
-        Card(backgroundColor: .white, cornerRadius: 16, padding: 0) {
+        Card(backgroundColor: AppConstants.cardBackgroundColor(for: colorScheme), cornerRadius: 16, padding: 0) {
             HStack(spacing: 16) {
                 // Icon
                 ZStack {
                     Circle()
                         .fill(topic.swiftUIColor.opacity(0.1))
                         .frame(width: 60, height: 60)
-                    
+
                     Image(systemName: topic.icon)
                         .font(.system(size: 24, weight: .semibold))
                         .foregroundColor(topic.swiftUIColor)
                 }
-                
+
                 // Content
                 VStack(alignment: .leading, spacing: 6) {
                     Text(topic.name)
                         .font(.system(size: 18, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text(topic.description)
                         .font(.system(size: 14))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         .lineLimit(2)
                 }
-                
+
                 Spacer()
-                
+
                 // Chevron
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.black.opacity(0.3))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
             }
             .padding(16)
         }
@@ -1332,20 +1338,21 @@ struct TopicCard: View {
 // MARK: - Post Card
 
 struct PostCard: View {
+    @Environment(\.colorScheme) var colorScheme
     let post: PostDisplayModel
     let communityService: CommunityService
     @State private var isLiked: Bool
     @State private var isBookmarked: Bool
-    
+
     init(post: PostDisplayModel, communityService: CommunityService) {
         self.post = post
         self.communityService = communityService
         self._isLiked = State(initialValue: post.isLiked)
         self._isBookmarked = State(initialValue: post.isBookmarked)
     }
-    
+
     var body: some View {
-        Card(backgroundColor: .white, cornerRadius: 16, padding: 0) {
+        Card(backgroundColor: AppConstants.cardBackgroundColor(for: colorScheme), cornerRadius: 16, padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 // Header: Author Info
                 HStack(spacing: 12) {
@@ -1353,21 +1360,21 @@ struct PostCard: View {
                     ZStack {
                         Circle()
                             .fill(post.category.color.opacity(0.2))
-                        
+
                         Text(post.authorInitials)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(post.category.color)
                     }
                     .frame(width: 40, height: 40)
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text(post.author)
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.black)
-                        
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                         Text(timeAgoString(from: post.timestamp))
                             .font(.system(size: 13))
-                            .foregroundColor(.black.opacity(0.5))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                     }
                     
                     Spacer()
@@ -1392,18 +1399,18 @@ struct PostCard: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(post.title)
                         .font(.system(size: 17, weight: .bold, design: .serif))
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         .lineLimit(2)
-                    
+
                     Text(post.preview)
                         .font(.system(size: 14, weight: .regular))
-                        .foregroundColor(.black.opacity(0.7))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         .lineLimit(3)
                         .multilineTextAlignment(.leading)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
-                
+
                 // Tags
                 if !post.tags.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -1411,10 +1418,10 @@ struct PostCard: View {
                             ForEach(post.tags, id: \.self) { tag in
                                 Text("#\(tag)")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(AppConstants.primaryColor)
+                                    .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 4)
-                                    .background(AppConstants.primaryColor.opacity(0.08))
+                                    .background(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.08))
                                     .clipShape(Capsule())
                             }
                         }
@@ -1447,22 +1454,22 @@ struct PostCard: View {
                         HStack(spacing: 6) {
                             Image(systemName: isLiked ? "heart.fill" : "heart")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(isLiked ? .pink : .black.opacity(0.5))
-                            
+                                .foregroundColor(isLiked ? .pink : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
+
                             Text("\(post.likesCount + (isLiked != post.isLiked ? (isLiked ? 1 : -1) : 0))")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.black.opacity(0.7))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         }
                     }
-                    
+
                     HStack(spacing: 6) {
                         Image(systemName: "bubble.left")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.black.opacity(0.5))
-                        
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
+
                         Text("\(post.commentsCount)")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.black.opacity(0.7))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     }
                     
                     Spacer()
@@ -1485,7 +1492,7 @@ struct PostCard: View {
                     }) {
                         Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(isBookmarked ? AppConstants.primaryColor : .black.opacity(0.5))
+                            .foregroundColor(isBookmarked ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
                     }
                 }
                 .padding(16)
@@ -1495,22 +1502,23 @@ struct PostCard: View {
 }
 
 struct EmptyStateView: View {
+    @Environment(\.colorScheme) var colorScheme
     let category: PostCategory
     let searchText: String
-    
+
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: searchText.isEmpty ? category.icon : "magnifyingglass")
                 .font(.system(size: 48))
-                .foregroundColor(.gray.opacity(0.5))
-            
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
+
             Text(searchText.isEmpty ? "No \(category.rawValue) posts yet" : "No results found")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(.black.opacity(0.7))
-            
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
             Text(searchText.isEmpty ? "Be the first to share!" : "Try a different search term")
                 .font(.system(size: 14))
-                .foregroundColor(.black.opacity(0.5))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
@@ -1523,6 +1531,7 @@ struct EditCommentView: View {
     let comment: CommentDisplayModel
     @ObservedObject var communityService: CommunityService
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     let onCommentUpdated: () -> Void
     
     @State private var content: String
@@ -1557,18 +1566,18 @@ struct EditCommentView: View {
                         .frame(minHeight: 150)
                         .focused($isContentFocused)
                         .padding(12)
-                        .background(Color.white)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(isContentFocused ? AppConstants.primaryColor : Color.black.opacity(0.1), lineWidth: 1)
+                                .stroke(isContentFocused ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.borderColor(for: colorScheme), lineWidth: 1)
                         )
                 }
                 .padding(20)
                 
                 Spacer()
             }
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
             .navigationTitle("Edit Comment")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -1582,7 +1591,7 @@ struct EditCommentView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: updateComment) {
                         if isSubmitting {
-                            ProgressView()
+                            FullScreenLoading(text: "Updating Comment")
                         } else {
                             Text("Update")
                                 .fontWeight(.semibold)
@@ -1636,12 +1645,13 @@ struct EditCommentView: View {
 // MARK: - Comment View
 
 struct CommentView: View {
+    @Environment(\.colorScheme) var colorScheme
     let comment: CommentDisplayModel
     let communityService: CommunityService
     let onReply: () -> Void
     let onDelete: (() -> Void)?
     let isReply: Bool
-    
+
     @State private var isLiked: Bool
     @State private var currentUserId: UUID?
     @State private var showEditComment = false
@@ -1668,35 +1678,35 @@ struct CommentView: View {
                 // Avatar
                 ZStack {
                     Circle()
-                        .fill(AppConstants.primaryColor.opacity(0.2))
-                    
+                        .fill(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.2))
+
                     Text(comment.authorInitials)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(AppConstants.primaryColor)
+                        .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                 }
                 .frame(width: 36, height: 36)
-                
+
                 VStack(alignment: .leading, spacing: 8) {
                     // Author and time
                     HStack(spacing: 8) {
                         Text(comment.author)
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.black)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         
                         Text("•")
-                            .foregroundColor(.gray)
-                        
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
+
                         Text(timeAgoString(from: comment.timestamp))
                             .font(.system(size: 13))
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                     }
-                    
+
                     // Comment content
                     Text(comment.content)
                         .font(.system(size: 15))
-                        .foregroundColor(.black.opacity(0.85))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         .lineSpacing(2)
-                    
+
                     // Actions
                     HStack(spacing: 20) {
                         Button(action: {
@@ -1718,12 +1728,12 @@ struct CommentView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: isLiked ? "heart.fill" : "heart")
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(isLiked ? .pink : .gray)
-                                
+                                    .foregroundColor(isLiked ? .pink : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
+
                                 if comment.likesCount > 0 || isLiked {
                                     Text("\(comment.likesCount + (isLiked != comment.isLiked ? (isLiked ? 1 : -1) : 0))")
                                         .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                                 }
                             }
                         }
@@ -1735,38 +1745,38 @@ struct CommentView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrowshape.turn.up.left")
                                     .font(.system(size: 13))
-                                
+
                                 Text("Reply")
                                     .font(.system(size: 13, weight: .medium))
                             }
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                         }
                     }
                     .padding(.top, 4)
                 }
-                
+
                 Spacer()
-                
+
                 // Edit/Delete Menu (only for comment author)
                 if isCommentAuthor {
                     Menu {
                         Button(action: { showEditComment = true }) {
                             Label("Edit", systemImage: "pencil")
                         }
-                        
+
                         Button(role: .destructive, action: { showDeleteAlert = true }) {
                             Label("Delete", systemImage: "trash")
                         }
                     } label: {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 14))
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
                             .padding(8)
                     }
                 }
             }
             .padding(16)
-            .background(Color.white)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .padding(.leading, isReply ? 40 : 0)
             
             // Nested replies
@@ -1824,6 +1834,7 @@ struct CommentView: View {
 struct PostDetailView: View {
     let post: PostDisplayModel
     @StateObject private var communityService = CommunityService()
+    @Environment(\.colorScheme) var colorScheme
     @State private var comments: [CommentDisplayModel] = []
     @State private var commentText = ""
     @State private var replyingTo: CommentDisplayModel?
@@ -1857,9 +1868,7 @@ struct PostDetailView: View {
                         
                         // Comments List - flush left
                         if communityService.isLoading && comments.isEmpty {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 40)
+                            FullScreenLoading(text: "Loading Comments")
                         } else if comments.isEmpty {
                             VStack(spacing: 12) {
                                 Image(systemName: "bubble.left")
@@ -1868,11 +1877,11 @@ struct PostDetailView: View {
                                 
                                 Text("No comments yet")
                                     .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(.black.opacity(0.7))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                 
                                 Text("Be the first to share your thoughts!")
                                     .font(.system(size: 14))
-                                    .foregroundColor(.black.opacity(0.5))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 40)
@@ -1905,10 +1914,10 @@ struct PostDetailView: View {
                 commentInputView
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
-                    .background(Color.white)
+                    .background(AppConstants.cardBackgroundColor(for: colorScheme))
             }
         }
-        .background(AppConstants.defaultBackgroundColor)
+        .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationTitle("Post")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -1973,11 +1982,11 @@ struct PostDetailView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(post.author)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text(timeAgoString(from: post.timestamp))
                         .font(.system(size: 13))
-                        .foregroundColor(.black.opacity(0.5))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                 }
                 
                 Spacer()
@@ -2000,12 +2009,12 @@ struct PostDetailView: View {
             // Title
             Text(post.title)
                 .font(.system(size: 28, weight: .bold, design: .serif))
-                .foregroundColor(.black)
-            
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
             // Full Content
             Text(post.content)
                 .font(.system(size: 16))
-                .foregroundColor(.black.opacity(0.8))
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 .lineSpacing(4)
             
             // Tags
@@ -2015,10 +2024,10 @@ struct PostDetailView: View {
                         ForEach(post.tags, id: \.self) { tag in
                             Text("#\(tag)")
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(AppConstants.primaryColor)
+                                .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(AppConstants.primaryColor.opacity(0.08))
+                                .background(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.08))
                                 .clipShape(Capsule())
                         }
                     }
@@ -2052,7 +2061,7 @@ struct PostDetailView: View {
                 //         .font(.system(size: 14, weight: .medium))
                 // }
             }
-            .foregroundColor(.black.opacity(0.7))
+            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             .padding(.top, 8)
         }
     }
@@ -2063,47 +2072,46 @@ struct PostDetailView: View {
                 HStack {
                     Text("Replying to @\(replyingTo.author)")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(AppConstants.primaryColor)
-                    
+                        .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
+
                     Spacer()
-                    
+
                     Button(action: {
                         self.replyingTo = nil
                         commentText = ""
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 16))
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
                     }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(AppConstants.primaryColor.opacity(0.08))
+                .background(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.08))
                 .cornerRadius(8)
             }
             
             HStack(alignment: .bottom, spacing: 12) {
                 TextField(replyingTo == nil ? "Add a comment..." : "Write your reply...", text: $commentText, axis: .vertical)
                     .font(.system(size: 15))
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     .padding(12)
-                    .background(AppConstants.defaultBackgroundColor)
+                    .background(AppConstants.cardBackgroundColor(for: colorScheme))
                     .cornerRadius(20)
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                            .stroke(AppConstants.borderColor(for: colorScheme), lineWidth: 1)
                     )
                     .focused($isCommentFieldFocused)
                     .lineLimit(1...6)
-                
+
                 Button(action: submitComment) {
                     if isSubmittingComment {
-                        ProgressView()
-                            .frame(width: 20, height: 20)
+                        FullScreenLoading(text: "Submitting Comment")
                     } else {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.system(size: 36))
-                            .foregroundColor(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : AppConstants.primaryColor)
+                            .foregroundColor(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5) : AppConstants.adaptivePrimaryColor(for: colorScheme))
                     }
                 }
                 .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmittingComment)
@@ -2177,6 +2185,7 @@ struct EditPostView: View {
     let post: PostDisplayModel
     @ObservedObject var communityService: CommunityService
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     let onPostUpdated: () -> Void
     
     @State private var title: String
@@ -2233,7 +2242,7 @@ struct EditPostView: View {
                             .font(.system(size: 18, weight: .semibold))
                             .focused($focusedField, equals: .title)
                             .padding(16)
-                            .background(Color.white)
+                            .background(AppConstants.cardBackgroundColor(for: colorScheme))
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
@@ -2275,7 +2284,7 @@ struct EditPostView: View {
                             .frame(minHeight: 200)
                             .focused($focusedField, equals: .content)
                             .padding(12)
-                            .background(Color.white)
+                            .background(AppConstants.cardBackgroundColor(for: colorScheme))
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
@@ -2293,7 +2302,7 @@ struct EditPostView: View {
                             .font(.system(size: 15))
                             .focused($focusedField, equals: .tags)
                             .padding(16)
-                            .background(Color.white)
+                            .background(AppConstants.cardBackgroundColor(for: colorScheme))
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
@@ -2319,7 +2328,7 @@ struct EditPostView: View {
                 }
                 .padding(20)
             }
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
             .navigationTitle("Edit Post")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2333,7 +2342,7 @@ struct EditPostView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: updatePost) {
                         if isSubmitting {
-                            ProgressView()
+                            FullScreenLoading(text: "Updating Post")
                         } else {
                             Text("Update")
                                 .fontWeight(.semibold)
@@ -2390,6 +2399,7 @@ struct CreatePostView: View {
     let topic: CommunityTopic?
     @ObservedObject var communityService: CommunityService
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     let onPostCreated: () -> Void
     
     @State private var selectedTopic: CommunityTopic?
@@ -2477,7 +2487,7 @@ struct CreatePostView: View {
                             .font(.system(size: 18, weight: .medium))
                             .foregroundColor(AppConstants.primaryColor)
                             .padding(16)
-                            .background(Color.white)
+                            .background(AppConstants.cardBackgroundColor(for: colorScheme))
                             .cornerRadius(12)
                             .focused($focusedField, equals: .title)
                             .submitLabel(.next)
@@ -2511,7 +2521,7 @@ struct CreatePostView: View {
                                 .focused($focusedField, equals: .content)
                                 .scrollContentBackground(.hidden)
                         }
-                        .background(Color.white)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .cornerRadius(12)
                     }
                     
@@ -2602,21 +2612,21 @@ struct CreatePostView: View {
                         
                         TextField("e.g., anxiety, progress, therapy", text: $tagsText)
                             .font(.system(size: 16))
-                            .foregroundColor(AppConstants.primaryColor)
+                            .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                             .padding(16)
-                            .background(Color.white)
+                            .background(AppConstants.cardBackgroundColor(for: colorScheme))
                             .cornerRadius(12)
                             .focused($focusedField, equals: .tags)
                             .submitLabel(.done)
-                        
+
                         Text("Separate tags with commas")
                             .font(.system(size: 12))
-                            .foregroundColor(.gray)
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                     }
                 }
                 .padding(20)
             }
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
             .navigationTitle("Create Post")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2625,20 +2635,20 @@ struct CreatePostView: View {
                         lightHaptic.impactOccurred(intensity: 0.5)
                         dismiss()
                     }
-                    .foregroundColor(AppConstants.primaryColor)
+                    .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: submitPost) {
                         if isSubmitting {
-                            ProgressView()
+                            FullScreenLoading(text: "Submitting Post")
                         } else {
                             Text("Post")
                                 .font(.system(size: 17, weight: .semibold))
                                 .fontDesign(.serif)
                         }
                     }
-                    .foregroundColor(canPost && !isSubmitting ? AppConstants.primaryColor : .gray)
+                    .foregroundColor(canPost && !isSubmitting ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
                     .disabled(!canPost || isSubmitting)
                 }
             }
@@ -2708,6 +2718,7 @@ enum PostEntryMode {
 struct PostEntryView: View {
     @Binding var isPresented: Bool
     let mode: PostEntryMode
+    @Environment(\.colorScheme) var colorScheme
     
     @State private var title: String = ""
     @State private var content: String = ""
@@ -2759,7 +2770,7 @@ struct PostEntryView: View {
                                 .font(.system(size: 18, weight: .medium))
                                 .foregroundColor(AppConstants.primaryColor)
                                 .padding(16)
-                                .background(Color.white)
+                                .background(AppConstants.cardBackgroundColor(for: colorScheme))
                                 .cornerRadius(12)
                                 .focused($focusedField, equals: .title)
                                 .submitLabel(.next)
@@ -2794,7 +2805,7 @@ struct PostEntryView: View {
                                 .focused($focusedField, equals: .content)
                                 .scrollContentBackground(.hidden)
                         }
-                        .background(Color.white)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .cornerRadius(12)
                     }
                     
@@ -2848,7 +2859,7 @@ struct PostEntryView: View {
                                 .font(.system(size: 16))
                                 .foregroundColor(AppConstants.primaryColor)
                                 .padding(16)
-                                .background(Color.white)
+                                .background(AppConstants.cardBackgroundColor(for: colorScheme))
                                 .cornerRadius(12)
                                 .focused($focusedField, equals: .tags)
                                 .submitLabel(.done)
@@ -2861,7 +2872,7 @@ struct PostEntryView: View {
                 }
                 .padding(20)
             }
-            .background(AppConstants.defaultBackgroundColor)
+            .background(AppConstants.backgroundColor(for: colorScheme))
             .navigationTitle(isReply ? "Write a Reply" : "Create Post")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -2933,7 +2944,7 @@ struct PostEntryView: View {
                 Spacer()
             }
             .padding(12)
-            .background(Color.white)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .cornerRadius(12)
         }
     }

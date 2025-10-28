@@ -9,8 +9,8 @@ import SwiftUI
 
 struct AffirmationsView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @State private var currentAffirmationIndex: Int = 0
-    @State private var showInstructions: Bool = false
     @State private var savedAffirmations: Set<Int> = []
     @State private var isAutoPlaying: Bool = false
     @State private var timer: Timer?
@@ -44,7 +44,7 @@ struct AffirmationsView: View {
     
     var body: some View {
         ZStack {
-            // Static gradient background
+            // Dynamic gradient background
             LinearGradient(
                 colors: [
                     currentAffirmation.color,
@@ -58,180 +58,176 @@ struct AffirmationsView: View {
             
             VStack(spacing: 0) {
                 // Header
-                HStack {
-                    Button(action: {
-                        timer?.invalidate()
-                        dismiss()
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    
-                    Spacer()
-                    
-                    // Counter
-                    Text("\(currentAffirmationIndex + 1)/\(affirmations.count)")
-                        .font(.system(size: 16, weight: .bold))
-                        .fontDesign(.monospaced)
-                        .foregroundColor(.white.opacity(0.9))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.white.opacity(0.2))
-                        .cornerRadius(20)
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        showInstructions.toggle()
-                    }) {
-                        Image(systemName: showInstructions ? "info.circle.fill" : "info.circle")
-                            .font(.system(size: 28))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 60)
-                .padding(.bottom, 20)
-                
-                // Instructions (if visible)
-                if showInstructions {
-                    instructionsCard
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
-                }
+                headerView
                 
                 Spacer()
                 
-                // Main Affirmation Card
-                VStack(spacing: 30) {
-                    // Icon
-                    ZStack {
-                        Circle()
-                            .fill(Color.white.opacity(0.3))
-                            .frame(width: 100, height: 100)
-                        
-                        Image(systemName: currentAffirmation.icon)
-                            .font(.system(size: 50, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                    
-                    // Affirmation Text
-                    Text(currentAffirmation.text)
-                        .font(.system(size: 32, weight: .bold))
-                        .fontDesign(.serif)
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(8)
-                        .padding(.horizontal, 40)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .minimumScaleFactor(0.8)
-                    
-                    // Category badge
-                    Text(currentAffirmation.category.rawValue)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.white.opacity(0.2))
-                        .cornerRadius(20)
-                    
-                    // Save button
-                    Button(action: {
-                        toggleSave()
-                    }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: savedAffirmations.contains(currentAffirmationIndex) ? "heart.fill" : "heart")
-                                .font(.system(size: 20, weight: .semibold))
-                            
-                            Text(savedAffirmations.contains(currentAffirmationIndex) ? "Saved" : "Save Favorite")
-                                .font(.system(size: 16, weight: .semibold))
-                                .fontDesign(.rounded)
-                        }
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
-                        .background(Color.white.opacity(0.2))
-                        .cornerRadius(25)
-                    }
-                }
-                .padding(.vertical, 40)
+                // Main Content
+                mainAffirmationContent
                 
                 Spacer()
                 
-                // Navigation Controls
-                VStack(spacing: 20) {
-                    // Auto-play toggle
-                    Button(action: toggleAutoPlay) {
-                        HStack(spacing: 12) {
-                            Image(systemName: isAutoPlaying ? "pause.circle.fill" : "play.circle.fill")
-                                .font(.system(size: 24, weight: .bold))
-                            
-                            Text(isAutoPlaying ? "Pause Auto-Play" : "Start Auto-Play")
-                                .font(.system(size: 16, weight: .bold))
-                                .fontDesign(.rounded)
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(Color.white.opacity(0.3))
-                        .cornerRadius(16)
-                    }
-                    .padding(.horizontal, 40)
-                    
-                    // Navigation arrows
-                    HStack(spacing: 20) {
-                        Button(action: previousAffirmation) {
-                            Image(systemName: "chevron.left.circle.fill")
-                                .font(.system(size: 50))
-                                .foregroundColor(.white)
-                        }
-                        .disabled(currentAffirmationIndex == 0)
-                        .opacity(currentAffirmationIndex == 0 ? 0.3 : 1.0)
-                        
-                        Spacer()
-                        
-                        Button(action: nextAffirmation) {
-                            Image(systemName: "chevron.right.circle.fill")
-                                .font(.system(size: 50))
-                                .foregroundColor(.white)
-                        }
-                        .disabled(currentAffirmationIndex == affirmations.count - 1)
-                        .opacity(currentAffirmationIndex == affirmations.count - 1 ? 0.3 : 1.0)
-                    }
-                    .padding(.horizontal, 60)
-                }
-                .padding(.bottom, 60)
+                // Bottom Controls
+                bottomControlsView
+                    .padding(.bottom, 40)
             }
         }
-        .ignoresSafeArea()
         .navigationBarHidden(true)
+        .toolbar(.hidden, for: .tabBar)
     }
     
-    // MARK: - Instructions Card
-    private var instructionsCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "heart.text.square.fill")
-                    .font(.system(size: 20, weight: .semibold))
+    // MARK: - Header
+    private var headerView: some View {
+        HStack {
+            Button(action: {
+                if isAutoPlaying {
+                    toggleAutoPlay()
+                }
+                dismiss()
+            }) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white.opacity(0.2))
+                        .frame(width: 44, height: 44)
+                    
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
+            .opacity(isAutoPlaying ? 0.7 : 1.0)
+            
+            Spacer()
+            
+            VStack(spacing: 4) {
+                Text("Affirmations")
+                    .font(.system(size: 22, weight: .bold))
+                    .fontDesign(.serif)
                     .foregroundColor(.white)
                 
-                Text("How to Use")
-                    .font(.system(size: 18, weight: .bold))
-                    .fontDesign(.serif)
+                Text("\(currentAffirmationIndex + 1) of \(affirmations.count)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.8))
+            }
+            
+            Spacer()
+            
+            if isAutoPlaying {
+                Button(action: {
+                    toggleAutoPlay()
+                }) {
+                    Text("Stop")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+            } else {
+                Color.clear
+                    .frame(width: 44, height: 44)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
+    }
+    
+    // MARK: - Main Content
+    private var mainAffirmationContent: some View {
+        VStack(spacing: 32) {
+            // Icon
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.15))
+                    .frame(width: 120, height: 120)
+                
+                Image(systemName: currentAffirmation.icon)
+                    .font(.system(size: 60, weight: .semibold))
                     .foregroundColor(.white)
             }
             
-            VStack(alignment: .leading, spacing: 12) {
-                AffirmationInfoRow(icon: "text.bubble.fill", text: "Read each affirmation slowly and mindfully")
-                AffirmationInfoRow(icon: "arrow.clockwise", text: "Repeat it silently or aloud 3 times")
-                AffirmationInfoRow(icon: "heart.fill", text: "Save your favorites for quick access")
-                AffirmationInfoRow(icon: "play.circle.fill", text: "Use auto-play for a guided session")
-            }
+            // Affirmation Text
+            Text(currentAffirmation.text)
+                .font(.system(size: 32, weight: .bold))
+                .fontDesign(.serif)
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+                .lineSpacing(8)
+                .padding(.horizontal, 32)
+                .frame(minHeight: 120)
+            
+            // Category badge
+            Text(currentAffirmation.category.rawValue)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white.opacity(0.9))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.15))
+                .cornerRadius(25)
         }
-        .padding(20)
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(20)
+        .padding(.horizontal, 24)
+    }
+    
+    // MARK: - Bottom Controls
+    private var bottomControlsView: some View {
+        VStack(spacing: 12) {
+            // Save button
+            Button(action: toggleSave) {
+                HStack(spacing: 8) {
+                    Image(systemName: savedAffirmations.contains(currentAffirmationIndex) ? "heart.fill" : "heart")
+                        .font(.system(size: 20, weight: .medium))
+                    
+                    Text(savedAffirmations.contains(currentAffirmationIndex) ? "Saved" : "Save Favorite")
+                        .font(.system(size: 16, weight: .semibold))
+                        .fontDesign(.serif)
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(Color.white.opacity(0.2))
+                .cornerRadius(25)
+            }
+            .padding(.horizontal, 32)
+            
+            // Navigation controls
+            HStack(spacing: 16) {
+                // Previous button
+                Button(action: previousAffirmation) {
+                    Image(systemName: "chevron.left.circle.fill")
+                        .font(.system(size: 44))
+                        .foregroundColor(.white)
+                        .opacity(currentAffirmationIndex == 0 ? 0.3 : 1.0)
+                }
+                .disabled(currentAffirmationIndex == 0)
+                
+                Spacer()
+                
+                // Auto-play button
+                Button(action: toggleAutoPlay) {
+                    Text(isAutoPlaying ? "Pause" : "Auto-Play")
+                        .font(.system(size: 18, weight: .semibold))
+                        .fontDesign(.serif)
+                        .foregroundColor(.white)
+                        .frame(width: 120, height: 50)
+                        .background(Color.white.opacity(0.25))
+                        .cornerRadius(25)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 25)
+                                .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                        )
+                }
+                
+                Spacer()
+                
+                // Next button
+                Button(action: nextAffirmation) {
+                    Image(systemName: "chevron.right.circle.fill")
+                        .font(.system(size: 44))
+                        .foregroundColor(.white)
+                        .opacity(currentAffirmationIndex == affirmations.count - 1 ? 0.3 : 1.0)
+                }
+                .disabled(currentAffirmationIndex == affirmations.count - 1)
+            }
+            .padding(.horizontal, 24)
+        }
     }
     
     // MARK: - Actions
@@ -315,26 +311,6 @@ enum AffirmationCategory: String {
     case pride = "Pride"
 }
 
-// MARK: - Info Row Component
-struct AffirmationInfoRow: View {
-    let icon: String
-    let text: String
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(width: 20)
-            
-            Text(text)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.9))
-        }
-    }
-}
-
 #Preview {
     AffirmationsView()
 }
-

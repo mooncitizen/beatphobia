@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ColorHuntView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @State private var selectedColor: HuntColor?
     @State private var foundColors: Set<String> = []
     @State private var showInstructions: Bool = false
@@ -45,7 +46,7 @@ struct ColorHuntView: View {
     
     var body: some View {
         ZStack {
-            AppConstants.defaultBackgroundColor
+            AppConstants.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
@@ -57,7 +58,7 @@ struct ColorHuntView: View {
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 28))
-                            .foregroundColor(.black.opacity(0.3))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
                     }
                     
                     Spacer()
@@ -67,16 +68,16 @@ struct ColorHuntView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "clock.fill")
                                 .font(.system(size: 16))
-                                .foregroundColor(AppConstants.primaryColor)
+                                .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                             
                             Text(formatTime(elapsedTime))
                                 .font(.system(size: 16, weight: .bold))
                                 .fontDesign(.monospaced)
-                                .foregroundColor(.black)
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.white)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .cornerRadius(20)
                     }
                     
@@ -101,11 +102,11 @@ struct ColorHuntView: View {
                             Text("Color Hunt")
                                 .font(.system(size: 36, weight: .bold))
                                 .fontDesign(.serif)
-                                .foregroundColor(.black)
-                            
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                             Text("Find objects of different colors around you")
                                 .font(.system(size: 15))
-                                .foregroundColor(.black.opacity(0.6))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 40)
                         }

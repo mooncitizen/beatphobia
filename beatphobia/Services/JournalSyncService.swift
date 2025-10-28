@@ -54,7 +54,9 @@ class JournalSyncService: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.handleSubscriptionChange()
+            Task { [weak self] in
+                await self?.handleSubscriptionChange()
+            }
         }
     }
     
@@ -64,7 +66,8 @@ class JournalSyncService: ObservableObject {
     }
     
     /// Handle subscription status changes (e.g., user upgraded to Pro)
-    private func handleSubscriptionChange() {
+    @MainActor
+    private func handleSubscriptionChange() async {
         if subscriptionManager?.isPro == true {
             print("🎉 Pro subscription activated - starting journal sync")
             startAutoSync()
@@ -77,20 +80,21 @@ class JournalSyncService: ObservableObject {
     // MARK: - Auto Sync
     
     /// Start automatic syncing every 5 minutes (Pro only)
+    @MainActor
     func startAutoSync() {
         stopAutoSync()
-        
+
         // Only sync if user is Pro
         guard subscriptionManager?.isPro == true else {
             print("📝 Journal sync disabled (Free tier)")
             return
         }
-        
+
         // Initial sync
         Task {
             await syncAll()
         }
-        
+
         // Schedule periodic syncs
         syncTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             Task {
@@ -98,7 +102,8 @@ class JournalSyncService: ObservableObject {
             }
         }
     }
-    
+
+    @MainActor
     func stopAutoSync() {
         syncTimer?.invalidate()
         syncTimer = nil
@@ -107,6 +112,7 @@ class JournalSyncService: ObservableObject {
     // MARK: - Manual Sync
     
     /// Sync all local changes to cloud and pull cloud changes (Pro only)
+    @MainActor
     func syncAll() async {
         // Check if user is Pro
         guard subscriptionManager?.isPro == true else {

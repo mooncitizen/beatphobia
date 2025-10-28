@@ -10,21 +10,455 @@ import MapKit
 import CoreLocation
 import Combine
 import RealmSwift
+import AVFoundation
+import ActivityKit
 
+// MARK: - Location Tracker Landing Page
 struct LocationTrackerView: View {
+    @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @ObservedResults(JourneyRealm.self) var allJourneys
+    @Binding var isTabBarVisible: Bool
+    
+    @State private var showTracking = false
+    @State private var selectedJourneyId: String?
+    @State private var showPaywall = false
+    @AppStorage("setting.miles") private var enableMiles = false
+    
+    var userJourneys: [JourneyRealm] {
+        allJourneys.sorted(by: { $0.startTime > $1.startTime })
+    }
+    
+    var body: some View {
+        ZStack {
+            AppConstants.backgroundColor(for: colorScheme)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Quick stats (fixed at top) - Pro only
+                if !userJourneys.isEmpty && subscriptionManager.isPro {
+                    statsSection
+                        .padding(.top, 8)
+                        .padding(.bottom, 16)
+                }
+                
+                // Start tracking button (fixed below stats)
+                Button(action: {
+                    showTracking = true
+                }) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 24))
+                        
+                        Text(userJourneys.isEmpty ? "Start Your First Journey" : "Start New Journey")
+                            .font(.system(size: 18, weight: .bold))
+                            .fontDesign(.rounded)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 18)
+                    .background(
+                        LinearGradient(
+                            colors: [AppConstants.primaryColor, AppConstants.primaryColor.opacity(0.8)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .cornerRadius(16)
+                    .shadow(color: AppConstants.primaryColor.opacity(0.3), radius: 10, y: 5)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+                
+                // Scrollable journey history
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Journey history
+                        if !userJourneys.isEmpty {
+                            journeyHistorySection
+                        } else {
+                            emptyStateView
+                        }
+                        
+                        Spacer(minLength: 100)
+                    }
+                    .padding(.top, 8)
+                }
+            }
+        }
+        .navigationTitle("Location Tracker")
+        .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: $showTracking) {
+            LocationTrackingView(isTabBarVisible: $isTabBarVisible, onJourneyCompleted: { journeyId in
+                selectedJourneyId = journeyId
+            })
+        }
+        .sheet(isPresented: $showPaywall) {
+            NavigationStack {
+                PaywallView()
+                    .environmentObject(subscriptionManager)
+            }
+        }
+    }
+    
+    // MARK: - Stats Section
+    private var statsSection: some View {
+        VStack(spacing: 16) {
+            Text("Your Progress")
+                .font(.system(size: 18, weight: .bold))
+                .fontDesign(.serif)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    LocationTrackerStatCard(
+                        title: "Journeys",
+                        value: "\(userJourneys.count)",
+                        subtitle: "Total tracked",
+                        icon: "map.fill",
+                        color: .blue
+                    )
+                    
+                    LocationTrackerStatCard(
+                        title: "Distance",
+                        value: formatTotalDistance(),
+                        subtitle: "Total traveled",
+                        icon: "figure.walk",
+                        color: .green
+                    )
+                    
+                    LocationTrackerStatCard(
+                        title: "Avg Pace",
+                        value: calculateAveragePace(),
+                        subtitle: "per km",
+                        icon: "gauge.high",
+                        color: .orange
+                    )
+                    
+                    LocationTrackerStatCard(
+                        title: "Time",
+                        value: formatTotalTime(),
+                        subtitle: "Total time",
+                        icon: "clock.fill",
+                        color: .purple
+                    )
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+    
+    
+    // MARK: - Journey History
+    private var journeyHistorySection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Journey History")
+                    .font(.system(size: 18, weight: .bold))
+                    .fontDesign(.serif)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                
+                if !subscriptionManager.isPro && userJourneys.count > 3 {
+                    Spacer()
+                    
+                    Text("Showing 3 of \(userJourneys.count)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.blue)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            
+            ForEach(groupedJourneys.keys.sorted(by: >), id: \.self) { date in
+                VStack(spacing: 8) {
+                    // Date separator
+                    HStack {
+                        Text(dateFormatter.string(from: date))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                            .textCase(.uppercase)
+                        
+                        Rectangle()
+                            .fill(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.3))
+                            .frame(height: 1)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, date == groupedJourneys.keys.sorted(by: >).first ? 0 : 12)
+                    
+                    // Journeys for this date
+                    if let journeys = groupedJourneys[date] {
+                        ForEach(journeys, id: \.id) { journey in
+                            NavigationLink(destination: JourneyDetailView(journey: journey)) {
+                                LocationJourneyCard(journey: journey, enableMiles: enableMiles)
+                                    .padding(.horizontal, 20)
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Upgrade prompt for free users
+            if !subscriptionManager.isPro && userJourneys.count > 3 {
+                upgradePrompt
+            }
+        }
+    }
+    
+    // Upgrade prompt view
+    private var upgradePrompt: some View {
+        Button(action: {
+            showPaywall = true
+        }) {
+            HStack(spacing: 8) {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(.orange)
+                
+                Text("Upgrade to Pro to view all journeys")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
+            .cornerRadius(12)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+    }
+    
+    // Group journeys by date
+    private var groupedJourneys: [Date: [JourneyRealm]] {
+        let calendar = Calendar.current
+        let limit = subscriptionManager.isPro ? userJourneys.count : min(3, userJourneys.count)
+        let grouped = Dictionary(grouping: userJourneys.prefix(limit)) { journey in
+            calendar.startOfDay(for: journey.startTime)
+        }
+        return grouped
+    }
+    
+    // Date formatter for section headers
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMMM d"
+        return formatter
+    }
+    
+    // MARK: - Empty State
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "map.fill")
+                .font(.system(size: 60))
+                .foregroundColor(AppConstants.primaryColor.opacity(0.5))
+
+            Text("Start Tracking")
+                .font(.system(size: 24, weight: .bold))
+                .fontDesign(.serif)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
+            Text("Track your movements and emotions as you explore outside your safe space.")
+                .font(.system(size: 15))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+        .padding(.vertical, 60)
+    }
+    
+    // MARK: - Computed Properties
+    private func formatTotalDistance() -> String {
+        let total = userJourneys.reduce(0.0) { $0 + $1.distance }
+        if enableMiles {
+            let miles = total / 1609.34
+            return String(format: "%.1f mi", miles)
+        } else {
+            let km = total / 1000.0
+            return String(format: "%.1f km", km)
+        }
+    }
+    
+    private func calculateAveragePace() -> String {
+        guard !userJourneys.isEmpty else { return "--:--" }
+        
+        let validJourneys = userJourneys.filter { $0.duration > 0 && $0.distance > 0 }
+        guard !validJourneys.isEmpty else { return "--:--" }
+        
+        let totalTime = validJourneys.reduce(0) { $0 + $1.duration }
+        let totalDist = validJourneys.reduce(0.0) { $0 + $1.distance }
+        
+        let distance = enableMiles ? (totalDist / 1609.34) : (totalDist / 1000.0)
+        let paceMinPerUnit = Double(totalTime) / 60.0 / distance
+        let paceMin = Int(paceMinPerUnit)
+        let paceSec = Int((paceMinPerUnit - Double(paceMin)) * 60)
+        
+        return String(format: "%d:%02d", paceMin, paceSec)
+    }
+    
+    private func formatTotalTime() -> String {
+        let total = userJourneys.reduce(0) { $0 + $1.duration }
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        if hours > 0 {
+            return String(format: "%dh %dm", hours, minutes)
+        }
+        return String(format: "%dm", minutes)
+    }
+}
+
+// MARK: - Location Journey Card
+struct LocationJourneyCard: View {
+    @Environment(\.colorScheme) var colorScheme
+    let journey: JourneyRealm
+    let enableMiles: Bool
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(journey.startTime.formatted(date: .abbreviated, time: .omitted))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
+                    Text(journey.startTime.formatted(date: .omitted, time: .shortened))
+                        .font(.system(size: 13))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                }
+                
+                Spacer()
+                
+                // Distance badge
+                HStack(spacing: 4) {
+                    Text(formatDistance(journey.distance))
+                        .font(.system(size: 18, weight: .bold))
+                        .fontDesign(.monospaced)
+
+                }
+                .foregroundColor(.blue)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.blue.opacity(0.15))
+                .cornerRadius(8)
+            }
+            
+            // Key details
+            HStack(spacing: 16) {
+                if journey.duration > 0 {
+                    DetailPill(icon: "clock.fill", text: formatDuration(journey.duration))
+                }
+                
+                if journey.checkpoints.count > 0 {
+                    DetailPill(icon: "heart.fill", text: "\(journey.checkpoints.count)")
+                }
+                
+                if journey.duration > 0 && journey.distance > 0 {
+                    DetailPill(icon: "gauge.high", text: calculatePace())
+                }
+            }
+        }
+        .padding(16)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+        .cornerRadius(16)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
+    }
+    
+    private func formatDistance(_ meters: Double) -> String {
+        if enableMiles {
+            let miles = meters / 1609.34
+            return String(format: "%.2f mi", miles)
+        } else {
+            let km = meters / 1000.0
+            return String(format: "%.2f km", km)
+        }
+    }
+    
+    private func formatDuration(_ seconds: Int) -> String {
+        let minutes = seconds / 60
+        if minutes > 60 {
+            let hours = minutes / 60
+            let mins = minutes % 60
+            return String(format: "%dh %dm", hours, mins)
+        }
+        return String(format: "%dm", minutes)
+    }
+    
+    private func calculatePace() -> String {
+        guard journey.duration > 0 && journey.distance > 0 else { return "--:--" }
+        
+        let distance = enableMiles ? (journey.distance / 1609.34) : (journey.distance / 1000.0)
+        let paceMinPerUnit = Double(journey.duration) / 60.0 / distance
+        let paceMin = Int(paceMinPerUnit)
+        let paceSec = Int((paceMinPerUnit - Double(paceMin)) * 60)
+        return String(format: "%d:%02d", paceMin, paceSec)
+    }
+}
+
+// MARK: - Location Tracker Stat Card Component
+struct LocationTrackerStatCard: View {
+    @Environment(\.colorScheme) var colorScheme
+    let title: String
+    let value: String
+    let subtitle: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                    .foregroundColor(color)
+
+                Spacer()
+            }
+
+            Text(value)
+                .font(.system(size: 28, weight: .bold))
+                .fontDesign(.rounded)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
+            Text(subtitle)
+                .font(.system(size: 11))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
+        }
+        .padding(16)
+        .frame(width: 140)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+        .cornerRadius(16)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
+    }
+}
+
+// MARK: - Active Tracking View (renamed from LocationTrackerView)
+struct LocationTrackingView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @StateObject private var locationManager = LocationTrackingManager()
     @State private var showMap = false // Hide map by default
     @Binding var isTabBarVisible: Bool
+    var onJourneyCompleted: ((String) -> Void)?
     @AppStorage("setting.miles") private var enableMiles = false
     @State private var showEndJourneyAlert = false
     @State private var showJourneyResults = false
     @State private var completedJourneyId: String?
+    @State private var showCountdown = false
+    @State private var countdown = 3
+    @State private var isPaused = false
+    @State private var countdownTimer: Timer?
+    @State private var audioPlayer: AVAudioPlayer?
+    
+    private let countdownHaptic = UIImpactFeedbackGenerator(style: .medium)
     
     var body: some View {
         ZStack {
             // Background color
-            AppConstants.defaultBackgroundColor
+            AppConstants.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
             
             // Map view (only when enabled)
@@ -81,30 +515,16 @@ struct LocationTrackerView: View {
             Button("End Journey", role: .destructive) {
                 completedJourneyId = locationManager.currentJourneyId?.uuidString
                 locationManager.stopTracking()
-                showJourneyResults = true
             }
         } message: {
             Text("Are you sure you want to end this tracking session?")
         }
-        .fullScreenCover(isPresented: $showJourneyResults) {
-            if let journeyId = completedJourneyId,
-               let realm = try? Realm(),
-               let journey = realm.object(ofType: JourneyRealm.self, forPrimaryKey: journeyId) {
-                NavigationView {
-                    JourneyDetailView(journey: journey)
-                        .toolbar {
-                            ToolbarItem(placement: .navigationBarTrailing) {
-                                Button("Done") {
-                                    showJourneyResults = false
-                                    // Restore tab bar visibility
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        isTabBarVisible = true
-                                    }
-                                    dismiss()
-                                }
-                            }
-                        }
-                }
+        .onChange(of: completedJourneyId) { oldValue, newValue in
+            if let journeyId = newValue {
+                // Call the completion handler if provided
+                onJourneyCompleted?(journeyId)
+                // Dismiss and return to the list
+                dismiss()
             }
         }
         .onAppear {
@@ -130,6 +550,132 @@ struct LocationTrackerView: View {
             }
         }
         .interactiveDismissDisabled(locationManager.isTracking) // Prevent swipe-to-dismiss while tracking
+        .overlay {
+            if showCountdown {
+                countdownOverlay
+            }
+        }
+    }
+    
+    // MARK: - Countdown Overlay
+    private var countdownOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 32) {
+                // Countdown number
+                Text("\(countdown)")
+                    .font(.system(size: 120, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                
+                // Progress circle
+                ZStack {
+                    Circle()
+                        .stroke(Color.white.opacity(0.2), lineWidth: 8)
+                        .frame(width: 200, height: 200)
+                    
+                    Circle()
+                        .trim(from: 0, to: CGFloat(countdown) / 3.0)
+                        .stroke(Color.white, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                        .frame(width: 200, height: 200)
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 1), value: countdown)
+                }
+                
+                // Button controls
+                HStack(spacing: 24) {
+                    // Cancel button
+                    Button(action: {
+                        cancelCountdown()
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Cancel")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(Color.red.opacity(0.9))
+                        .cornerRadius(12)
+                    }
+                    
+                    // Pause/Resume button
+                    Button(action: {
+                        togglePause()
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: isPaused ? "play.fill" : "pause.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text(isPaused ? "Resume" : "Pause")
+                                .font(.system(size: 16, weight: .semibold))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(Color.white.opacity(0.2))
+                        .cornerRadius(12)
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Countdown Functions
+    private func startCountdown() {
+        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+            if !isPaused {
+                if countdown > 1 {
+                    // Play beep for numbers 3, 2, 1
+                    playCountdownBeep()
+                    countdown -= 1
+                } else if countdown == 1 {
+                    // Play beep for 1, then stop
+                    playCountdownBeep()
+                    countdown -= 1
+                } else {
+                    // countdown reached 0, start tracking
+                    timer.invalidate()
+                    countdownTimer = nil
+                    showCountdown = false
+                    locationManager.startTracking()
+                }
+            }
+        }
+    }
+    
+    private func playCountdownBeep() {
+        // Prepare haptic for immediate response
+        countdownHaptic.prepare()
+        
+        // Play audio beep
+        guard let url = Bundle.main.url(forResource: "soft_1_second_beep", withExtension: "wav") else {
+            return
+        }
+        
+        do {
+            audioPlayer = try AVAudioPlayer(contentsOf: url)
+            audioPlayer?.play()
+        } catch {
+            print("Error playing countdown beep: \(error)")
+        }
+        
+        // Trigger haptic feedback
+        countdownHaptic.impactOccurred(intensity: 0.9)
+    }
+    
+    private func cancelCountdown() {
+        countdownTimer?.invalidate()
+        countdownTimer = nil
+        showCountdown = false
+        countdown = 3
+        isPaused = false
+    }
+    
+    private func togglePause() {
+        isPaused.toggle()
     }
     
     // MARK: - Info View
@@ -151,12 +697,12 @@ struct LocationTrackerView: View {
                 Text("Tracker")
                     .font(.system(size: 26, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
-                
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                 Text("Track your movements and emotions")
                     .font(.system(size: 15))
                     .fontDesign(.serif)
-                    .foregroundColor(.black.opacity(0.7))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
             }
@@ -198,7 +744,7 @@ struct LocationTrackerView: View {
                 Text("Your location data is stored securely on your device")
                     .font(.system(size: 12))
                     .fontDesign(.serif)
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -212,34 +758,34 @@ struct LocationTrackerView: View {
         HStack(spacing: 16) {
             ZStack {
                 Circle()
-                    .fill(Color.blue.opacity(0.15))
+                    .fill(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.15))
                     .frame(width: 44, height: 44)
-                
+
                 Image(systemName: icon)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.blue)
+                    .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 15, weight: .semibold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
-                
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                 Text(description)
                     .font(.system(size: 12))
                     .fontDesign(.serif)
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .fixedSize(horizontal: false, vertical: true)
             }
-            
+
             Spacer()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.08), radius: 8, y: 3)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
     }
     
     // MARK: - Header
@@ -345,22 +891,22 @@ struct LocationTrackerView: View {
                 Image(systemName: icon)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(color)
-                
+
                 Text(title)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
-            
+
             Text(value)
                 .font(.system(size: 24, weight: .bold))
                 .fontDesign(.monospaced)
-                .foregroundColor(.black)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.1), radius: 8, y: 3)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
     }
     
     private var recentEmotionsView: some View {
@@ -368,7 +914,7 @@ struct LocationTrackerView: View {
             Text("Recent Emotions")
                 .font(.system(size: 14, weight: .semibold))
                 .fontDesign(.serif)
-                .foregroundColor(.black.opacity(0.7))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             
             HStack(spacing: 8) {
                 ForEach(locationManager.feelingCheckpoints.suffix(5).reversed(), id: \.id) { checkpoint in
@@ -378,9 +924,9 @@ struct LocationTrackerView: View {
             }
         }
         .padding(16)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.1), radius: 8, y: 3)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
     }
     
     private func emotionBadge(checkpoint: FeelingCheckpoint) -> some View {
@@ -391,10 +937,10 @@ struct LocationTrackerView: View {
                 .frame(width: 44, height: 44)
                 .background(checkpoint.feeling.color.opacity(0.15))
                 .cornerRadius(12)
-            
+
             Text(checkpoint.timestamp.formatted(date: .omitted, time: .shortened))
                 .font(.system(size: 9, weight: .medium))
-                .foregroundColor(.black.opacity(0.5))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
         }
     }
     
@@ -407,9 +953,9 @@ struct LocationTrackerView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Color.black.opacity(0.6))
+                .background(Color.black.opacity(0.8))
                 .cornerRadius(12)
-                .shadow(color: Color.black.opacity(0.2), radius: 8, y: 3)
+                .shadow(color: Color.black.opacity(0.3), radius: 8, y: 3)
             
             HStack(spacing: showMap ? 8 : 12) {
                 ForEach(FeelingLevel.allCases, id: \.self) { feeling in
@@ -457,16 +1003,16 @@ struct LocationTrackerView: View {
                     Text(feeling.title)
                         .font(.system(size: 11, weight: .semibold))
                         .fontDesign(.serif)
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
                 .background(
                     locationManager.currentFeeling == feeling ?
-                    feeling.color.opacity(0.25) : Color.white
+                    feeling.color.opacity(0.25) : AppConstants.cardBackgroundColor(for: colorScheme)
                 )
                 .cornerRadius(16)
-                .shadow(color: Color.black.opacity(0.15), radius: 8, y: 3)
+                .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
                         .stroke(feeling.color, lineWidth: locationManager.currentFeeling == feeling ? 3 : 0)
@@ -481,7 +1027,9 @@ struct LocationTrackerView: View {
             if !locationManager.isTracking {
                 // Start tracking button
                 Button(action: {
-                    locationManager.startTracking()
+                    countdown = 3
+                    showCountdown = true
+                    startCountdown()
                 }) {
                     HStack(spacing: 12) {
                         Image(systemName: "location.fill")
@@ -659,6 +1207,10 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
     private var distanceMeters: Double = 0
     var currentJourneyId: UUID? // Made public to access after journey ends
     
+    // Live Activity
+    @available(iOS 16.1, *)
+    private var liveActivity: Activity<LocationTrackingAttributes>?
+    
     let lightHaptic = UIImpactFeedbackGenerator(style: .light)
     let mediumHaptic = UIImpactFeedbackGenerator(style: .medium)
     let successHaptic = UINotificationFeedbackGenerator()
@@ -708,6 +1260,11 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         saveTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.saveJourneyToRealm()
         }
+        
+        // Start Live Activity
+        if #available(iOS 16.1, *) {
+            startLiveActivity()
+        }
     }
     
     func stopTracking() {
@@ -721,6 +1278,11 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         timer = nil
         saveTimer?.invalidate()
         saveTimer = nil
+        
+        // End Live Activity
+        if #available(iOS 16.1, *) {
+            endLiveActivity()
+        }
         
         // Save final state to Realm
         saveJourneyToRealm()
@@ -759,6 +1321,60 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
             let paceSec = Int((paceMinPerUnit - Double(paceMin)) * 60)
             averagePace = String(format: "%d:%02d", paceMin, paceSec)
         }
+        
+        // Update Live Activity
+        if #available(iOS 16.1, *) {
+            updateLiveActivity()
+        }
+    }
+    
+    // MARK: - Live Activity Methods
+    @available(iOS 16.1, *)
+    private func startLiveActivity() {
+        let attributes = LocationTrackingAttributes(startTime: startTime!)
+        let contentState = LocationTrackingAttributes.ContentState(
+            duration: trackingDuration,
+            distance: totalDistance,
+            pace: averagePace
+        )
+        
+        do {
+            liveActivity = try Activity<LocationTrackingAttributes>.request(
+                attributes: attributes,
+                contentState: contentState,
+                pushType: nil
+            )
+            print("✅ Live Activity started")
+        } catch {
+            print("❌ Failed to start Live Activity: \(error)")
+        }
+    }
+    
+    @available(iOS 16.1, *)
+    private func updateLiveActivity() {
+        guard let activity = liveActivity else { return }
+        
+        let contentState = LocationTrackingAttributes.ContentState(
+            duration: trackingDuration,
+            distance: totalDistance,
+            pace: averagePace
+        )
+        
+        Task {
+            await activity.update(using: contentState)
+        }
+    }
+    
+    @available(iOS 16.1, *)
+    private func endLiveActivity() {
+        guard let activity = liveActivity else { return }
+        
+        Task {
+            await activity.end(dismissalPolicy: .immediate)
+        }
+        
+        liveActivity = nil
+        print("✅ Live Activity ended")
     }
     
     private func calculateDistance() {
@@ -967,7 +1583,7 @@ class FeelingAnnotation: NSObject, MKAnnotation {
 }
 
 // MARK: - Realm Models
-class JourneyRealm: Object {
+class JourneyRealm: Object, Identifiable {
     @Persisted(primaryKey: true) var id: String = ""
     @Persisted var startTime: Date = Date()
     @Persisted var endTime: Date = Date()
@@ -994,6 +1610,6 @@ class FeelingCheckpointRealm: Object {
 // MARK: - Preview
 #Preview {
     @Previewable @State var isTabBarVisible = true
-    LocationTrackerView(isTabBarVisible: $isTabBarVisible)
+    LocationTrackingView(isTabBarVisible: $isTabBarVisible)
 }
 

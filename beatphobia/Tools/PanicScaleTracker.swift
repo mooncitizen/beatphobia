@@ -9,6 +9,8 @@ import SwiftUI
 import RealmSwift
 import Auth
 import Charts
+import PDFKit
+import UniformTypeIdentifiers
 
 // MARK: - Realm Models
 class PanicEpisode: Object, Identifiable {
@@ -71,14 +73,16 @@ enum PanicSymptomCategory: String, CaseIterable {
 
 // MARK: - Main View
 struct PanicScaleView: View {
-    @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var subscriptionManager: SubscriptionManager
     @ObservedResults(PanicEpisode.self) var allEpisodes
     
     @State private var showTracker = false
     @State private var selectedEpisode: PanicEpisode?
-    @State private var showPaywall = false
+    @State private var showExportMenu = false
+    @State private var showPDFExport = false
+    @State private var pdfData: Data?
     
     var userEpisodes: [PanicEpisode] {
         let userId = authManager.currentUser?.id.uuidString ?? ""
@@ -88,43 +92,14 @@ struct PanicScaleView: View {
     
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.95, green: 0.95, blue: 0.98),
-                    Color(red: 0.92, green: 0.92, blue: 0.96)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-            
+            AppConstants.backgroundColor(for: colorScheme)
+                .ignoresSafeArea()
+
             VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(.black.opacity(0.7))
-                    }
-                    
-                    Spacer()
-                    
-                    Text("Panic Tracker")
-                        .font(.system(size: 22, weight: .bold))
-                        .fontDesign(.serif)
-                        .foregroundColor(.black)
-                    
-                    Spacer()
-                    
-                    Color.clear.frame(width: 28, height: 28)
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 60)
-                .padding(.bottom, 20)
-                
-                // Quick stats (fixed at top)
-                if !userEpisodes.isEmpty {
+                // Quick stats (fixed at top) - Pro only
+                if !userEpisodes.isEmpty && subscriptionManager.isPro {
                     statsSection
+                        .padding(.top, 16)
                         .padding(.bottom, 16)
                 }
                 
@@ -143,13 +118,13 @@ struct PanicScaleView: View {
                     .padding(.vertical, 18)
                     .background(
                         LinearGradient(
-                            colors: [Color.purple, Color.purple.opacity(0.8)],
+                            colors: [AppConstants.adaptivePrimaryColor(for: colorScheme), AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.8)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .cornerRadius(16)
-                    .shadow(color: Color.purple.opacity(0.3), radius: 10, y: 5)
+                    .shadow(color: AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.3), radius: 10, y: 5)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
@@ -179,17 +154,35 @@ struct PanicScaleView: View {
                 }
             }
         }
-        .ignoresSafeArea()
-        .navigationBarHidden(true)
+        .navigationTitle("Panic Tracker")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: { showExportMenu = true }) {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
+                }
+            }
+        }
+        .confirmationDialog("Export Options", isPresented: $showExportMenu, titleVisibility: .visible) {
+            Button("Export to PDF") {
+                generatePDF()
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .sheet(isPresented: $showPDFExport) {
+            if let pdfData = pdfData {
+                ShareSheet(activityItems: [generatePDFFile(pdfData: pdfData)])
+            }
+        }
         .fullScreenCover(isPresented: $showTracker) {
             PanicTrackerFlow()
         }
         .sheet(item: $selectedEpisode) { episode in
             EpisodeDetailView(episode: episode)
-        }
-        .sheet(isPresented: $showPaywall) {
-            PaywallView()
-                .environmentObject(subscriptionManager)
         }
     }
     
@@ -199,7 +192,7 @@ struct PanicScaleView: View {
             Text("Your Insights")
                 .font(.system(size: 18, weight: .bold))
                 .fontDesign(.serif)
-                .foregroundColor(.black)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
             
@@ -282,21 +275,21 @@ struct PanicScaleView: View {
             Text("Trends & Insights")
                 .font(.system(size: 18, weight: .bold))
                 .fontDesign(.serif)
-                .foregroundColor(.black)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
-            
-            Button(action: { showPaywall = true }) {
+
+            NavigationLink(destination: PaywallView().environmentObject(subscriptionManager).navigationBarTitleDisplayMode(.inline)) {
                 Text("View Analytics")
                     .font(.system(size: 16, weight: .semibold, design: .serif))
-                    .foregroundColor(AppConstants.primaryColor)
+                    .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(Color.white)
+                    .background(AppConstants.cardBackgroundColor(for: colorScheme))
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(AppConstants.primaryColor.opacity(0.3), lineWidth: 1.5)
+                            .stroke(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.3), lineWidth: 1.5)
                     )
             }
             .padding(.horizontal, 20)
@@ -309,7 +302,7 @@ struct PanicScaleView: View {
             Text("Episode History")
                 .font(.system(size: 18, weight: .bold))
                 .fontDesign(.serif)
-                .foregroundColor(.black)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
             
@@ -328,16 +321,16 @@ struct PanicScaleView: View {
         VStack(spacing: 20) {
             Image(systemName: "chart.line.uptrend.xyaxis")
                 .font(.system(size: 60))
-                .foregroundColor(.purple.opacity(0.5))
-            
+                .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.5))
+
             Text("Start Tracking")
                 .font(.system(size: 24, weight: .bold))
                 .fontDesign(.serif)
-                .foregroundColor(.black)
-            
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
             Text("Track panic episodes to understand patterns, triggers, and what helps you most.")
                 .font(.system(size: 15))
-                .foregroundColor(.black.opacity(0.6))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
@@ -372,62 +365,83 @@ struct PanicScaleView: View {
         let minutes = Int(duration) / 60
         return "\(minutes)"
     }
+    
+    // MARK: - PDF Export
+    private func generatePDF() {
+        let eventLimit = subscriptionManager.isPro ? 40 : 10
+        let eventsToExport = Array(userEpisodes.prefix(eventLimit))
+        
+        let pdfCreator = PanicTrackerPDFCreator(episodes: eventsToExport, isPro: subscriptionManager.isPro)
+        pdfData = pdfCreator.createPDF()
+        showPDFExport = true
+    }
+    
+    private func generatePDFFile(pdfData: Data) -> URL {
+        let filename = "Panic_Tracker_Report_\(Date().formatted(date: .numeric, time: .omitted).replacingOccurrences(of: "/", with: "_")).pdf"
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileURL = tempDir.appendingPathComponent(filename)
+        
+        try? pdfData.write(to: fileURL)
+        return fileURL
+    }
 }
 
 // MARK: - Stat Card Component
 struct StatCard: View {
+    @Environment(\.colorScheme) var colorScheme
     let title: String
     let value: String
     let subtitle: String
     let icon: String
     let color: Color
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: icon)
                     .font(.system(size: 20))
                     .foregroundColor(color)
-                
+
                 Spacer()
             }
-            
+
             Text(value)
                 .font(.system(size: 28, weight: .bold))
                 .fontDesign(.rounded)
-                .foregroundColor(.black)
-            
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.black.opacity(0.7))
-            
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
             Text(subtitle)
                 .font(.system(size: 11))
-                .foregroundColor(.black.opacity(0.5))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
         }
         .padding(16)
         .frame(width: 140)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
     }
 }
 
 // MARK: - Episode Card Component
 struct EpisodeCard: View {
+    @Environment(\.colorScheme) var colorScheme
     let episode: PanicEpisode
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(episode.timestamp.formatted(date: .abbreviated, time: .omitted))
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.black)
-                    
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                     Text(episode.timestamp.formatted(date: .omitted, time: .shortened))
                         .font(.system(size: 13))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
                 
                 Spacer()
@@ -437,10 +451,10 @@ struct EpisodeCard: View {
                     Text("\(episode.peakIntensity)")
                         .font(.system(size: 18, weight: .bold))
                         .fontDesign(.rounded)
-                    
+
                     Text("/10")
                         .font(.system(size: 12))
-                        .foregroundColor(.black.opacity(0.5))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                 }
                 .foregroundColor(intensityColor(episode.peakIntensity))
                 .padding(.horizontal, 12)
@@ -465,11 +479,11 @@ struct EpisodeCard: View {
             }
         }
         .padding(16)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
     }
-    
+
     private func intensityColor(_ intensity: Int) -> Color {
         switch intensity {
         case 0...3: return .green
@@ -492,22 +506,23 @@ struct EpisodeCard: View {
 
 // MARK: - Detail Pill Component
 struct DetailPill: View {
+    @Environment(\.colorScheme) var colorScheme
     let icon: String
     let text: String
-    
+
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 10))
-            
+
             Text(text)
                 .font(.system(size: 12))
                 .lineLimit(1)
         }
-        .foregroundColor(.black.opacity(0.6))
+        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.black.opacity(0.05))
+        .background(AppConstants.borderColor(for: colorScheme).opacity(0.3))
         .cornerRadius(6)
     }
 }
@@ -515,16 +530,17 @@ struct DetailPill: View {
 // MARK: - Panic Tracker Flow (Multi-step form)
 struct PanicTrackerFlow: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var authManager: AuthManager
     @Environment(\.realm) var realm
-    
+
     @State private var currentStep = 0
-    
+
     // Data collection state variables
     @State private var initialIntensity: Int = 0
     @State private var peakIntensity: Int = 0
     @State private var finalIntensity: Int = 0
-    
+
     // Physical symptoms
     @State private var heartRate: Int = 0
     @State private var breathingDifficulty: Int = 0
@@ -533,37 +549,30 @@ struct PanicTrackerFlow: View {
     @State private var trembling: Int = 0
     @State private var dizziness: Int = 0
     @State private var nausea: Int = 0
-    
+
     // Cognitive symptoms
     @State private var fearOfDying: Int = 0
     @State private var fearOfLosingControl: Int = 0
     @State private var derealization: Int = 0
     @State private var racingThoughts: Int = 0
-    
+
     // Context
     @State private var location: String = ""
     @State private var trigger: String = ""
     @State private var timeOfDay: String = ""
     @State private var aloneOrWithOthers: String = ""
-    
+
     // Coping and aftermath
     @State private var selectedCopingStrategies: Set<String> = []
     @State private var selectedAfterEffects: Set<String> = []
     @State private var notes: String = ""
-    
+
     let totalSteps = 7
-    
+
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.95, green: 0.95, blue: 0.98),
-                    Color(red: 0.92, green: 0.92, blue: 0.96)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            AppConstants.backgroundColor(for: colorScheme)
+                .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 // Header
@@ -579,33 +588,33 @@ struct PanicTrackerFlow: View {
                     }) {
                         Image(systemName: currentStep > 0 ? "arrow.left.circle.fill" : "xmark.circle.fill")
                             .font(.system(size: 28))
-                            .foregroundColor(.black.opacity(0.7))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     }
-                    
+
                     Spacer()
-                    
+
                     VStack(spacing: 4) {
                         Text("Step \(currentStep + 1) of \(totalSteps)")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.black.opacity(0.6))
-                        
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
                         // Progress bar
                         GeometryReader { geometry in
                             ZStack(alignment: .leading) {
                                 RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color.black.opacity(0.1))
+                                    .fill(AppConstants.borderColor(for: colorScheme).opacity(0.3))
                                     .frame(height: 6)
-                                
+
                                 RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color.purple)
+                                    .fill(AppConstants.adaptivePrimaryColor(for: colorScheme))
                                     .frame(width: geometry.size.width * (Double(currentStep + 1) / Double(totalSteps)), height: 6)
                             }
                         }
                         .frame(width: 120, height: 6)
                     }
-                    
+
                     Spacer()
-                    
+
                     Color.clear.frame(width: 28, height: 28)
                 }
                 .padding(.horizontal, 20)
@@ -764,23 +773,24 @@ struct PanicTrackerFlow: View {
 
 // MARK: - Step: Intensity
 struct IntensityStep: View {
+    @Environment(\.colorScheme) var colorScheme
     let title: String
     let subtitle: String
     @Binding var value: Int
-    
+
     var body: some View {
         VStack(spacing: 16) {
             VStack(spacing: 6) {
                 Text(title)
                     .font(.system(size: 22, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                
+
                 Text(subtitle)
                     .font(.system(size: 14))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .multilineTextAlignment(.center)
             }
             
@@ -790,11 +800,11 @@ struct IntensityStep: View {
                     .font(.system(size: 56, weight: .bold))
                     .fontDesign(.rounded)
                     .foregroundColor(intensityColor(value))
-                
+
                 Text(intensityLabel(value))
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.black.opacity(0.7))
-                
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
                 Slider(value: Binding(
                     get: { Double(value) },
                     set: { value = Int($0) }
@@ -802,25 +812,25 @@ struct IntensityStep: View {
                 .tint(intensityColor(value))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 4)
-                
+
                 // Number buttons
                 HStack(spacing: 5) {
                     ForEach(0...10, id: \.self) { num in
                         Button(action: { value = num }) {
                             Text("\(num)")
                                 .font(.system(size: 12, weight: value == num ? .bold : .regular))
-                                .foregroundColor(value == num ? .white : .black.opacity(0.6))
+                                .foregroundColor(value == num ? .white : AppConstants.secondaryTextColor(for: colorScheme))
                                 .frame(width: 26, height: 26)
-                                .background(value == num ? intensityColor(num) : Color.black.opacity(0.05))
+                                .background(value == num ? intensityColor(num) : AppConstants.borderColor(for: colorScheme).opacity(0.3))
                                 .cornerRadius(6)
                         }
                     }
                 }
             }
             .padding(16)
-            .background(Color.white)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+            .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
         }
     }
     
@@ -849,6 +859,7 @@ struct IntensityStep: View {
 
 // MARK: - Step: Physical Symptoms
 struct PhysicalSymptomsStep: View {
+    @Environment(\.colorScheme) var colorScheme
     @Binding var heartRate: Int
     @Binding var breathingDifficulty: Int
     @Binding var chestTightness: Int
@@ -856,18 +867,18 @@ struct PhysicalSymptomsStep: View {
     @Binding var trembling: Int
     @Binding var dizziness: Int
     @Binding var nausea: Int
-    
+
     var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 8) {
                 Text("Physical Symptoms")
                     .font(.system(size: 24, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
-                
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                 Text("Rate how intense each symptom is")
                     .font(.system(size: 15))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
             
             VStack(spacing: 16) {
@@ -885,6 +896,7 @@ struct PhysicalSymptomsStep: View {
 
 // MARK: - Step: Cognitive Symptoms
 struct CognitiveSymptomsStep: View {
+    @Environment(\.colorScheme) var colorScheme
     @Binding var fearOfDying: Int
     @Binding var fearOfLosingControl: Int
     @Binding var derealization: Int
@@ -896,11 +908,11 @@ struct CognitiveSymptomsStep: View {
                 Text("Mental Symptoms")
                     .font(.system(size: 24, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Text("Rate how intense each feeling is")
                     .font(.system(size: 15))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
             
             VStack(spacing: 16) {
@@ -915,50 +927,52 @@ struct CognitiveSymptomsStep: View {
 
 // MARK: - Symptom Row Component
 struct SymptomRow: View {
+    @Environment(\.colorScheme) var colorScheme
     let icon: String
     let label: String
     @Binding var value: Int
-    
+
     var body: some View {
         VStack(spacing: 12) {
             HStack {
                 Image(systemName: icon)
                     .font(.system(size: 16))
-                    .foregroundColor(.purple)
+                    .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                     .frame(width: 24)
-                
+
                 Text(label)
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.black)
-                
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
                 Spacer()
-                
+
                 Text("\(value)")
                     .font(.system(size: 16, weight: .bold))
                     .fontDesign(.rounded)
-                    .foregroundColor(value > 0 ? .purple : .black.opacity(0.3))
+                    .foregroundColor(value > 0 ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
                     .frame(width: 24)
             }
-            
+
             HStack(spacing: 4) {
                 ForEach(0...10, id: \.self) { num in
                     Button(action: { value = num }) {
                         RoundedRectangle(cornerRadius: 4)
-                            .fill(num <= value ? Color.purple : Color.black.opacity(0.1))
+                            .fill(num <= value ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.borderColor(for: colorScheme).opacity(0.3))
                             .frame(height: 8)
                     }
                 }
             }
         }
         .padding(16)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.05), radius: 5, y: 2)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 5, y: 2)
     }
 }
 
 // MARK: - Step: Context
 struct ContextStep: View {
+    @Environment(\.colorScheme) var colorScheme
     @Binding var location: String
     @Binding var trigger: String
     @Binding var timeOfDay: String
@@ -974,11 +988,11 @@ struct ContextStep: View {
                 Text("Context")
                     .font(.system(size: 24, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Text("Help identify patterns and triggers")
                     .font(.system(size: 15))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
             
             VStack(alignment: .leading, spacing: 20) {
@@ -986,14 +1000,15 @@ struct ContextStep: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Where were you?")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     
                     FlowLayout(spacing: 8) {
                         ForEach(locations, id: \.self) { loc in
                             ContextPill(
                                 text: loc,
                                 isSelected: location == loc,
-                                action: { location = loc }
+                                action: { location = loc },
+                                colorScheme: colorScheme
                             )
                         }
                     }
@@ -1003,14 +1018,15 @@ struct ContextStep: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("What time of day?")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     
                     FlowLayout(spacing: 8) {
                         ForEach(timesOfDay, id: \.self) { time in
                             ContextPill(
                                 text: time,
                                 isSelected: timeOfDay == time,
-                                action: { timeOfDay = time }
+                                action: { timeOfDay = time },
+                                colorScheme: colorScheme
                             )
                         }
                     }
@@ -1020,14 +1036,15 @@ struct ContextStep: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Were you alone or with others?")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     
                     FlowLayout(spacing: 8) {
                         ForEach(socialContexts, id: \.self) { context in
                             ContextPill(
                                 text: context,
                                 isSelected: aloneOrWithOthers == context,
-                                action: { aloneOrWithOthers = context }
+                                action: { aloneOrWithOthers = context },
+                                colorScheme: colorScheme
                             )
                         }
                     }
@@ -1037,32 +1054,32 @@ struct ContextStep: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Known trigger (optional)")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     
                     ZStack(alignment: .leading) {
                         if trigger.isEmpty {
                             Text("e.g., crowded space, argument, health concern")
                                 .font(.system(size: 15, design: .serif))
-                                .foregroundColor(.black.opacity(0.4))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
                                 .padding(.horizontal, 12)
                         }
                         TextField("", text: $trigger)
                             .textFieldStyle(.plain)
                             .font(.system(size: 15, design: .serif))
                             .padding(12)
-                            .foregroundColor(.black)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                             .submitLabel(.done)
                     }
-                    .background(Color.white)
+                    .background(AppConstants.cardBackgroundColor(for: colorScheme))
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                            .stroke(AppConstants.borderColor(for: colorScheme), lineWidth: 1)
                     )
                 }
             }
             .padding(20)
-            .background(Color.white.opacity(0.5))
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .cornerRadius(16)
         }
     }
@@ -1073,19 +1090,20 @@ struct ContextPill: View {
     let text: String
     let isSelected: Bool
     let action: () -> Void
+    var colorScheme: ColorScheme = .light
     
     var body: some View {
         Button(action: action) {
             Text(text)
                 .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .white : .black.opacity(0.7))
+                .foregroundColor(isSelected ? .white : AppConstants.primaryTextColor(for: colorScheme))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(isSelected ? Color.purple : Color.white)
+                .background(isSelected ? Color.purple : AppConstants.cardBackgroundColor(for: colorScheme))
                 .cornerRadius(20)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                        .stroke(AppConstants.borderColor(for: colorScheme).opacity(isSelected ? 0 : 1), lineWidth: 1)
                 )
         }
     }
@@ -1093,6 +1111,7 @@ struct ContextPill: View {
 
 // MARK: - Step: Coping Strategies
 struct CopingStrategiesStep: View {
+    @Environment(\.colorScheme) var colorScheme
     @Binding var selectedStrategies: Set<String>
     
     let strategies = [
@@ -1118,11 +1137,11 @@ struct CopingStrategiesStep: View {
                 Text("Coping Strategies")
                     .font(.system(size: 24, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Text("What did you try? (Select all that apply)")
                     .font(.system(size: 15))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .multilineTextAlignment(.center)
             }
             
@@ -1137,12 +1156,13 @@ struct CopingStrategiesStep: View {
                             } else {
                                 selectedStrategies.insert(strategy)
                             }
-                        }
+                        },
+                        colorScheme: colorScheme
                     )
                 }
             }
             .padding(20)
-            .background(Color.white.opacity(0.5))
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .cornerRadius(16)
         }
     }
@@ -1150,6 +1170,7 @@ struct CopingStrategiesStep: View {
 
 // MARK: - Step: Final
 struct FinalStep: View {
+    @Environment(\.colorScheme) var colorScheme
     @Binding var finalIntensity: Int
     @Binding var selectedAfterEffects: Set<String>
     @Binding var notes: String
@@ -1163,11 +1184,11 @@ struct FinalStep: View {
                 Text("Almost Done")
                     .font(.system(size: 22, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Text("Just a couple more questions")
                     .font(.system(size: 14))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
             
             VStack(alignment: .leading, spacing: 16) {
@@ -1175,7 +1196,7 @@ struct FinalStep: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Current intensity (0-10)")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     
                     HStack(spacing: 5) {
                         ForEach(0...10, id: \.self) { num in
@@ -1185,9 +1206,9 @@ struct FinalStep: View {
                             }) {
                                 Text("\(num)")
                                     .font(.system(size: 12, weight: finalIntensity == num ? .bold : .regular))
-                                    .foregroundColor(finalIntensity == num ? .white : .black.opacity(0.6))
+                                    .foregroundColor(finalIntensity == num ? .white : AppConstants.primaryTextColor(for: colorScheme))
                                     .frame(width: 26, height: 26)
-                                    .background(finalIntensity == num ? Color.purple : Color.white)
+                                    .background(finalIntensity == num ? Color.purple : AppConstants.cardBackgroundColor(for: colorScheme))
                                     .cornerRadius(6)
                             }
                         }
@@ -1198,7 +1219,7 @@ struct FinalStep: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Any after-effects?")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     
                     FlowLayout(spacing: 6) {
                         ForEach(afterEffects, id: \.self) { effect in
@@ -1212,7 +1233,8 @@ struct FinalStep: View {
                                         selectedAfterEffects.insert(effect)
                                     }
                                     isNotesFocused = false
-                                }
+                                },
+                                colorScheme: colorScheme
                             )
                         }
                     }
@@ -1222,13 +1244,13 @@ struct FinalStep: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Additional notes (optional)")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     
                     ZStack(alignment: .topLeading) {
                         if notes.isEmpty {
                             Text("e.g., what helped, what made it worse, triggers...")
                                 .font(.system(size: 15, design: .serif))
-                                .foregroundColor(.black.opacity(0.4))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 12)
                         }
@@ -1237,22 +1259,22 @@ struct FinalStep: View {
                             .font(.system(size: 15, design: .serif))
                             .lineLimit(3...5)
                             .padding(12)
-                            .foregroundColor(.black)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                             .focused($isNotesFocused)
                             .onSubmit {
                                 isNotesFocused = false
                             }
                     }
-                    .background(Color.white)
+                    .background(AppConstants.cardBackgroundColor(for: colorScheme))
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.black.opacity(0.1), lineWidth: 1)
+                            .stroke(AppConstants.borderColor(for: colorScheme), lineWidth: 1)
                     )
                 }
             }
             .padding(16)
-            .background(Color.white.opacity(0.5))
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .cornerRadius(16)
         }
         .contentShape(Rectangle())
@@ -1265,19 +1287,13 @@ struct FinalStep: View {
 // MARK: - Episode Detail View
 struct EpisodeDetailView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     let episode: PanicEpisode
     
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.95, green: 0.95, blue: 0.98),
-                    Color(red: 0.92, green: 0.92, blue: 0.96)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            AppConstants.backgroundColor(for: colorScheme)
+                .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 // Header
@@ -1285,7 +1301,7 @@ struct EpisodeDetailView: View {
                     Button(action: { dismiss() }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 28))
-                            .foregroundColor(.black.opacity(0.7))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     }
                     
                     Spacer()
@@ -1293,7 +1309,7 @@ struct EpisodeDetailView: View {
                     Text("Episode Details")
                         .font(.system(size: 20, weight: .bold))
                         .fontDesign(.serif)
-                        .foregroundColor(.black)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                     
                     Spacer()
                     
@@ -1309,11 +1325,11 @@ struct EpisodeDetailView: View {
                         VStack(spacing: 4) {
                             Text(episode.timestamp.formatted(date: .long, time: .omitted))
                                 .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.black)
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                             
                             Text(episode.timestamp.formatted(date: .omitted, time: .shortened))
                                 .font(.system(size: 15))
-                                .foregroundColor(.black.opacity(0.6))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         }
                         .padding(.top, 10)
                         
@@ -1376,43 +1392,43 @@ struct EpisodeDetailView: View {
                                     HStack {
                                         Text("Location:")
                                             .font(.system(size: 14))
-                                            .foregroundColor(.black.opacity(0.6))
+                                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                         Spacer()
                                         Text(episode.location)
                                             .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(.black)
+                                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                                     }
                                 }
                                 if !episode.timeOfDay.isEmpty {
                                     HStack {
                                         Text("Time of Day:")
                                             .font(.system(size: 14))
-                                            .foregroundColor(.black.opacity(0.6))
+                                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                         Spacer()
                                         Text(episode.timeOfDay)
                                             .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(.black)
+                                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                                     }
                                 }
                                 if !episode.aloneOrWithOthers.isEmpty {
                                     HStack {
                                         Text("Social Context:")
                                             .font(.system(size: 14))
-                                            .foregroundColor(.black.opacity(0.6))
+                                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                         Spacer()
                                         Text(episode.aloneOrWithOthers)
                                             .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(.black)
+                                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                                     }
                                 }
                                 if !episode.trigger.isEmpty {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("Trigger:")
                                             .font(.system(size: 14))
-                                            .foregroundColor(.black.opacity(0.6))
+                                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                         Text(episode.trigger)
                                             .font(.system(size: 14, weight: .semibold))
-                                            .foregroundColor(.black)
+                                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                 }
@@ -1458,7 +1474,7 @@ struct EpisodeDetailView: View {
                             DetailSection(title: "Notes", icon: "note.text") {
                                 Text(episode.notes)
                                     .font(.system(size: 14))
-                                    .foregroundColor(.black.opacity(0.8))
+                                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
@@ -1487,33 +1503,35 @@ struct EpisodeDetailView: View {
 
 // MARK: - Intensity Journey View
 struct IntensityJourneyView: View {
+    @Environment(\.colorScheme) var colorScheme
     let episode: PanicEpisode
     
     var body: some View {
         VStack(spacing: 16) {
             Text("Intensity Journey")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.black)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             HStack(spacing: 20) {
                 IntensityBadge(label: "Initial", value: episode.initialIntensity)
                 Image(systemName: "arrow.right")
-                    .foregroundColor(.black.opacity(0.3))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 IntensityBadge(label: "Peak", value: episode.peakIntensity)
                 Image(systemName: "arrow.right")
-                    .foregroundColor(.black.opacity(0.3))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 IntensityBadge(label: "Final", value: episode.finalIntensity)
             }
         }
         .padding(20)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
     }
 }
 
 struct IntensityBadge: View {
+    @Environment(\.colorScheme) var colorScheme
     let label: String
     let value: Int
     
@@ -1526,7 +1544,7 @@ struct IntensityBadge: View {
             
             Text(label)
                 .font(.system(size: 12))
-                .foregroundColor(.black.opacity(0.6))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
         }
     }
     
@@ -1542,6 +1560,7 @@ struct IntensityBadge: View {
 
 // MARK: - Detail Section
 struct DetailSection<Content: View>: View {
+    @Environment(\.colorScheme) var colorScheme
     let title: String
     let icon: String
     let content: Content
@@ -1561,7 +1580,7 @@ struct DetailSection<Content: View>: View {
                 
                 Text(title)
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Spacer()
             }
@@ -1569,14 +1588,15 @@ struct DetailSection<Content: View>: View {
             content
         }
         .padding(20)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
     }
 }
 
 // MARK: - Detail Row
 struct DetailRow: View {
+    @Environment(\.colorScheme) var colorScheme
     let label: String
     let value: Int
     
@@ -1584,14 +1604,14 @@ struct DetailRow: View {
         HStack {
             Text(label)
                 .font(.system(size: 14))
-                .foregroundColor(.black.opacity(0.7))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             
             Spacer()
             
             HStack(spacing: 2) {
                 ForEach(1...10, id: \.self) { index in
                     Circle()
-                        .fill(index <= value ? Color.purple : Color.black.opacity(0.1))
+                        .fill(index <= value ? Color.purple : AppConstants.borderColor(for: colorScheme))
                         .frame(width: 8, height: 8)
                 }
             }
@@ -1599,7 +1619,7 @@ struct DetailRow: View {
             Text("\(value)/10")
                 .font(.system(size: 14, weight: .semibold))
                 .fontDesign(.monospaced)
-                .foregroundColor(.black)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 .frame(width: 40, alignment: .trailing)
         }
     }
@@ -1607,6 +1627,7 @@ struct DetailRow: View {
 
 // MARK: - Chart: Intensity Over Time
 struct IntensityOverTimeChart: View {
+    @Environment(\.colorScheme) var colorScheme
     let episodes: [PanicEpisode]
     
     var sortedEpisodes: [PanicEpisode] {
@@ -1622,7 +1643,7 @@ struct IntensityOverTimeChart: View {
                 
                 Text("Intensity Trends")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Spacer()
             }
@@ -1670,17 +1691,18 @@ struct IntensityOverTimeChart: View {
             
             Text("Peak intensity levels over time")
                 .font(.system(size: 12))
-                .foregroundColor(.black.opacity(0.5))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
         }
         .padding(16)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
     }
 }
 
 // MARK: - Chart: Symptom Breakdown
 struct SymptomBreakdownChart: View {
+    @Environment(\.colorScheme) var colorScheme
     let episodes: [PanicEpisode]
     
     struct SymptomData: Identifiable {
@@ -1753,7 +1775,7 @@ struct SymptomBreakdownChart: View {
                 
                 Text("Most Common Symptoms")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Spacer()
             }
@@ -1779,7 +1801,7 @@ struct SymptomBreakdownChart: View {
                         .frame(width: 8, height: 8)
                     Text("Physical")
                         .font(.system(size: 11))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
                 
                 HStack(spacing: 4) {
@@ -1788,19 +1810,20 @@ struct SymptomBreakdownChart: View {
                         .frame(width: 8, height: 8)
                     Text("Mental")
                         .font(.system(size: 11))
-                        .foregroundColor(.black.opacity(0.6))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
             }
         }
         .padding(16)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
     }
 }
 
 // MARK: - Chart: Episode Frequency
 struct EpisodeFrequencyChart: View {
+    @Environment(\.colorScheme) var colorScheme
     let episodes: [PanicEpisode]
     
     struct DayData: Identifiable {
@@ -1838,7 +1861,7 @@ struct EpisodeFrequencyChart: View {
                 
                 Text("Episodes by Day of Week")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Spacer()
             }
@@ -1858,17 +1881,18 @@ struct EpisodeFrequencyChart: View {
             
             Text("When episodes typically occur")
                 .font(.system(size: 12))
-                .foregroundColor(.black.opacity(0.5))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
         }
         .padding(16)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
     }
 }
 
 // MARK: - Chart: Trigger Analysis
 struct TriggerAnalysisChart: View {
+    @Environment(\.colorScheme) var colorScheme
     let episodes: [PanicEpisode]
     
     struct TriggerData: Identifiable {
@@ -1898,7 +1922,7 @@ struct TriggerAnalysisChart: View {
                 
                 Text("Most Common Triggers")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 Spacer()
             }
@@ -1918,12 +1942,183 @@ struct TriggerAnalysisChart: View {
             
             Text("Identify patterns to prepare")
                 .font(.system(size: 12))
-                .foregroundColor(.black.opacity(0.5))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
         }
         .padding(16)
-        .background(Color.white)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
+    }
+}
+
+// MARK: - Share Sheet
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    let applicationActivities: [UIActivity]? = nil
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(
+            activityItems: activityItems,
+            applicationActivities: applicationActivities
+        )
+        return controller
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - PDF Creator
+class PanicTrackerPDFCreator {
+    let episodes: [PanicEpisode]
+    let isProPDF: Bool
+    
+    init(episodes: [PanicEpisode], isPro: Bool) {
+        self.episodes = episodes
+        self.isProPDF = isPro
+    }
+    
+    func createPDF() -> Data {
+        let pdfMetaData = [
+            kCGPDFContextCreator: "BeatPhobia - Panic Tracker",
+            kCGPDFContextAuthor: "StillStep",
+            kCGPDFContextTitle: "Panic Tracker Report"
+        ]
+        
+        let format = UIGraphicsPDFRendererFormat()
+        format.documentInfo = pdfMetaData as [String: Any]
+        
+        let pageWidth = 8.5 * 72.0
+        let pageHeight = 11 * 72.0
+        let pageRect = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
+        
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect, format: format)
+        
+        let data = renderer.pdfData { context in
+            context.beginPage()
+            
+            var yPosition: CGFloat = 60
+            
+            // Header
+            "BeatPhobia - Panic Tracker Report".draw(at: CGPoint(x: 60, y: yPosition), withAttributes: [
+                .font: UIFont.systemFont(ofSize: 24, weight: .bold),
+                .foregroundColor: UIColor.black
+            ])
+            yPosition += 40
+            
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateStyle = .long
+            dateFormatter.timeStyle = .none
+            "Generated: \(dateFormatter.string(from: Date()))".draw(at: CGPoint(x: 60, y: yPosition), withAttributes: [
+                .font: UIFont.systemFont(ofSize: 14),
+                .foregroundColor: UIColor.black.withAlphaComponent(0.7)
+            ])
+            
+            yPosition += 40
+            
+            if isProPDF {
+                // Summary statistics
+                drawSummary(yPosition: &yPosition)
+                context.beginPage()
+                yPosition = 60
+            }
+            
+            // Episode details
+            for (index, episode) in episodes.enumerated() {
+                if yPosition + 200 > pageHeight - 60 {
+                    context.beginPage()
+                    yPosition = 60
+                }
+                
+                drawEpisode(episode: episode, yPosition: &yPosition, index: index + 1)
+                yPosition += 20
+            }
+        }
+        
+        return data
+    }
+    
+    private func drawSummary(yPosition: inout CGFloat) {
+        "Summary Statistics".draw(at: CGPoint(x: 60, y: yPosition), withAttributes: [
+            .font: UIFont.systemFont(ofSize: 18, weight: .bold),
+            .foregroundColor: UIColor.black
+        ])
+        yPosition += 30
+        
+        let totalEpisodes = episodes.count
+        let avgPeak = episodes.isEmpty ? 0.0 : Double(episodes.reduce(0) { $0 + $1.peakIntensity }) / Double(episodes.count)
+        let avgDuration = episodes.isEmpty ? 0.0 : episodes.reduce(0.0) { $0 + $1.duration } / Double(episodes.count)
+        
+        "Total Episodes: \(totalEpisodes)".draw(at: CGPoint(x: 80, y: yPosition), withAttributes: [
+            .font: UIFont.systemFont(ofSize: 14),
+            .foregroundColor: UIColor.black
+        ])
+        yPosition += 25
+        
+        String(format: "Average Peak Intensity: %.1f / 10", avgPeak).draw(at: CGPoint(x: 80, y: yPosition), withAttributes: [
+            .font: UIFont.systemFont(ofSize: 14),
+            .foregroundColor: UIColor.black
+        ])
+        yPosition += 25
+        
+        String(format: "Average Duration: %.0f minutes", avgDuration / 60).draw(at: CGPoint(x: 80, y: yPosition), withAttributes: [
+            .font: UIFont.systemFont(ofSize: 14),
+            .foregroundColor: UIColor.black
+        ])
+        yPosition += 40
+    }
+    
+    private func drawEpisode(episode: PanicEpisode, yPosition: inout CGFloat, index: Int) {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .medium
+        dateFormatter.timeStyle = .short
+        
+        // Episode number
+        "Episode \(index)".draw(at: CGPoint(x: 60, y: yPosition), withAttributes: [
+            .font: UIFont.systemFont(ofSize: 16, weight: .bold),
+            .foregroundColor: UIColor.black
+        ])
+        yPosition += 25
+        
+        // Date
+        dateFormatter.string(from: episode.timestamp).draw(at: CGPoint(x: 80, y: yPosition), withAttributes: [
+            .font: UIFont.systemFont(ofSize: 14),
+            .foregroundColor: UIColor.black.withAlphaComponent(0.7)
+        ])
+        yPosition += 25
+        
+        // Intensity journey
+        "Intensity: Initial \(episode.initialIntensity) → Peak \(episode.peakIntensity) → Final \(episode.finalIntensity)".draw(at: CGPoint(x: 80, y: yPosition), withAttributes: [
+            .font: UIFont.systemFont(ofSize: 12),
+            .foregroundColor: UIColor.black
+        ])
+        yPosition += 20
+        
+        // Duration
+        let minutes = Int(episode.duration) / 60
+        "Duration: \(minutes) minutes".draw(at: CGPoint(x: 80, y: yPosition), withAttributes: [
+            .font: UIFont.systemFont(ofSize: 12),
+            .foregroundColor: UIColor.black
+        ])
+        yPosition += 20
+        
+        if isProPDF {
+            // Location and trigger
+            if !episode.location.isEmpty {
+                "Location: \(episode.location)".draw(at: CGPoint(x: 80, y: yPosition), withAttributes: [
+                    .font: UIFont.systemFont(ofSize: 12),
+                    .foregroundColor: UIColor.black
+                ])
+                yPosition += 20
+            }
+            
+            if !episode.trigger.isEmpty {
+                "Trigger: \(episode.trigger)".draw(at: CGPoint(x: 80, y: yPosition), withAttributes: [
+                    .font: UIFont.systemFont(ofSize: 12),
+                    .foregroundColor: UIColor.black
+                ])
+                yPosition += 20
+            }
+        }
     }
 }
 

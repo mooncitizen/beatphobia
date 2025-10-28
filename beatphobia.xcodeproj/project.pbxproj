@@ -13,9 +13,12 @@
 		DA0610862EA43A7C001EBA37 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610852EA43A7C001EBA37 /* Realtime */; };
 		DA0610882EA43A7C001EBA37 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610872EA43A7C001EBA37 /* Storage */; };
 		DA06108A2EA43A7C001EBA37 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610892EA43A7C001EBA37 /* Supabase */; };
-		DA259C262EA6DC3E00BF64D4 /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = DA259C252EA6DC3E00BF64D4 /* RealmSwift */; };
-		DA259C352EA7054A00BF64D4 /* RealmSwift in Embed Frameworks */ = {isa = PBXBuildFile; productRef = DA259C252EA6DC3E00BF64D4 /* RealmSwift */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		DA259C3B2EA70B3100BF64D4 /* CoreHaptics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DA259C3A2EA70B3100BF64D4 /* CoreHaptics.framework */; };
+		DAE564652EB161D3001F4A5C /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DAE564462EB16034001F4A5C /* WidgetKit.framework */; };
+		DAE564662EB161D3001F4A5C /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DAE564482EB16034001F4A5C /* SwiftUI.framework */; };
+		DAE564732EB161D3001F4A5C /* LocationLiveActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DAE564642EB161D3001F4A5C /* LocationLiveActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		DAE564812EB1660B001F4A5C /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = DAE564802EB1660B001F4A5C /* RealmSwift */; };
+		DAE564AB2EB169A5001F4A5C /* RealmSwift in Embed Frameworks */ = {isa = PBXBuildFile; productRef = DAE564802EB1660B001F4A5C /* RealmSwift */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,6 +36,13 @@
 			remoteGlobalIDString = DA0610512EA43819001EBA37;
 			remoteInfo = beatphobia;
 		};
+		DAE564712EB161D3001F4A5C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DA06104A2EA43819001EBA37 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DAE564632EB161D3001F4A5C;
+			remoteInfo = LocationLiveActivityExtension;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -42,9 +52,20 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				DA259C352EA7054A00BF64D4 /* RealmSwift in Embed Frameworks */,
+				DAE564AB2EB169A5001F4A5C /* RealmSwift in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DAE5645F2EB16035001F4A5C /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				DAE564732EB161D3001F4A5C /* LocationLiveActivityExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -54,6 +75,9 @@
 		DA0610612EA4381B001EBA37 /* beatphobiaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = beatphobiaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA06106B2EA4381B001EBA37 /* beatphobiaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = beatphobiaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA259C3A2EA70B3100BF64D4 /* CoreHaptics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreHaptics.framework; path = System/Library/Frameworks/CoreHaptics.framework; sourceTree = SDKROOT; };
+		DAE564462EB16034001F4A5C /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		DAE564482EB16034001F4A5C /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		DAE564642EB161D3001F4A5C /* LocationLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LocationLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -64,6 +88,20 @@
 			);
 			target = DA0610512EA43819001EBA37 /* beatphobia */;
 		};
+		DAE564772EB161D3001F4A5C /* Exceptions for "LocationLiveActivity" folder in "LocationLiveActivityExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = DAE564632EB161D3001F4A5C /* LocationLiveActivityExtension */;
+		};
+		DAE5647C2EB1649E001F4A5C /* Exceptions for "beatphobia" folder in "LocationLiveActivityExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				LocationTrackingAttributes.swift,
+			);
+			target = DAE564632EB161D3001F4A5C /* LocationLiveActivityExtension */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -71,6 +109,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				DA0610B32EA44974001EBA37 /* Exceptions for "beatphobia" folder in "beatphobia" target */,
+				DAE5647C2EB1649E001F4A5C /* Exceptions for "beatphobia" folder in "LocationLiveActivityExtension" target */,
 			);
 			path = beatphobia;
 			sourceTree = "<group>";
@@ -85,6 +124,14 @@
 			path = beatphobiaUITests;
 			sourceTree = "<group>";
 		};
+		DAE564672EB161D3001F4A5C /* LocationLiveActivity */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				DAE564772EB161D3001F4A5C /* Exceptions for "LocationLiveActivity" folder in "LocationLiveActivityExtension" target */,
+			);
+			path = LocationLiveActivity;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -92,7 +139,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DA259C262EA6DC3E00BF64D4 /* RealmSwift in Frameworks */,
+				DAE564812EB1660B001F4A5C /* RealmSwift in Frameworks */,
 				DA0610842EA43A7C001EBA37 /* PostgREST in Frameworks */,
 				DA0610822EA43A7C001EBA37 /* Functions in Frameworks */,
 				DA06108A2EA43A7C001EBA37 /* Supabase in Frameworks */,
@@ -117,6 +164,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DAE564612EB161D3001F4A5C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DAE564662EB161D3001F4A5C /* SwiftUI.framework in Frameworks */,
+				DAE564652EB161D3001F4A5C /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -126,6 +182,7 @@
 				DA0610542EA43819001EBA37 /* beatphobia */,
 				DA0610642EA4381B001EBA37 /* beatphobiaTests */,
 				DA06106E2EA4381B001EBA37 /* beatphobiaUITests */,
+				DAE564672EB161D3001F4A5C /* LocationLiveActivity */,
 				DA259C392EA70B3100BF64D4 /* Frameworks */,
 				DA0610532EA43819001EBA37 /* Products */,
 			);
@@ -137,6 +194,7 @@
 				DA0610522EA43819001EBA37 /* beatphobia.app */,
 				DA0610612EA4381B001EBA37 /* beatphobiaTests.xctest */,
 				DA06106B2EA4381B001EBA37 /* beatphobiaUITests.xctest */,
+				DAE564642EB161D3001F4A5C /* LocationLiveActivityExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -145,6 +203,8 @@
 			isa = PBXGroup;
 			children = (
 				DA259C3A2EA70B3100BF64D4 /* CoreHaptics.framework */,
+				DAE564462EB16034001F4A5C /* WidgetKit.framework */,
+				DAE564482EB16034001F4A5C /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -160,10 +220,12 @@
 				DA06104F2EA43819001EBA37 /* Frameworks */,
 				DA0610502EA43819001EBA37 /* Resources */,
 				DA259C362EA7054A00BF64D4 /* Embed Frameworks */,
+				DAE5645F2EB16035001F4A5C /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				DAE564722EB161D3001F4A5C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				DA0610542EA43819001EBA37 /* beatphobia */,
@@ -176,7 +238,7 @@
 				DA0610852EA43A7C001EBA37 /* Realtime */,
 				DA0610872EA43A7C001EBA37 /* Storage */,
 				DA0610892EA43A7C001EBA37 /* Supabase */,
-				DA259C252EA6DC3E00BF64D4 /* RealmSwift */,
+				DAE564802EB1660B001F4A5C /* RealmSwift */,
 			);
 			productName = beatphobia;
 			productReference = DA0610522EA43819001EBA37 /* beatphobia.app */;
@@ -228,6 +290,28 @@
 			productReference = DA06106B2EA4381B001EBA37 /* beatphobiaUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		DAE564632EB161D3001F4A5C /* LocationLiveActivityExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DAE564742EB161D3001F4A5C /* Build configuration list for PBXNativeTarget "LocationLiveActivityExtension" */;
+			buildPhases = (
+				DAE564602EB161D3001F4A5C /* Sources */,
+				DAE564612EB161D3001F4A5C /* Frameworks */,
+				DAE564622EB161D3001F4A5C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				DAE564672EB161D3001F4A5C /* LocationLiveActivity */,
+			);
+			name = LocationLiveActivityExtension;
+			packageProductDependencies = (
+			);
+			productName = LocationLiveActivityExtension;
+			productReference = DAE564642EB161D3001F4A5C /* LocationLiveActivityExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -249,6 +333,9 @@
 						CreatedOnToolsVersion = 26.0.1;
 						TestTargetID = DA0610512EA43819001EBA37;
 					};
+					DAE564632EB161D3001F4A5C = {
+						CreatedOnToolsVersion = 26.0.1;
+					};
 				};
 			};
 			buildConfigurationList = DA06104D2EA43819001EBA37 /* Build configuration list for PBXProject "beatphobia" */;
@@ -262,7 +349,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				DA06107E2EA43A7C001EBA37 /* XCRemoteSwiftPackageReference "supabase-swift" */,
-				DA259C222EA6DC3E00BF64D4 /* XCRemoteSwiftPackageReference "realm-swift" */,
+				DAE5647F2EB1660B001F4A5C /* XCRemoteSwiftPackageReference "realm-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DA0610532EA43819001EBA37 /* Products */;
@@ -272,6 +359,7 @@
 				DA0610512EA43819001EBA37 /* beatphobia */,
 				DA0610602EA4381B001EBA37 /* beatphobiaTests */,
 				DA06106A2EA4381B001EBA37 /* beatphobiaUITests */,
+				DAE564632EB161D3001F4A5C /* LocationLiveActivityExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -292,6 +380,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		DA0610692EA4381B001EBA37 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DAE564622EB161D3001F4A5C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -322,6 +417,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DAE564602EB161D3001F4A5C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -334,6 +436,11 @@
 			isa = PBXTargetDependency;
 			target = DA0610512EA43819001EBA37 /* beatphobia */;
 			targetProxy = DA06106C2EA4381B001EBA37 /* PBXContainerItemProxy */;
+		};
+		DAE564722EB161D3001F4A5C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DAE564632EB161D3001F4A5C /* LocationLiveActivityExtension */;
+			targetProxy = DAE564712EB161D3001F4A5C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -462,6 +569,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = DFJQ67UM9L;
@@ -471,17 +579,21 @@
 				INFOPLIST_KEY_CFBundleDisplayName = StillStep;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera for the Focus Training tool, which helps you practice grounding techniques by focusing on objects around you.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Still Step needs continuous location access to track your anxiety journeys even when the app runs in the background. This ensures uninterrupted progress monitoring during exposure therapy sessions so you can focus on your journey without managing the app.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Still Step requires always location access to provide continuous anxiety journey tracking and safety monitoring during exposure therapy. This enables comprehensive progress analysis and ensures you receive support notifications when needed, even when not actively using the app.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Still Step uses location tracking to help you overcome anxiety by recording your journeys outside your comfort zone. This enables progress visualization and safe exposure therapy tracking during active app use.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Still Step uses your device motion data to help you overcome anxiety by recording your journeys outside your comfort zone. This enables progress visualization and safe ";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.bph.beatphobia;
+				PRODUCT_BUNDLE_IDENTIFIER = org.stillstep.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -498,6 +610,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = DFJQ67UM9L;
@@ -507,17 +620,21 @@
 				INFOPLIST_KEY_CFBundleDisplayName = StillStep;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSCameraUsageDescription = "We need access to your camera for the Focus Training tool, which helps you practice grounding techniques by focusing on objects around you.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Still Step needs continuous location access to track your anxiety journeys even when the app runs in the background. This ensures uninterrupted progress monitoring during exposure therapy sessions so you can focus on your journey without managing the app.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Still Step requires always location access to provide continuous anxiety journey tracking and safety monitoring during exposure therapy. This enables comprehensive progress analysis and ensures you receive support notifications when needed, even when not actively using the app.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Still Step uses location tracking to help you overcome anxiety by recording your journeys outside your comfort zone. This enables progress visualization and safe exposure therapy tracking during active app use.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Still Step uses your device motion data to help you overcome anxiety by recording your journeys outside your comfort zone. This enables progress visualization and safe ";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.bph.beatphobia;
+				PRODUCT_BUNDLE_IDENTIFIER = org.stillstep.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -609,6 +726,66 @@
 			};
 			name = Release;
 		};
+		DAE564752EB161D3001F4A5C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = DFJQ67UM9L;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LocationLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LocationLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.stillstep.app.LocationLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		DAE564762EB161D3001F4A5C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = DFJQ67UM9L;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = LocationLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = LocationLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.stillstep.app.LocationLiveActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -648,6 +825,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		DAE564742EB161D3001F4A5C /* Build configuration list for PBXNativeTarget "LocationLiveActivityExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DAE564752EB161D3001F4A5C /* Debug */,
+				DAE564762EB161D3001F4A5C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -659,7 +845,7 @@
 				minimumVersion = 2.5.1;
 			};
 		};
-		DA259C222EA6DC3E00BF64D4 /* XCRemoteSwiftPackageReference "realm-swift" */ = {
+		DAE5647F2EB1660B001F4A5C /* XCRemoteSwiftPackageReference "realm-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/realm/realm-swift.git";
 			requirement = {
@@ -700,9 +886,9 @@
 			package = DA06107E2EA43A7C001EBA37 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
 		};
-		DA259C252EA6DC3E00BF64D4 /* RealmSwift */ = {
+		DAE564802EB1660B001F4A5C /* RealmSwift */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = DA259C222EA6DC3E00BF64D4 /* XCRemoteSwiftPackageReference "realm-swift" */;
+			package = DAE5647F2EB1660B001F4A5C /* XCRemoteSwiftPackageReference "realm-swift" */;
 			productName = RealmSwift;
 		};
 /* End XCSwiftPackageProductDependency section */

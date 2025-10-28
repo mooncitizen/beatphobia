@@ -9,9 +9,9 @@ import SwiftUI
 
 struct SafeSpaceView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @State private var selectedEnvironment: SafeEnvironment?
     @State private var isVisualizing: Bool = false
-    @State private var showInstructions: Bool = false
     @State private var currentPromptIndex: Int = 0
     @State private var timer: Timer?
     @State private var elapsedTime: TimeInterval = 0
@@ -127,15 +127,15 @@ struct SafeSpaceView: View {
     
     var progress: Double {
         guard let env = currentEnvironment else { return 0 }
-        let promptDuration: Double = 15.0 // 15 seconds per prompt
+        let promptDuration: Double = 15.0
         let totalDuration = Double(env.prompts.count) * promptDuration
         return min(elapsedTime / totalDuration, 1.0)
     }
     
     var body: some View {
         ZStack {
-            // Dynamic background based on selected environment
-            if let env = currentEnvironment {
+            if let env = currentEnvironment, isVisualizing {
+                // Dynamic background during visualization
                 LinearGradient(
                     colors: env.gradientColors,
                     startPoint: .topLeading,
@@ -143,216 +143,139 @@ struct SafeSpaceView: View {
                 )
                 .ignoresSafeArea()
             } else {
-                // Default gradient
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.3, green: 0.2, blue: 0.5),
-                        Color(red: 0.2, green: 0.3, blue: 0.4)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                // Default background for selection
+                AppConstants.backgroundColor(for: colorScheme)
+                    .ignoresSafeArea()
             }
             
             VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button(action: {
-                        timer?.invalidate()
-                        if isVisualizing {
-                            endVisualization()
-                        } else {
-                            dismiss()
-                        }
-                    }) {
-                        Image(systemName: isVisualizing ? "arrow.left.circle.fill" : "xmark.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    
-                    Spacer()
-                    
-                    if isVisualizing {
-                        // Timer display
-                        Text(formatTime(elapsedTime))
-                            .font(.system(size: 16, weight: .bold))
-                            .fontDesign(.monospaced)
-                            .foregroundColor(.white.opacity(0.9))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.white.opacity(0.2))
-                            .cornerRadius(20)
-                    }
-                    
-                    Spacer()
-                    
-                    if !isVisualizing {
-                        Button(action: {
-                            showInstructions.toggle()
-                        }) {
-                            Image(systemName: showInstructions ? "info.circle.fill" : "info.circle")
-                                .font(.system(size: 28))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
-                    } else {
-                        // Placeholder for symmetry
-                        Color.clear
-                            .frame(width: 28, height: 28)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 60)
-                .padding(.bottom, 20)
+                // Header - Always visible
+                headerView
                 
-                ScrollView {
-                    VStack(spacing: 30) {
-                        if !isVisualizing {
-                            // Title
-                            VStack(spacing: 8) {
-                                Text("Safe Space")
-                                    .font(.system(size: 36, weight: .bold))
-                                    .fontDesign(.serif)
-                                    .foregroundColor(.white)
-                                
-                                Text("Create a peaceful place in your mind")
-                                    .font(.system(size: 15))
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 40)
-                            }
-                            
-                            // Instructions (if visible)
-                            if showInstructions {
-                                instructionsCard
-                                    .padding(.horizontal, 20)
-                            }
-                            
-                            // Environment selection
-                            environmentSelectionView
-                                .padding(.horizontal, 20)
-                                .padding(.top, 20)
-                        } else {
-                            // Visualization view
-                            visualizationView
-                                .padding(.horizontal, 20)
-                                .padding(.top, 40)
-                        }
-                        
-                        Spacer(minLength: 100)
-                    }
-                    .padding(.top, 20)
+                Spacer()
+                
+                // Main content
+                if isVisualizing {
+                    visualizationView
+                } else {
+                    mainSelectionView
                 }
+                
+                Spacer()
+                
+                // Bottom controls - Always visible
+                bottomControlsView
+                    .padding(.bottom, 40)
             }
         }
-        .ignoresSafeArea()
         .navigationBarHidden(true)
+        .toolbar(.hidden, for: .tabBar)
     }
     
-    // MARK: - Instructions Card
-    private var instructionsCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white)
-                
-                Text("How It Works")
-                    .font(.system(size: 18, weight: .bold))
+    // MARK: - Header
+    private var headerView: some View {
+        HStack {
+            Button(action: {
+                if isVisualizing {
+                    endVisualization()
+                }
+                dismiss()
+            }) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(isVisualizing ? Color.white.opacity(0.2) : AppConstants.cardBackgroundColor(for: colorScheme))
+                        .frame(width: 44, height: 44)
+                        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 4, y: 2)
+                    
+                    Image(systemName: isVisualizing ? "arrow.left" : "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(isVisualizing ? .white : AppConstants.primaryTextColor(for: colorScheme))
+                }
+            }
+            .opacity(isVisualizing ? 0.9 : 1.0)
+            
+            Spacer()
+            
+            VStack(spacing: 4) {
+                Text(isVisualizing ? (currentEnvironment?.name ?? "Safe Space") : "Safe Space")
+                    .font(.system(size: 22, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.white)
+                    .foregroundColor(isVisualizing ? .white : AppConstants.primaryTextColor(for: colorScheme))
+                
+                if isVisualizing {
+                    Text("Prompt \(currentPromptIndex + 1) of \(currentEnvironment?.prompts.count ?? 8)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.8))
+                }
             }
             
-            VStack(alignment: .leading, spacing: 12) {
-                SafeSpaceInfoRow(icon: "location.fill", text: "Choose your ideal safe environment")
-                SafeSpaceInfoRow(icon: "eye.fill", text: "Close your eyes and visualize each detail")
-                SafeSpaceInfoRow(icon: "心", text: "Engage all your senses in the experience")
-                SafeSpaceInfoRow(icon: "infinity", text: "Return to this space whenever you need calm")
+            Spacer()
+            
+            // Stop/Complete button
+            if isVisualizing {
+                Button(action: endVisualization) {
+                    Text("Stop")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+            } else {
+                Color.clear
+                    .frame(width: 44, height: 44)
             }
         }
-        .padding(20)
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(20)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
     }
     
-    // MARK: - Environment Selection View
-    private var environmentSelectionView: some View {
-        VStack(spacing: 20) {
-            Text("Choose Your Safe Space")
-                .font(.system(size: 20, weight: .bold))
-                .fontDesign(.serif)
-                .foregroundColor(.white)
-                .padding(.top, 10)
-            
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 16) {
-                ForEach(environments) { env in
-                    EnvironmentCard(
-                        environment: env,
-                        isSelected: selectedEnvironment?.id == env.id
-                    )
-                    .onTapGesture {
-                        let generator = UIImpactFeedbackGenerator(style: .medium)
-                        generator.impactOccurred()
-                        selectedEnvironment = env
-                    }
+    // MARK: - Main Selection View
+    private var mainSelectionView: some View {
+        ScrollView {
+            VStack(spacing: 32) {
+                // Title
+                VStack(spacing: 12) {
+                    Text("Create Your Safe Space")
+                        .font(.system(size: 28, weight: .bold))
+                        .fontDesign(.serif)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                    
+                    Text("Choose a peaceful environment and visualize it with all your senses")
+                        .font(.system(size: 15))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
                 }
-            }
-            
-            // Begin button
-            if selectedEnvironment != nil {
-                Button(action: startVisualization) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 20, weight: .bold))
-                        
-                        Text("Begin Visualization")
-                            .font(.system(size: 18, weight: .bold))
-                            .fontDesign(.rounded)
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 18)
-                    .background(
-                        LinearGradient(
-                            colors: [selectedEnvironment!.color, selectedEnvironment!.color.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                
+                // Environment selection grid
+                LazyVGrid(columns: [
+                    GridItem(.flexible()),
+                    GridItem(.flexible())
+                ], spacing: 16) {
+                    ForEach(environments) { env in
+                        EnvironmentCard(
+                            environment: env,
+                            isSelected: selectedEnvironment?.id == env.id
                         )
-                    )
-                    .cornerRadius(16)
-                    .shadow(color: selectedEnvironment!.color.opacity(0.4), radius: 15, y: 8)
+                        .onTapGesture {
+                            let generator = UIImpactFeedbackGenerator(style: .medium)
+                            generator.impactOccurred()
+                            selectedEnvironment = env
+                        }
+                    }
                 }
-                .padding(.horizontal, 40)
-                .padding(.top, 20)
+                .padding(.horizontal, 24)
             }
+            .padding(.top, 24)
         }
     }
     
     // MARK: - Visualization View
     private var visualizationView: some View {
         VStack(spacing: 40) {
-            // Progress bar
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.white.opacity(0.2))
-                        .frame(height: 8)
-                    
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.white.opacity(0.8))
-                        .frame(width: geometry.size.width * progress, height: 8)
-                }
-            }
-            .frame(height: 8)
-            .padding(.horizontal, 20)
-            
             // Environment icon
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.2))
+                    .fill(Color.white.opacity(0.15))
                     .frame(width: 120, height: 120)
                 
                 Image(systemName: currentEnvironment?.icon ?? "sparkles")
@@ -360,40 +283,61 @@ struct SafeSpaceView: View {
                     .foregroundColor(.white)
             }
             
-            // Environment name
-            Text(currentEnvironment?.name ?? "")
-                .font(.system(size: 32, weight: .bold))
-                .fontDesign(.serif)
-                .foregroundColor(.white)
-            
             // Current prompt
             Text(currentPrompt)
-                .font(.system(size: 22, weight: .medium))
-                .foregroundColor(.white.opacity(0.95))
+                .font(.system(size: 28, weight: .semibold))
+                .fontDesign(.serif)
+                .foregroundColor(.white)
                 .multilineTextAlignment(.center)
                 .lineSpacing(8)
-                .padding(.horizontal, 30)
-                .fixedSize(horizontal: false, vertical: true)
-                .minimumScaleFactor(0.7)
-                .frame(minHeight: 120)
+                .padding(.horizontal, 32)
+                .frame(minHeight: 150)
             
             // Breathing guide
             HStack(spacing: 12) {
                 Image(systemName: "wind")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.7))
+                    .font(.system(size: 18))
                 
                 Text("Breathe deeply and slowly")
-                    .font(.system(size: 15))
-                    .foregroundColor(.white.opacity(0.7))
+                    .font(.system(size: 16, weight: .medium))
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 20)
-            .background(Color.white.opacity(0.1))
-            .cornerRadius(25)
-            
-            // Control buttons
-            HStack(spacing: 16) {
+            .foregroundColor(.white.opacity(0.9))
+            .padding(.vertical, 14)
+            .padding(.horizontal, 24)
+            .background(Color.white.opacity(0.15))
+            .cornerRadius(30)
+        }
+        .padding(.horizontal, 24)
+    }
+    
+    // MARK: - Bottom Controls
+    private var bottomControlsView: some View {
+        VStack(spacing: 12) {
+            if !isVisualizing && selectedEnvironment != nil {
+                Button(action: startVisualization) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 22, weight: .semibold))
+                        
+                        Text("Begin Visualization")
+                            .font(.system(size: 18, weight: .semibold))
+                            .fontDesign(.serif)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 60)
+                    .background(
+                        LinearGradient(
+                            colors: [selectedEnvironment!.color, selectedEnvironment!.color.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(30)
+                    .shadow(color: selectedEnvironment!.color.opacity(0.4), radius: 12, y: 6)
+                }
+                .padding(.horizontal, 32)
+            } else if isVisualizing {
                 Button(action: {
                     isPaused.toggle()
                     if isPaused {
@@ -402,43 +346,27 @@ struct SafeSpaceView: View {
                         startTimer()
                     }
                 }) {
-                    VStack(spacing: 8) {
-                        Image(systemName: isPaused ? "play.fill" : "pause.fill")
-                            .font(.system(size: 24, weight: .semibold))
-                        
-                        Text(isPaused ? "Resume" : "Pause")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.white.opacity(0.2))
-                    .cornerRadius(16)
-                }
-                
-                Button(action: endVisualization) {
-                    VStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 24, weight: .semibold))
-                        
-                        Text("Complete")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.green, Color.green.opacity(0.8)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                    Text(isPaused ? "Resume" : "Pause")
+                        .font(.system(size: 18, weight: .semibold))
+                        .fontDesign(.serif)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 60)
+                        .background(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.25), Color.white.opacity(0.15)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
                         )
-                    )
-                    .cornerRadius(16)
+                        .cornerRadius(30)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 30)
+                                .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                        )
                 }
+                .padding(.horizontal, 32)
             }
-            .padding(.horizontal, 40)
-            .padding(.top, 10)
         }
     }
     
@@ -453,21 +381,18 @@ struct SafeSpaceView: View {
     
     private func startTimer() {
         timer?.invalidate()
-        let promptDuration: TimeInterval = 15.0 // 15 seconds per prompt
+        let promptDuration: TimeInterval = 15.0
         
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
             elapsedTime += 0.1
             
-            // Check if current prompt duration is complete
             let promptProgress = elapsedTime.truncatingRemainder(dividingBy: promptDuration)
             if promptProgress < 0.1 && elapsedTime > 0.1 {
-                // Move to next prompt
                 if let env = currentEnvironment, currentPromptIndex < env.prompts.count - 1 {
                     let generator = UIImpactFeedbackGenerator(style: .light)
                     generator.impactOccurred()
                     currentPromptIndex += 1
                 } else {
-                    // Complete visualization
                     completeVisualization()
                 }
             }
@@ -510,58 +435,37 @@ struct SafeEnvironment: Identifiable {
 struct EnvironmentCard: View {
     let environment: SafeEnvironment
     let isSelected: Bool
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         VStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(environment.color.opacity(0.3))
+                    .fill(environment.color.opacity(0.2))
                     .frame(width: 80, height: 80)
                 
                 Image(systemName: environment.icon)
                     .font(.system(size: 40, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(environment.color)
             }
             
             Text(environment.name)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color.white.opacity(isSelected ? 0.3 : 0.15))
-        )
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+        .cornerRadius(16)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 4, y: 2)
         .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.white.opacity(isSelected ? 0.8 : 0.0), lineWidth: 3)
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(environment.color.opacity(isSelected ? 0.6 : 0), lineWidth: 3)
         )
-    }
-}
-
-// MARK: - Info Row Component
-struct SafeSpaceInfoRow: View {
-    let icon: String
-    let text: String
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(width: 20)
-            
-            Text(text)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.9))
-        }
     }
 }
 
 #Preview {
     SafeSpaceView()
 }
-

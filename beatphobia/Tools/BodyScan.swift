@@ -10,9 +10,9 @@ import AVFoundation
 
 struct BodyScanView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @State private var currentStep: Int = 0
     @State private var isScanning: Bool = false
-    @State private var showInstructions: Bool = false
     @State private var isPaused: Bool = false
     @State private var timer: Timer?
     @State private var elapsedTime: TimeInterval = 0
@@ -51,163 +51,123 @@ struct BodyScanView: View {
     
     var body: some View {
         ZStack {
-            // Calming gradient background
-            LinearGradient(
-                colors: [
-                    Color(red: 0.2, green: 0.3, blue: 0.5),
-                    Color(red: 0.3, green: 0.2, blue: 0.4)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            AppConstants.backgroundColor(for: colorScheme)
+                .ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button(action: {
-                        timer?.invalidate()
-                        dismiss()
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                    
-                    Spacer()
-                    
-                    if isScanning {
-                        // Timer display
-                        Text(formatTime(elapsedTime))
-                            .font(.system(size: 16, weight: .bold))
-                            .fontDesign(.monospaced)
-                            .foregroundColor(.white.opacity(0.9))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.white.opacity(0.2))
-                            .cornerRadius(20)
-                    }
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        showInstructions.toggle()
-                    }) {
-                        Image(systemName: showInstructions ? "info.circle.fill" : "info.circle")
-                            .font(.system(size: 28))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 60)
-                .padding(.bottom, 20)
+                // Header - Always visible
+                headerView
                 
-                ScrollView {
-                    VStack(spacing: 30) {
-                        // Title
-                        if !isScanning {
-                            VStack(spacing: 8) {
-                                Text("Body Scan")
-                                    .font(.system(size: 36, weight: .bold))
-                                    .fontDesign(.serif)
-                                    .foregroundColor(.white)
-                                
-                                Text("Mindfully scan through your body to release tension")
-                                    .font(.system(size: 15))
-                                    .foregroundColor(.white.opacity(0.8))
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 40)
-                            }
-                        }
-                        
-                        // Instructions (if visible and not scanning)
-                        if showInstructions && !isScanning {
-                            instructionsCard
-                                .padding(.horizontal, 20)
-                        }
-                        
-                        // Main Content
-                        if !isScanning {
-                            // Start Screen
-                            startView
-                                .padding(.horizontal, 20)
-                                .padding(.top, 20)
-                        } else {
-                            // Scanning View
-                            scanningView
-                                .padding(.horizontal, 20)
-                                .padding(.top, 20)
-                        }
-                        
-                        Spacer(minLength: 100)
-                    }
-                    .padding(.top, 20)
+                Spacer()
+                
+                // Main content
+                if isScanning {
+                    scanningView
+                } else {
+                    mainScanView
                 }
+                
+                Spacer()
+                
+                // Bottom controls - Always visible
+                bottomControlsView
+                    .padding(.bottom, 40)
             }
         }
-        .ignoresSafeArea()
         .navigationBarHidden(true)
+        .toolbar(.hidden, for: .tabBar)
     }
     
-    // MARK: - Instructions Card
-    private var instructionsCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "figure.stand")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(.white)
-                
-                Text("How to Practice")
-                    .font(.system(size: 18, weight: .bold))
+    // MARK: - Header
+    private var headerView: some View {
+        HStack {
+            Button(action: {
+                if isScanning {
+                    endScan()
+                }
+                dismiss()
+            }) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppConstants.cardBackgroundColor(for: colorScheme))
+                        .frame(width: 44, height: 44)
+                        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 4, y: 2)
+                    
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                }
+            }
+            .opacity(isScanning ? 0.3 : 1.0)
+            
+            Spacer()
+            
+            VStack(spacing: 4) {
+                Text("Body Scan")
+                    .font(.system(size: 22, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                
+                if isScanning {
+                    Text("Step \(currentStep + 1) of \(bodyScanSteps.count)")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                }
             }
             
-            VStack(alignment: .leading, spacing: 12) {
-                BodyScanInfoRow(icon: "hand.point.up.left.fill", text: "Find a comfortable position - sitting or lying down")
-                BodyScanInfoRow(icon: "eye.slash.fill", text: "Close your eyes or soften your gaze")
-                BodyScanInfoRow(icon: "figure.mind.and.body", text: "Notice sensations without trying to change them")
-                BodyScanInfoRow(icon: "wind", text: "Breathe naturally and stay present")
+            Spacer()
+            
+            // Stop button - minimal style
+            if isScanning {
+                Button(action: {
+                    endScan()
+                }) {
+                    Text("Stop")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.7))
+                }
+            } else {
+                Color.clear
+                    .frame(width: 44, height: 44)
             }
         }
-        .padding(20)
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(20)
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
     }
     
-    // MARK: - Start View
-    private var startView: some View {
-        VStack(spacing: 30) {
+    // MARK: - Main Scan View (start screen)
+    private var mainScanView: some View {
+        VStack(spacing: 32) {
             // Duration info
             VStack(spacing: 16) {
                 ZStack {
                     Circle()
-                        .fill(Color.white.opacity(0.2))
+                        .fill(AppConstants.primaryColor.opacity(0.15))
                         .frame(width: 120, height: 120)
                     
                     VStack(spacing: 4) {
                         Text("\(totalDuration / 60)")
                             .font(.system(size: 48, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(AppConstants.primaryColor)
                         
                         Text("minutes")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(AppConstants.primaryColor)
                     }
                 }
                 
                 Text("13 body areas to scan")
                     .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             }
-            .padding(.vertical, 20)
             
             // Body parts preview
             VStack(alignment: .leading, spacing: 12) {
-                Text("What You'll Scan")
-                    .font(.system(size: 18, weight: .bold))
+                Text("Body Areas")
+                    .font(.system(size: 20, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 LazyVGrid(columns: [
                     GridItem(.flexible()),
@@ -217,125 +177,101 @@ struct BodyScanView: View {
                         HStack(spacing: 8) {
                             Image(systemName: step.icon)
                                 .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                             
                             Text(step.bodyPart)
                                 .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 8)
                         .padding(.horizontal, 12)
-                        .background(Color.white.opacity(0.1))
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .cornerRadius(10)
                     }
                 }
             }
             .padding(20)
-            .background(Color.white.opacity(0.1))
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .cornerRadius(20)
-            
-            // Start button
-            Button(action: startScan) {
-                HStack(spacing: 12) {
-                    Image(systemName: "play.fill")
-                        .font(.system(size: 20, weight: .bold))
-                    
-                    Text("Begin Body Scan")
-                        .font(.system(size: 18, weight: .bold))
-                        .fontDesign(.rounded)
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 18)
-                .background(
-                    LinearGradient(
-                        colors: [.purple, .purple.opacity(0.8)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .cornerRadius(16)
-                .shadow(color: Color.purple.opacity(0.4), radius: 15, y: 8)
-            }
-            .padding(.horizontal, 40)
-            .padding(.top, 10)
+            .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
+            .padding(.horizontal, 24)
         }
     }
     
     // MARK: - Scanning View
     private var scanningView: some View {
-        VStack(spacing: 40) {
-            // Progress bar
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Step \(currentStep + 1) of \(bodyScanSteps.count)")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.8))
-                    
-                    Spacer()
-                    
-                    Text("\(Int(progress * 100))%")
-                        .font(.system(size: 14, weight: .bold))
-                        .fontDesign(.monospaced)
-                        .foregroundColor(.white)
-                }
-                
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.white.opacity(0.2))
-                            .frame(height: 12)
-                        
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(
-                                LinearGradient(
-                                    colors: [.purple, .blue],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: geometry.size.width * progress, height: 12)
-                    }
-                }
-                .frame(height: 12)
-            }
-            .padding(20)
-            .background(Color.white.opacity(0.1))
-            .cornerRadius(16)
-            
-            // Current body part
-            VStack(spacing: 24) {
+        VStack(spacing: 32) {
+            // Current body part card
+            VStack(spacing: 20) {
                 // Icon
                 ZStack {
                     Circle()
-                        .fill(Color.white.opacity(0.2))
-                        .frame(width: 120, height: 120)
+                        .fill(AppConstants.primaryColor.opacity(0.1))
+                        .frame(width: 100, height: 100)
                     
                     Image(systemName: currentBodyPart.icon)
-                        .font(.system(size: 60, weight: .semibold))
-                        .foregroundColor(.white)
+                        .font(.system(size: 50, weight: .semibold))
+                        .foregroundColor(AppConstants.primaryColor)
                 }
                 
                 // Body part name
                 Text(currentBodyPart.bodyPart)
                     .font(.system(size: 36, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(.white)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
                 // Instruction
                 Text(currentBodyPart.instruction)
                     .font(.system(size: 17))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     .multilineTextAlignment(.center)
                     .lineSpacing(6)
-                    .padding(.horizontal, 30)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 20)
             }
-            .padding(.vertical, 30)
+            .padding(.vertical, 32)
+            .padding(.horizontal, 24)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
+            .cornerRadius(20)
+            .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
+            .padding(.horizontal, 24)
             
-            // Control buttons
-            HStack(spacing: 16) {
+            // Timer display
+            Text(formatTime(elapsedTime))
+                .font(.system(size: 48, weight: .bold))
+                .fontDesign(.monospaced)
+                .foregroundColor(AppConstants.primaryColor)
+        }
+    }
+    
+    // MARK: - Bottom Controls
+    private var bottomControlsView: some View {
+        VStack(spacing: 12) {
+            if !isScanning {
+                Button(action: startScan) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 22, weight: .semibold))
+                        
+                        Text("Start Body Scan")
+                            .font(.system(size: 18, weight: .semibold))
+                            .fontDesign(.serif)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 60)
+                    .background(
+                        LinearGradient(
+                            colors: [AppConstants.primaryColor, AppConstants.primaryColor.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(30)
+                    .shadow(color: AppConstants.primaryColor.opacity(0.4), radius: 12, y: 6)
+                }
+                .padding(.horizontal, 32)
+            } else {
                 Button(action: {
                     isPaused.toggle()
                     if isPaused {
@@ -344,42 +280,24 @@ struct BodyScanView: View {
                         startTimer()
                     }
                 }) {
-                    VStack(spacing: 8) {
-                        Image(systemName: isPaused ? "play.fill" : "pause.fill")
-                            .font(.system(size: 24, weight: .semibold))
-                        
-                        Text(isPaused ? "Resume" : "Pause")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.white.opacity(0.2))
-                    .cornerRadius(16)
-                }
-                
-                Button(action: endScan) {
-                    VStack(spacing: 8) {
-                        Image(systemName: "stop.fill")
-                            .font(.system(size: 24, weight: .semibold))
-                        
-                        Text("End")
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        LinearGradient(
-                            colors: [.red, .red.opacity(0.8)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                    Text(isPaused ? "Resume" : "Pause")
+                        .font(.system(size: 18, weight: .semibold))
+                        .fontDesign(.serif)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 60)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(red: 220/255, green: 100/255, blue: 100/255), Color(red: 200/255, green: 80/255, blue: 80/255).opacity(0.8)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
                         )
-                    )
-                    .cornerRadius(16)
+                        .cornerRadius(30)
+                        .shadow(color: Color(red: 220/255, green: 100/255, blue: 100/255).opacity(0.4), radius: 12, y: 6)
                 }
+                .padding(.horizontal, 32)
             }
-            .padding(.horizontal, 40)
         }
     }
     
@@ -418,7 +336,7 @@ struct BodyScanView: View {
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)
         
-        // Could show completion view here
+        // Complete and go back to start
         endScan()
     }
     
@@ -445,26 +363,6 @@ struct BodyScanStep {
     let icon: String
 }
 
-// MARK: - Info Row Component
-struct BodyScanInfoRow: View {
-    let icon: String
-    let text: String
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(width: 20)
-            
-            Text(text)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.9))
-        }
-    }
-}
-
 #Preview {
     BodyScanView()
 }
-

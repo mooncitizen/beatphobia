@@ -28,7 +28,7 @@ struct ContentView: View {
                         if let profileError {
                             Text("Error: \(profileError)")
                         } else if profileExists == nil {
-                            FullScreenLoading(text: "Loading Application")
+                            FullScreenLoading(text: "Loading")
                         } else if profileExists == true {
                             HomeView()
                         } else {
@@ -60,5 +60,6 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-            .environmentObject(AuthManager())
+        .environmentObject(AuthManager())
+        .environmentObject(ThemeManager())
 }

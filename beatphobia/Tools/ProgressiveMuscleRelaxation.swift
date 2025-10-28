@@ -173,16 +173,6 @@ class PMRManager: ObservableObject {
         }
     }
     
-    func resume() {
-        guard !isActive else { return }
-        isActive = true
-        startPhaseTimer()
-        
-        if hapticsEnabled {
-            mediumHaptic.impactOccurred()
-        }
-    }
-    
     func reset() {
         pause()
         currentGroupIndex = 0
@@ -207,7 +197,7 @@ class PMRManager: ObservableObject {
     
     private func startReadyPhase() {
         currentPhase = .ready
-        phaseDuration = 5.0
+        phaseDuration = 3.0
         timeRemaining = phaseDuration
         phaseStartTime = Date()
         progress = 0
@@ -261,7 +251,7 @@ class PMRManager: ObservableObject {
     
     private func startTransitionPhase() {
         currentPhase = .transition
-        phaseDuration = 3.0
+        phaseDuration = 2.0
         timeRemaining = phaseDuration
         phaseStartTime = Date()
         progress = 0
@@ -340,38 +330,35 @@ class PMRManager: ObservableObject {
 // MARK: - Main View
 struct ProgressiveMuscleRelaxationView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @StateObject private var pmrManager = PMRManager()
     
     var body: some View {
         ZStack {
             // Background
-            AppConstants.defaultBackgroundColor
+            AppConstants.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
             
-            if pmrManager.isCompleted {
-                completionView
-            } else {
-                VStack(spacing: 0) {
-                    // Header
-                    headerView
-                    
-                    // Main content in ScrollView
-                    ScrollView {
-                        VStack(spacing: 32) {
-                            mainContentView
-                                .padding(.top, 20)
-                            
-                            // Controls
-                            controlsView
-                                .padding(.bottom, 40)
-                            
-                            Spacer(minLength: 100)
-                        }
-                    }
+            VStack(spacing: 0) {
+                // Header - Always visible
+                headerView
+                
+                Spacer()
+                
+                // Main content
+                if pmrManager.isCompleted {
+                    completionView
+                } else {
+                    mainContentView
                 }
+                
+                Spacer()
+                
+                // Bottom controls - Always visible
+                bottomControlsView
+                    .padding(.bottom, 40)
             }
         }
-        .ignoresSafeArea()
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
         .onAppear {
@@ -383,125 +370,115 @@ struct ProgressiveMuscleRelaxationView: View {
     private var headerView: some View {
         HStack {
             Button(action: {
+                pmrManager.pause()
                 if pmrManager.hapticsEnabled {
                     pmrManager.lightHaptic.impactOccurred(intensity: 0.5)
                 }
                 dismiss()
             }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(.black.opacity(0.7))
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppConstants.cardBackgroundColor(for: colorScheme))
+                        .frame(width: 44, height: 44)
+                        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 4, y: 2)
+                    
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                }
             }
+            .opacity(pmrManager.isActive ? 0.3 : 1.0)
             
             Spacer()
             
             VStack(spacing: 4) {
-                Text("PMR")
-                    .font(.system(size: 18, weight: .bold))
+                Text("Progressive Muscle Relaxation")
+                    .font(.system(size: 22, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(AppConstants.primaryColor)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
-                Text("\(pmrManager.groupsCompleted) of \(pmrManager.totalGroups) groups")
-                    .font(.system(size: 12))
-                    .foregroundColor(AppConstants.primaryColor.opacity(0.6))
+                if pmrManager.groupsCompleted > 0 {
+                    Text("\(pmrManager.groupsCompleted) of \(pmrManager.totalGroups) groups")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                }
             }
             
             Spacer()
             
-            // Balance spacer
-            Color.clear
-                .frame(width: 28, height: 28)
+            // Stop button - minimal style
+            if pmrManager.isActive {
+                Button(action: {
+                    pmrManager.pause()
+                }) {
+                    Text("Stop")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.7))
+                }
+            } else {
+                Color.clear
+                    .frame(width: 44, height: 44)
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 60)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
     }
     
     // MARK: - Main Content
     private var mainContentView: some View {
         VStack(spacing: 32) {
-            // Overall progress bar
-            overallProgressView
-            
             // Phase indicator
-            phaseIndicatorView
+            let currentPhase = pmrManager.currentPhase
             
-            // Current muscle group card
-            muscleGroupCardView
-            
-            // Phase-specific guidance
-            guidanceView
-        }
-        .padding(.horizontal, 20)
-    }
-    
-    private var overallProgressView: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text("Overall Progress")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(AppConstants.primaryColor.opacity(0.7))
-                
-                Spacer()
-                
-                Text("\(Int(pmrManager.overallProgress * 100))%")
-                    .font(.system(size: 14, weight: .bold))
-                    .fontDesign(.monospaced)
-                    .foregroundColor(AppConstants.primaryColor)
-            }
-            
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
-                    // Background
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(AppConstants.primaryColor.opacity(0.1))
+            VStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(currentPhase.color.opacity(0.1))
+                        .frame(width: 100, height: 100)
                     
-                    // Progress
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    AppConstants.primaryColor,
-                                    AppConstants.primaryColor.opacity(0.7)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: geometry.size.width * pmrManager.overallProgress)
+                    Image(systemName: phaseIcon)
+                        .font(.system(size: 44, weight: .semibold))
+                        .foregroundColor(currentPhase.color)
                 }
-            }
-            .frame(height: 8)
-        }
-    }
-    
-    private var phaseIndicatorView: some View {
-        HStack(spacing: 12) {
-            // Phase icon
-            ZStack {
-                Circle()
-                    .fill(pmrManager.currentPhase.color.opacity(0.2))
-                    .frame(width: 60, height: 60)
                 
-                Image(systemName: phaseIcon)
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(pmrManager.currentPhase.color)
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(pmrManager.currentPhase.title)
-                    .font(.system(size: 22, weight: .bold))
+                Text(currentPhase.title)
+                    .font(.system(size: 28, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(pmrManager.currentPhase.color)
+                    .foregroundColor(currentPhase.color)
                 
-                if pmrManager.isActive && pmrManager.currentPhase != .completed {
-                    Text("\(Int(pmrManager.timeRemaining))s remaining")
-                        .font(.system(size: 14, weight: .medium))
-                        .fontDesign(.monospaced)
-                        .foregroundColor(pmrManager.currentPhase.color.opacity(0.7))
+                if pmrManager.isActive {
+                    Text("\(Int(pmrManager.timeRemaining)) seconds")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 }
             }
+            .padding(.vertical, 24)
+            .padding(.horizontal, 32)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
+            .cornerRadius(20)
+            .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
+            .padding(.horizontal, 24)
             
-            Spacer()
+            // Muscle group card
+            VStack(spacing: 16) {
+                Text(pmrManager.currentGroup.name)
+                    .font(.system(size: 36, weight: .bold))
+                    .fontDesign(.serif)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                
+                Text(pmrManager.currentGroup.instruction)
+                    .font(.system(size: 18))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
+            .padding(.horizontal, 24)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
+            .cornerRadius(20)
+            .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
+            .padding(.horizontal, 24)
         }
     }
     
@@ -515,397 +492,139 @@ struct ProgressiveMuscleRelaxationView: View {
         }
     }
     
-    private var muscleGroupCardView: some View {
-        ZStack {
-            cardBackground
-            cardBorder
-            cardContent
-        }
-        .frame(height: 400)
-    }
-    
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 24)
-            .fill(pmrManager.currentPhase.color.opacity(0.1))
-    }
-    
-    private var cardBorder: some View {
-        RoundedRectangle(cornerRadius: 24)
-            .stroke(
-                pmrManager.currentPhase.color.opacity(pmrManager.isActive ? 0.5 : 0.3),
-                lineWidth: 3
-            )
-    }
-    
-    private var cardContent: some View {
-        VStack(spacing: 20) {
-            muscleGroupIcon
-            muscleGroupName
-            
-            if pmrManager.currentPhase == .ready || pmrManager.currentPhase == .tense {
-                instructionText
-            }
-            
-            if pmrManager.isActive && pmrManager.currentPhase != .completed {
-                phaseProgressRing
-            }
-        }
-        .padding(.vertical, 40)
-        .padding(.horizontal, 30)
-    }
-    
-    private var muscleGroupIcon: some View {
-        ZStack {
-            Circle()
-                .fill(pmrManager.currentPhase.color.opacity(0.15))
-                .frame(width: 100, height: 100)
-                .scaleEffect(pmrManager.currentPhase == .tense && pmrManager.isActive ? 1.1 : 1.0)
-                .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: pmrManager.isActive && pmrManager.currentPhase == .tense)
-            
-            Image(systemName: pmrManager.currentGroup.icon)
-                .font(.system(size: 48, weight: .semibold))
-                .foregroundColor(pmrManager.currentPhase.color)
-        }
-    }
-    
-    private var muscleGroupName: some View {
-        Text(pmrManager.currentGroup.name)
-            .font(.system(size: 28, weight: .bold))
-            .fontDesign(.serif)
-            .foregroundColor(AppConstants.primaryColor)
-    }
-    
-    private var instructionText: some View {
-        Text(pmrManager.currentGroup.instruction)
-            .font(.system(size: 16))
-            .foregroundColor(AppConstants.primaryColor.opacity(0.8))
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 20)
-    }
-    
-    private var phaseProgressRing: some View {
-        ZStack {
-            Circle()
-                .stroke(pmrManager.currentPhase.color.opacity(0.2), lineWidth: 8)
-                .frame(width: 80, height: 80)
-            
-            Circle()
-                .trim(from: 0, to: pmrManager.progress)
-                .stroke(
-                    pmrManager.currentPhase.color,
-                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                )
-                .frame(width: 80, height: 80)
-                .rotationEffect(.degrees(-90))
-            
-            Text("\(Int(pmrManager.timeRemaining))")
-                .font(.system(size: 24, weight: .bold))
-                .fontDesign(.monospaced)
-                .foregroundColor(pmrManager.currentPhase.color)
-        }
-    }
-    
-    private var guidanceView: some View {
+    // MARK: - Bottom Controls
+    private var bottomControlsView: some View {
         VStack(spacing: 12) {
-            if pmrManager.currentPhase == .ready {
-                guidanceText("Prepare to tense your \(pmrManager.currentGroup.name.lowercased())", icon: "hand.raised.circle")
-            } else if pmrManager.currentPhase == .tense {
-                guidanceText("Hold the tension... breathe normally", icon: "hand.raised.circle.fill")
-            } else if pmrManager.currentPhase == .relax {
-                guidanceText("Let go completely... feel the difference", icon: "leaf.circle.fill")
-            } else if pmrManager.currentPhase == .transition {
-                guidanceText("Notice how relaxed your muscles feel", icon: "sparkles.rectangle.stack")
-            }
-        }
-        .padding(.horizontal, 20)
-    }
-    
-    private func guidanceText(_ text: String, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 20))
-                .foregroundColor(pmrManager.currentPhase.color)
-            
-            Text(text)
-                .font(.system(size: 15))
-                .foregroundColor(AppConstants.primaryColor.opacity(0.8))
-            
-            Spacer()
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(pmrManager.currentPhase.color.opacity(0.1))
-        )
-    }
-    
-    // MARK: - Controls
-    private var controlsView: some View {
-        VStack(spacing: 16) {
             if !pmrManager.isActive && pmrManager.groupsCompleted == 0 {
-                startButton
+                Button(action: {
+                    pmrManager.start()
+                }) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 22, weight: .semibold))
+                        
+                        Text("Start Session")
+                            .font(.system(size: 18, weight: .semibold))
+                            .fontDesign(.serif)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 60)
+                    .background(
+                        LinearGradient(
+                            colors: [AppConstants.primaryColor, AppConstants.primaryColor.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(30)
+                    .shadow(color: AppConstants.primaryColor.opacity(0.4), radius: 12, y: 6)
+                }
+                .padding(.horizontal, 32)
             } else if pmrManager.isActive {
-                activeControls
+                Button(action: {
+                    pmrManager.pause()
+                }) {
+                    Text("Pause")
+                        .font(.system(size: 18, weight: .semibold))
+                        .fontDesign(.serif)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 60)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(red: 220/255, green: 100/255, blue: 100/255), Color(red: 200/255, green: 80/255, blue: 80/255).opacity(0.8)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(30)
+                        .shadow(color: Color(red: 220/255, green: 100/255, blue: 100/255).opacity(0.4), radius: 12, y: 6)
+                }
+                .padding(.horizontal, 32)
             } else if !pmrManager.isActive && pmrManager.groupsCompleted > 0 {
-                resumeButton
+                Button(action: {
+                    pmrManager.start()
+                }) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 22, weight: .semibold))
+                        
+                        Text("Resume")
+                            .font(.system(size: 18, weight: .semibold))
+                            .fontDesign(.serif)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 60)
+                    .background(
+                        LinearGradient(
+                            colors: [AppConstants.primaryColor, AppConstants.primaryColor.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(30)
+                    .shadow(color: AppConstants.primaryColor.opacity(0.4), radius: 12, y: 6)
+                }
+                .padding(.horizontal, 32)
             }
             
             if pmrManager.groupsCompleted > 0 && !pmrManager.isCompleted {
-                resetButton
+                Button(action: {
+                    pmrManager.reset()
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 16, weight: .medium))
+                        Text("Reset")
+                            .font(.system(size: 16, weight: .medium))
+                            .fontDesign(.serif)
+                    }
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.7))
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 24)
+                }
             }
         }
-        .padding(.horizontal, 20)
-    }
-    
-    private var startButton: some View {
-        Button(action: {
-            pmrManager.start()
-        }) {
-            HStack(spacing: 12) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                
-                Text("Begin Session")
-                    .font(.system(size: 18, weight: .bold))
-                    .fontDesign(.serif)
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(primaryGradient)
-            .cornerRadius(16)
-            .shadow(color: AppConstants.primaryColor.opacity(0.3), radius: 8, y: 4)
-        }
-    }
-    
-    private var activeControls: some View {
-        HStack(spacing: 12) {
-            pauseButton
-            skipButton
-        }
-    }
-    
-    private var pauseButton: some View {
-        Button(action: {
-            pmrManager.pause()
-        }) {
-            HStack(spacing: 8) {
-                Image(systemName: "pause.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                
-                Text("Pause")
-                    .font(.system(size: 16, weight: .bold))
-                    .fontDesign(.serif)
-            }
-            .foregroundColor(AppConstants.primaryColor)
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(AppConstants.primaryColor.opacity(0.1))
-            )
-        }
-    }
-    
-    private var skipButton: some View {
-        Button(action: {
-            pmrManager.skip()
-        }) {
-            HStack(spacing: 8) {
-                Image(systemName: "forward.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                
-                Text("Skip")
-                    .font(.system(size: 16, weight: .bold))
-                    .fontDesign(.serif)
-            }
-            .foregroundColor(AppConstants.primaryColor)
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(AppConstants.primaryColor.opacity(0.1))
-            )
-        }
-    }
-    
-    private var resumeButton: some View {
-        Button(action: {
-            pmrManager.resume()
-        }) {
-            HStack(spacing: 12) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 20, weight: .semibold))
-                
-                Text("Resume")
-                    .font(.system(size: 18, weight: .bold))
-                    .fontDesign(.serif)
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(primaryGradient)
-            .cornerRadius(16)
-            .shadow(color: AppConstants.primaryColor.opacity(0.3), radius: 8, y: 4)
-        }
-    }
-    
-    private var resetButton: some View {
-        Button(action: {
-            pmrManager.reset()
-        }) {
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.counterclockwise")
-                    .font(.system(size: 16, weight: .semibold))
-                
-                Text("Start Over")
-                    .font(.system(size: 16, weight: .semibold))
-                    .fontDesign(.serif)
-            }
-            .foregroundColor(AppConstants.primaryColor.opacity(0.7))
-            .frame(height: 44)
-        }
-    }
-    
-    private var primaryGradient: LinearGradient {
-        LinearGradient(
-            colors: [
-                AppConstants.primaryColor,
-                AppConstants.primaryColor.opacity(0.8)
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
     }
     
     // MARK: - Completion View
     private var completionView: some View {
         VStack(spacing: 32) {
-            Spacer()
-            
-            successAnimation
-            
-            completionMessage
-            
-            statsCard
-            
-            Spacer()
-            
-            completionActions
-        }
-    }
-    
-    private var successAnimation: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(red: 100/255, green: 180/255, blue: 140/255),
-                            Color(red: 80/255, green: 160/255, blue: 120/255)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 120, height: 120)
-                .shadow(color: Color(red: 100/255, green: 180/255, blue: 140/255).opacity(0.4), radius: 20)
-            
-            Image(systemName: "checkmark")
-                .font(.system(size: 60, weight: .bold))
-                .foregroundColor(.white)
-        }
-    }
-    
-    private var completionMessage: some View {
-        VStack(spacing: 12) {
-            Text("Session Complete!")
-                .font(.system(size: 32, weight: .bold))
-                .fontDesign(.serif)
-                .foregroundColor(AppConstants.primaryColor)
-            
-            Text("You've completed all \(pmrManager.totalGroups) muscle groups")
-                .font(.system(size: 16))
-                .foregroundColor(AppConstants.primaryColor.opacity(0.7))
-                .multilineTextAlignment(.center)
-        }
-    }
-    
-    private var statsCard: some View {
-        statsCardContent
-            .padding(24)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(AppConstants.primaryColor.opacity(0.1))
-            )
-            .padding(.horizontal, 20)
-    }
-    
-    private var statsCardContent: some View {
-        HStack(spacing: 20) {
-            statItem(value: "\(pmrManager.totalGroups)", label: "Groups")
-            statDivider
-            statItem(value: "~\(Int((7 + 20) * Double(pmrManager.totalGroups) / 60))m", label: "Duration")
-            statDivider
-            statItem(value: "100%", label: "Complete")
-        }
-    }
-    
-    private var statDivider: some View {
-        Divider()
-            .frame(height: 40)
-            .background(AppConstants.primaryColor.opacity(0.3))
-    }
-    
-    private var completionActions: some View {
-        VStack(spacing: 12) {
-            Button(action: {
-                pmrManager.reset()
-            }) {
-                HStack(spacing: 12) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.system(size: 20, weight: .semibold))
-                    
-                    Text("Do Another Session")
-                        .font(.system(size: 18, weight: .bold))
-                        .fontDesign(.serif)
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 56)
-                .background(
-                    LinearGradient(
-                        colors: [
-                            AppConstants.primaryColor,
-                            AppConstants.primaryColor.opacity(0.8)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .cornerRadius(16)
-                .shadow(color: AppConstants.primaryColor.opacity(0.3), radius: 8, y: 4)
+            ZStack {
+                Circle()
+                    .fill(Color.green.opacity(0.15))
+                    .frame(width: 120, height: 120)
+                
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 64))
+                    .foregroundColor(.green)
             }
             
-            Button(action: {
-                if pmrManager.hapticsEnabled {
-                    pmrManager.lightHaptic.impactOccurred(intensity: 0.5)
-                }
-                dismiss()
-            }) {
-                Text("Done")
-                    .font(.system(size: 16, weight: .semibold))
+            VStack(spacing: 12) {
+                Text("Session Complete!")
+                    .font(.system(size: 32, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(AppConstants.primaryColor.opacity(0.7))
-                    .frame(height: 44)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                
+                Text("You've completed all \(pmrManager.totalGroups) muscle groups")
+                    .font(.system(size: 16))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                    .multilineTextAlignment(.center)
             }
+            
+            HStack(spacing: 16) {
+                statCard(value: "\(pmrManager.totalGroups)", label: "Groups")
+                statCard(value: "~\(Int((7 + 20) * Double(pmrManager.totalGroups) / 60))m", label: "Duration")
+                statCard(value: "100%", label: "Complete")
+            }
+            .padding(.horizontal, 24)
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 40)
     }
     
-    private func statItem(value: String, label: String) -> some View {
-        VStack(spacing: 4) {
+    private func statCard(value: String, label: String) -> some View {
+        VStack(spacing: 8) {
             Text(value)
                 .font(.system(size: 24, weight: .bold))
                 .fontDesign(.monospaced)
@@ -913,13 +632,15 @@ struct ProgressiveMuscleRelaxationView: View {
             
             Text(label)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(AppConstants.primaryColor.opacity(0.6))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
         }
         .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+        .cornerRadius(12)
     }
 }
 
 #Preview {
     ProgressiveMuscleRelaxationView()
 }
-

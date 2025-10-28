@@ -10,41 +10,29 @@ import Combine
 
 struct GroundingView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
     @StateObject private var groundingManager = GroundingManager()
     
     var body: some View {
         ZStack {
             // Background
-            AppConstants.defaultBackgroundColor
+            AppConstants.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Header
+                // Header - Always visible
                 headerView
                 
+                Spacer()
+                
                 // Main content
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Progress
-                        progressView
-                        
-                        // Current step card
-                        currentStepCard
-                        
-                        // Completed steps summary
-                        if groundingManager.currentStep > 0 {
-                            completedStepsView
-                        }
-                        
-                        // Completion or restart
-                        if groundingManager.isComplete {
-                            completionView
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 100)
-                }
+                mainGroundingView
+                
+                Spacer()
+                
+                // Bottom controls - Always visible
+                bottomControlsView
+                    .padding(.bottom, 40)
             }
         }
         .navigationBarHidden(true)
@@ -58,147 +46,199 @@ struct GroundingView: View {
     private var headerView: some View {
         HStack {
             Button(action: {
+                groundingManager.pause()
                 if groundingManager.hapticsEnabled {
                     groundingManager.lightHaptic.impactOccurred(intensity: 0.5)
                 }
                 dismiss()
             }) {
                 ZStack {
-                    Circle()
-                        .fill(AppConstants.primaryColor.opacity(0.3))
-                        .frame(width: 40, height: 40)
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(AppConstants.cardBackgroundColor(for: colorScheme))
+                        .frame(width: 44, height: 44)
+                        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 4, y: 2)
                     
-                    Image(systemName: "chevron.left")
+                    Image(systemName: "xmark")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(AppConstants.primaryColor)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 }
             }
+            .opacity(groundingManager.isActive ? 0.3 : 1.0)
             
             Spacer()
             
             VStack(spacing: 4) {
                 Text("5-4-3-2-1 Grounding")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                     .fontDesign(.serif)
-                    .foregroundColor(AppConstants.primaryColor)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
-                Text("Stay present with your senses")
-                    .font(.system(size: 12))
-                    .foregroundColor(AppConstants.primaryColor.opacity(0.6))
+                if groundingManager.isComplete {
+                    Text("Complete")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                }
             }
             
             Spacer()
             
-            // Spacer for balance
-            Color.clear
-                .frame(width: 40, height: 40)
+            // Stop button - minimal style
+            if groundingManager.isActive {
+                Button(action: {
+                    groundingManager.pause()
+                }) {
+                    Text("Stop")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.7))
+                }
+            } else {
+                Color.clear
+                    .frame(width: 44, height: 44)
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 60)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
     }
     
-    // MARK: - Progress View
-    private var progressView: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 8) {
-                ForEach(0..<5) { index in
-                    Circle()
-                        .fill(index < groundingManager.currentStep ? AppConstants.primaryColor : AppConstants.primaryColor.opacity(0.2))
-                        .frame(width: 12, height: 12)
+    // MARK: - Main Grounding View
+    private var mainGroundingView: some View {
+        VStack(spacing: 40) {
+            // Show completion details when done
+            if groundingManager.isComplete {
+                completionDetailsView
+            } else {
+                // Instruction Card
+                let currentSense = groundingManager.senses[groundingManager.currentStep]
+                
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: currentSense.icon)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(currentSense.color)
+                        
+                        Text("\(currentSense.count) things you can \(currentSense.title.lowercased())")
+                            .font(.system(size: 18, weight: .semibold))
+                            .fontDesign(.serif)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .padding(.horizontal, 20)
+                .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                .cornerRadius(16)
+                .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
+                .padding(.horizontal, 24)
             }
             
-            Text("Step \(groundingManager.currentStep + 1) of 5")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(AppConstants.primaryColor.opacity(0.7))
-        }
-    }
-    
-    // MARK: - Current Step Card
-    private var currentStepCard: some View {
-        VStack(spacing: 0) {
+            // Items list with animated circles
             if !groundingManager.isComplete {
                 let currentSense = groundingManager.senses[groundingManager.currentStep]
                 
-                VStack(spacing: 20) {
-                    // Icon
-                    ZStack {
-                        Circle()
-                            .fill(currentSense.color.opacity(0.15))
-                            .frame(width: 80, height: 80)
-                        
-                        Image(systemName: currentSense.icon)
-                            .font(.system(size: 36, weight: .medium))
-                            .foregroundColor(currentSense.color)
-                    }
-                    
-                    // Title and description
-                    VStack(spacing: 8) {
-                        Text("Identify \(currentSense.count) thing\(currentSense.count > 1 ? "s" : "")")
-                            .font(.system(size: 24, weight: .bold))
-                            .fontDesign(.serif)
-                            .foregroundColor(AppConstants.primaryColor)
-                        
-                        Text("you can \(currentSense.title.lowercased())")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(AppConstants.primaryColor.opacity(0.7))
-                    }
-                    
-                    // Items list
-                    VStack(spacing: 12) {
-                        ForEach(0..<currentSense.count, id: \.self) { index in
-                            itemRow(index: index, sense: currentSense)
-                        }
-                    }
-                    .padding(.top, 8)
-                    
-                    // Next button
-                    if groundingManager.canProceed {
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3)) {
-                                groundingManager.nextStep()
-                            }
-                        }) {
-                            HStack(spacing: 8) {
-                                Text("Continue")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .fontDesign(.serif)
-                                
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 16, weight: .semibold))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .background(currentSense.color)
-                            .cornerRadius(26)
-                        }
-                        .padding(.top, 8)
+                VStack(spacing: 16) {
+                    ForEach(0..<currentSense.count, id: \.self) { index in
+                        itemRow(index: index, sense: currentSense)
                     }
                 }
-                .padding(24)
-                .background(Color.white)
-                .cornerRadius(20)
-                .shadow(color: Color.black.opacity(0.05), radius: 10, y: 5)
+                .padding(.horizontal, 24)
+            }
+        }
+    }
+    
+    // MARK: - Completion Details View
+    private var completionDetailsView: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Success header
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.green.opacity(0.15))
+                            .frame(width: 80, height: 80)
+                        
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 48))
+                            .foregroundColor(.green)
+                    }
+                    
+                    Text("Well Done!")
+                        .font(.system(size: 28, weight: .bold))
+                        .fontDesign(.serif)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                    
+                    Text("You've grounded yourself in the present moment")
+                        .font(.system(size: 16))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.vertical, 20)
+                
+                // Summary of all inputs
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Your Grounding Summary")
+                        .font(.system(size: 20, weight: .bold))
+                        .fontDesign(.serif)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                    
+                    ForEach(0..<groundingManager.senses.count, id: \.self) { stepIndex in
+                        let sense = groundingManager.senses[stepIndex]
+                        let items = groundingManager.completedItems[stepIndex]
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack(spacing: 10) {
+                                Image(systemName: sense.icon)
+                                    .font(.system(size: 18))
+                                    .foregroundColor(sense.color)
+                                
+                                Text(sense.title)
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.top, 12)
+                            
+                            ForEach(Array(items.enumerated()), id: \.offset) { itemIndex, item in
+                                HStack(spacing: 12) {
+                                    Circle()
+                                        .fill(sense.color.opacity(0.2))
+                                        .frame(width: 8, height: 8)
+                                    
+                                    Text(item)
+                                        .font(.system(size: 16))
+                                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                                }
+                                .padding(.horizontal, 24)
+                                .padding(.leading, 28)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                        .cornerRadius(12)
+                    }
+                }
+                .padding(.horizontal, 24)
             }
         }
     }
     
     private func itemRow(index: Int, sense: GroundingSense) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
             ZStack {
                 Circle()
                     .fill(sense.color.opacity(0.15))
-                    .frame(width: 32, height: 32)
+                    .frame(width: 48, height: 48)
                 
                 Text("\(index + 1)")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundColor(sense.color)
             }
             
             TextField("Tap to add...", text: groundingManager.getBinding(for: index))
-                .font(.system(size: 16))
-                .foregroundColor(AppConstants.primaryColor)
+                .font(.system(size: 17))
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 .submitLabel(.done)
                 .onSubmit {
                     if groundingManager.hapticsEnabled {
@@ -206,131 +246,137 @@ struct GroundingView: View {
                     }
                 }
             
-            Spacer()
-            
             if !groundingManager.getBinding(for: index).wrappedValue.isEmpty {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 20))
+                    .font(.system(size: 24))
                     .foregroundColor(.green)
             }
         }
-        .padding(12)
-        .background(AppConstants.defaultBackgroundColor)
-        .cornerRadius(12)
+        .padding(16)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+        .cornerRadius(16)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 4, y: 2)
     }
     
-    // MARK: - Completed Steps
-    private var completedStepsView: some View {
+    // MARK: - Bottom Controls
+    private var bottomControlsView: some View {
         VStack(spacing: 12) {
-            Text("Completed")
-                .font(.system(size: 16, weight: .bold))
-                .fontDesign(.serif)
-                .foregroundColor(AppConstants.primaryColor.opacity(0.7))
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            ForEach(0..<groundingManager.currentStep, id: \.self) { stepIndex in
-                let sense = groundingManager.senses[stepIndex]
-                let items = groundingManager.completedItems[stepIndex]
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Image(systemName: sense.icon)
-                            .font(.system(size: 16))
-                            .foregroundColor(sense.color)
-                        
-                        Text(sense.title)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(AppConstants.primaryColor)
-                    }
-                    
-                    ForEach(items, id: \.self) { item in
-                        HStack {
-                            Circle()
-                                .fill(sense.color.opacity(0.3))
-                                .frame(width: 6, height: 6)
-                            
-                            Text(item)
-                                .font(.system(size: 14))
-                                .foregroundColor(AppConstants.primaryColor.opacity(0.7))
-                        }
-                    }
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white)
-                .cornerRadius(12)
-            }
-        }
-    }
-    
-    // MARK: - Completion View
-    private var completionView: some View {
-        VStack(spacing: 20) {
-            ZStack {
-                Circle()
-                    .fill(Color.green.opacity(0.15))
-                    .frame(width: 80, height: 80)
-                
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 48))
-                    .foregroundColor(.green)
-            }
-            
-            VStack(spacing: 8) {
-                Text("Well Done!")
-                    .font(.system(size: 28, weight: .bold))
-                    .fontDesign(.serif)
-                    .foregroundColor(AppConstants.primaryColor)
-                
-                Text("You've grounded yourself in the present moment")
-                    .font(.system(size: 16))
-                    .foregroundColor(AppConstants.primaryColor.opacity(0.7))
-                    .multilineTextAlignment(.center)
-            }
-            
-            HStack(spacing: 12) {
+            // Start/Continue button
+            if !groundingManager.isComplete && !groundingManager.isActive {
                 Button(action: {
-                    withAnimation {
-                        groundingManager.reset()
+                    withAnimation(.spring(response: 0.3)) {
+                        groundingManager.start()
                     }
                 }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.counterclockwise")
-                        Text("Restart")
+                    HStack(spacing: 12) {
+                        Image(systemName: "play.fill")
+                            .font(.system(size: 22, weight: .semibold))
+                        
+                        Text("Start Grounding")
+                            .font(.system(size: 18, weight: .semibold))
                             .fontDesign(.serif)
                     }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(AppConstants.primaryColor)
+                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(AppConstants.primaryColor.opacity(0.1))
-                    .cornerRadius(24)
+                    .frame(height: 60)
+                    .background(
+                        LinearGradient(
+                            colors: [AppConstants.primaryColor, AppConstants.primaryColor.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(30)
+                    .shadow(color: AppConstants.primaryColor.opacity(0.4), radius: 12, y: 6)
                 }
+                .padding(.horizontal, 32)
+            }
+            
+            // Continue button when can proceed
+            if groundingManager.isActive && groundingManager.canProceed {
+                let currentSense = groundingManager.senses[groundingManager.currentStep]
                 
+                Button(action: {
+                    withAnimation(.spring(response: 0.3)) {
+                        groundingManager.nextStep()
+                    }
+                }) {
+                    HStack(spacing: 12) {
+                        Text("Continue")
+                            .font(.system(size: 18, weight: .semibold))
+                            .fontDesign(.serif)
+                        
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 22, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 60)
+                    .background(
+                        LinearGradient(
+                            colors: [currentSense.color, currentSense.color.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(30)
+                    .shadow(color: currentSense.color.opacity(0.4), radius: 12, y: 6)
+                }
+                .padding(.horizontal, 32)
+            }
+            
+            // Done button on completion
+            if groundingManager.isComplete {
                 Button(action: {
                     if groundingManager.hapticsEnabled {
                         groundingManager.lightHaptic.impactOccurred(intensity: 0.5)
                     }
                     dismiss()
                 }) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 22, weight: .semibold))
+                        
                         Text("Done")
+                            .font(.system(size: 18, weight: .semibold))
                             .fontDesign(.serif)
-                        Image(systemName: "checkmark")
                     }
-                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(AppConstants.primaryColor)
-                    .cornerRadius(24)
+                    .frame(height: 60)
+                    .background(
+                        LinearGradient(
+                            colors: [Color.green, Color.green.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .cornerRadius(30)
+                    .shadow(color: Color.green.opacity(0.4), radius: 12, y: 6)
+                }
+                .padding(.horizontal, 32)
+            }
+            
+            // Reset button
+            if !groundingManager.isActive && groundingManager.currentStep > 0 {
+                Button(action: {
+                    withAnimation(.spring(response: 0.4)) {
+                        groundingManager.reset()
+                    }
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 16, weight: .medium))
+                        Text("Reset")
+                            .font(.system(size: 16, weight: .medium))
+                            .fontDesign(.serif)
+                    }
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme).opacity(0.7))
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 24)
                 }
             }
         }
-        .padding(24)
-        .background(Color.white)
-        .cornerRadius(20)
-        .shadow(color: Color.black.opacity(0.05), radius: 10, y: 5)
     }
 }
 
@@ -344,6 +390,7 @@ class GroundingManager: ObservableObject {
     @Published var item3: String = ""
     @Published var item4: String = ""
     @Published var hapticsEnabled: Bool = true
+    @Published var isActive: Bool = false
     
     let lightHaptic = UIImpactFeedbackGenerator(style: .light)
     let mediumHaptic = UIImpactFeedbackGenerator(style: .medium)
@@ -358,6 +405,7 @@ class GroundingManager: ObservableObject {
     ]
     
     var canProceed: Bool {
+        guard !isComplete else { return false }
         let currentSense = senses[currentStep]
         let items = getCurrentItems()
         let filledCount = items.prefix(currentSense.count).filter { !$0.isEmpty }.count
@@ -372,6 +420,20 @@ class GroundingManager: ObservableObject {
         lightHaptic.prepare()
         mediumHaptic.prepare()
         successHaptic.prepare()
+    }
+    
+    func start() {
+        isActive = true
+        if hapticsEnabled {
+            mediumHaptic.impactOccurred(intensity: 0.7)
+        }
+    }
+    
+    func pause() {
+        isActive = false
+        if hapticsEnabled {
+            lightHaptic.impactOccurred(intensity: 0.5)
+        }
     }
     
     func getCurrentItems() -> [String] {
@@ -434,6 +496,8 @@ class GroundingManager: ObservableObject {
     }
     
     func reset() {
+        pause()
+        
         if hapticsEnabled {
             lightHaptic.impactOccurred(intensity: 0.5)
         }
@@ -456,14 +520,6 @@ struct GroundingSense {
     let color: Color
 }
 
-// MARK: - Array Extension
-extension Array {
-    subscript(safe index: Int) -> Element? {
-        return indices.contains(index) ? self[index] : nil
-    }
-}
-
-// MARK: - Preview
 #Preview {
     GroundingView()
 }
