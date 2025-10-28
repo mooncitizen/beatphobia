@@ -23,7 +23,26 @@ class CommunityService: ObservableObject {
             .order("name", ascending: true)
             .execute()
             .value
-        return topics
+        
+        // Sort with "Notices" and "App Suggestions" at the top, then alphabetical
+        return topics.sorted { topic1, topic2 in
+            let topic1IsSpecial = topic1.name == "Notices" || topic1.name == "App Suggestions"
+            let topic2IsSpecial = topic2.name == "Notices" || topic2.name == "App Suggestions"
+            
+            // Both special - "Notices" comes before "App Suggestions"
+            if topic1IsSpecial && topic2IsSpecial {
+                if topic1.name == "Notices" { return true }
+                if topic2.name == "Notices" { return false }
+                return topic1.name < topic2.name
+            }
+            
+            // One is special - special ones go first
+            if topic1IsSpecial { return true }
+            if topic2IsSpecial { return false }
+            
+            // Neither is special - alphabetical order
+            return topic1.name < topic2.name
+        }
     }
     
     // MARK: - Fetch Posts

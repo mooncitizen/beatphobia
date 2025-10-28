@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS community_topics (
 
 -- Insert default topics
 INSERT INTO community_topics (name, slug, description, icon, color) VALUES
+    ('Notices', 'notices', 'Official announcements and important updates', 'megaphone.fill', '#F59E0B'),
     ('Phobias', 'phobias', 'Share experiences and support for specific phobias', 'exclamationmark.triangle.fill', '#FF3B30'),
     ('Stress', 'stress', 'Discuss stress management and coping strategies', 'wind', '#FF9500'),
     ('Anxiety', 'anxiety', 'General anxiety discussions and support', 'heart.circle.fill', '#FFCC00'),

@@ -111,7 +111,7 @@ struct CommunityOverview: View {
     }
     
     private var communityContent: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // Header Section
@@ -345,18 +345,41 @@ struct CommunityStatCard: View {
 
 struct CommunityForumView: View {
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var authManager: AuthManager
     @StateObject private var communityService = CommunityService()
     @State private var topics: [CommunityTopic] = []
     @State private var searchText = ""
 
     var filteredTopics: [CommunityTopic] {
+        let filtered: [CommunityTopic]
+        
         if searchText.isEmpty {
-            return topics
+            filtered = topics
         } else {
-            return topics.filter { topic in
+            filtered = topics.filter { topic in
                 topic.name.localizedCaseInsensitiveContains(searchText) ||
                 topic.description.localizedCaseInsensitiveContains(searchText)
             }
+        }
+        
+        // Sort with "Notices" and "App Suggestions" at the top, then alphabetical
+        return filtered.sorted { topic1, topic2 in
+            let topic1IsSpecial = topic1.name == "Notices" || topic1.name == "App Suggestions"
+            let topic2IsSpecial = topic2.name == "Notices" || topic2.name == "App Suggestions"
+            
+            // Both special - "Notices" comes before "App Suggestions"
+            if topic1IsSpecial && topic2IsSpecial {
+                if topic1.name == "Notices" { return true }
+                if topic2.name == "Notices" { return false }
+                return topic1.name < topic2.name
+            }
+            
+            // One is special - special ones go first
+            if topic1IsSpecial { return true }
+            if topic2IsSpecial { return false }
+            
+            // Neither is special - alphabetical order
+            return topic1.name < topic2.name
         }
     }
 
@@ -440,11 +463,30 @@ struct CommunityForumView: View {
                     .padding(.vertical, 60)
                 } else {
                     LazyVStack(spacing: 12) {
-                        ForEach(filteredTopics) { topic in
-                            NavigationLink(destination: TopicDetailView(topic: topic)) {
-                                TopicCard(topic: topic)
+                        ForEach(Array(filteredTopics.enumerated()), id: \.element.id) { index, topic in
+                            VStack(spacing: 12) {
+                                NavigationLink(destination: TopicDetailView(topic: topic)) {
+                                    TopicCard(topic: topic)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                
+                                // Add separator after the first two special topics (Notices and App Suggestions)
+                                if index == 1 && filteredTopics.count > 2 {
+                                    let isSpecial = topic.name == "Notices" || topic.name == "App Suggestions"
+                                    let previousIsSpecial = index > 0 && (filteredTopics[index - 1].name == "Notices" || filteredTopics[index - 1].name == "App Suggestions")
+                                    
+                                    if isSpecial && previousIsSpecial {
+                                        HStack {
+                                            Spacer()
+                                            Text("TOPICS")
+                                                .font(.system(size: 12, weight: .semibold))
+                                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                                            Spacer()
+                                        }
+                                        .padding(.vertical, 8)
+                                    }
+                                }
                             }
-                            .buttonStyle(PlainButtonStyle())
                         }
                     }
                 }
@@ -603,16 +645,37 @@ struct YourPostsView: View {
 
 struct TopicDetailView: View {
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var authManager: AuthManager
     let topic: CommunityTopic
     @StateObject private var communityService = CommunityService()
     @State private var selectedCategory: PostCategory = .all
     @State private var searchText = ""
     @State private var showNewPostSheet = false
     @State private var posts: [PostDisplayModel] = []
+    @State private var userRole: String?
+    @State private var showCreatePost = false
+    
+    // Check if user can create posts in this topic
+    var canCreatePost: Bool {
+        // For Notices topic, only admins can post
+        // If role is loaded and user is not admin, hide button
+        if topic.name == "Notices" {
+            if let role = userRole {
+                return role == "admin"
+            }
+            // If role not loaded yet, show button (will be checked when posting)
+            return true
+        }
+        return true
+    }
 
     var filteredPosts: [PostDisplayModel] {
         posts.filter { post in
-            (selectedCategory == .all || post.category == selectedCategory) &&
+            // Skip category filtering for Notices and App Suggestions
+            let categoryMatch = (topic.name == "Notices" || topic.name == "App Suggestions") || 
+                               (selectedCategory == .all || post.category == selectedCategory)
+            
+            return categoryMatch &&
             (searchText.isEmpty ||
              post.title.localizedCaseInsensitiveContains(searchText) ||
              post.content.localizedCaseInsensitiveContains(searchText) ||
@@ -664,16 +727,18 @@ struct TopicDetailView: View {
                         .stroke(AppConstants.borderColor(for: colorScheme), lineWidth: 1)
                 )
                 
-                // Category Filter Pills
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(PostCategory.allCases) { category in
-                            CategoryPill(
-                                category: category,
-                                isSelected: selectedCategory == category
-                            ) {
-                                withAnimation(.spring(response: 0.3)) {
-                                    selectedCategory = category
+                // Category Filter Pills (hide for Notices and App Suggestions)
+                if topic.name != "Notices" && topic.name != "App Suggestions" {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(PostCategory.allCases) { category in
+                                CategoryPill(
+                                    category: category,
+                                    isSelected: selectedCategory == category
+                                ) {
+                                    withAnimation(.spring(response: 0.3)) {
+                                        selectedCategory = category
+                                    }
                                 }
                             }
                         }
@@ -745,27 +810,41 @@ struct TopicDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    showNewPostSheet = true
-                }) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
+                if canCreatePost {
+                    NavigationLink(destination: CreatePostView(topic: topic, onPostCreated: {
+                        Task {
+                            await loadPosts()
+                        }
+                    })
+                    .environmentObject(authManager)) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
+                    }
                 }
             }
         }
         .task {
+            // Load user profile to check role
+            do {
+                let userId = try await supabase.auth.session.user.id
+                let profile: Profile = try await supabase
+                    .from("profile")
+                    .select()
+                    .eq("id", value: userId.uuidString)
+                    .single()
+                    .execute()
+                    .value
+                
+                userRole = profile.role
+            } catch {
+                print("❌ Error loading user profile: \(error)")
+            }
+            
             await loadPosts()
         }
         .refreshable {
             await loadPosts()
-        }
-        .sheet(isPresented: $showNewPostSheet) {
-            CreatePostView(topic: topic, communityService: communityService) {
-                Task {
-                    await loadPosts()
-                }
-            }
         }
     }
     
@@ -1914,6 +1993,7 @@ struct PostDetailView: View {
                 commentInputView
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
+                    .padding(.bottom, 80) // Add space for tab bar
                     .background(AppConstants.cardBackgroundColor(for: colorScheme))
             }
         }
@@ -2397,10 +2477,12 @@ struct EditPostView: View {
 
 struct CreatePostView: View {
     let topic: CommunityTopic?
-    @ObservedObject var communityService: CommunityService
+    let onPostCreated: () -> Void
+    
+    @StateObject private var communityService = CommunityService()
+    @EnvironmentObject var authManager: AuthManager
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
-    let onPostCreated: () -> Void
     
     @State private var selectedTopic: CommunityTopic?
     @State private var topics: [CommunityTopic] = []
@@ -2413,9 +2495,8 @@ struct CreatePostView: View {
     @State private var errorMessage = ""
     @FocusState private var focusedField: PostField?
     
-    init(topic: CommunityTopic? = nil, communityService: CommunityService, onPostCreated: @escaping () -> Void) {
+    init(topic: CommunityTopic? = nil, onPostCreated: @escaping () -> Void) {
         self.topic = topic
-        self.communityService = communityService
         self.onPostCreated = onPostCreated
         self._selectedTopic = State(initialValue: topic)
     }
@@ -2443,89 +2524,90 @@ struct CreatePostView: View {
     }
     
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Topic display (if topic is provided)
-                    if let selectedTopic = selectedTopic {
-                        Card(backgroundColor: selectedTopic.swiftUIColor.opacity(0.1), cornerRadius: 12, padding: 0) {
-                            HStack(spacing: 12) {
-                                ZStack {
-                                    Circle()
-                                        .fill(selectedTopic.swiftUIColor.opacity(0.2))
-                                        .frame(width: 50, height: 50)
-                                    
-                                    Image(systemName: selectedTopic.icon)
-                                        .font(.system(size: 20, weight: .semibold))
-                                        .foregroundColor(selectedTopic.swiftUIColor)
-                                }
+        ScrollView {
+            VStack(spacing: 24) {
+                // Topic display (if topic is provided)
+                if let selectedTopic = selectedTopic {
+                    Card(backgroundColor: selectedTopic.swiftUIColor.opacity(0.1), cornerRadius: 12, padding: 0) {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(selectedTopic.swiftUIColor.opacity(0.2))
+                                    .frame(width: 50, height: 50)
                                 
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("Posting to")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.black.opacity(0.5))
-                                    
-                                    Text(selectedTopic.name)
-                                        .font(.system(size: 16, weight: .bold, design: .serif))
-                                        .foregroundColor(selectedTopic.swiftUIColor)
-                                }
-                                
-                                Spacer()
-                            }
-                            .padding(12)
-                        }
-                    }
-                    
-                    // Title field
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Title")
-                            .font(.system(size: 16, weight: .semibold))
-                            .fontDesign(.serif)
-                            .foregroundColor(AppConstants.primaryColor)
-                        
-                        TextField("What's on your mind?", text: $title)
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(AppConstants.primaryColor)
-                            .padding(16)
-                            .background(AppConstants.cardBackgroundColor(for: colorScheme))
-                            .cornerRadius(12)
-                            .focused($focusedField, equals: .title)
-                            .submitLabel(.next)
-                            .onSubmit {
-                                focusedField = .content
-                            }
-                    }
-                    
-                    // Content field
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Details")
-                            .font(.system(size: 16, weight: .semibold))
-                            .fontDesign(.serif)
-                            .foregroundColor(AppConstants.primaryColor)
-                        
-                        ZStack(alignment: .topLeading) {
-                            if content.isEmpty {
-                                Text("Share your story, ask a question, or start a discussion...")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.gray.opacity(0.6))
-                                    .padding(.horizontal, 20)
-                                    .padding(.vertical, 16)
+                                Image(systemName: selectedTopic.icon)
+                                    .font(.system(size: 20, weight: .semibold))
+                                    .foregroundColor(selectedTopic.swiftUIColor)
                             }
                             
-                            TextEditor(text: $content)
-                                .font(.system(size: 16))
-                                .foregroundColor(AppConstants.primaryColor)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .frame(minHeight: 200)
-                                .focused($focusedField, equals: .content)
-                                .scrollContentBackground(.hidden)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Posting to")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                                
+                                Text(selectedTopic.name)
+                                    .font(.system(size: 16, weight: .bold, design: .serif))
+                                    .foregroundColor(selectedTopic.swiftUIColor)
+                            }
+                            
+                            Spacer()
                         }
+                        .padding(12)
+                    }
+                }
+                
+                // Title field
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Title")
+                        .font(.system(size: 16, weight: .semibold))
+                        .fontDesign(.serif)
+                        .foregroundColor(AppConstants.primaryColor)
+                    
+                    TextField("What's on your mind?", text: $title)
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(AppConstants.primaryColor)
+                        .padding(16)
                         .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .cornerRadius(12)
-                    }
+                        .focused($focusedField, equals: .title)
+                        .submitLabel(.next)
+                        .onSubmit {
+                            focusedField = .content
+                        }
+                }
+                
+                // Content field
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Details")
+                        .font(.system(size: 16, weight: .semibold))
+                        .fontDesign(.serif)
+                        .foregroundColor(AppConstants.primaryColor)
                     
-                    // Category selector
+                    ZStack(alignment: .topLeading) {
+                        if content.isEmpty {
+                            Text("Share your story, ask a question, or start a discussion...")
+                                .font(.system(size: 16))
+                                .foregroundColor(.gray.opacity(0.6))
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 16)
+                        }
+                        
+                        TextEditor(text: $content)
+                            .font(.system(size: 16))
+                            .foregroundColor(AppConstants.primaryColor)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .frame(minHeight: 200)
+                            .focused($focusedField, equals: .content)
+                            .scrollContentBackground(.hidden)
+                    }
+                    .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                    .cornerRadius(12)
+                }
+                
+                // Category selector (only show for topics that allow categories)
+                if let selectedTopic = selectedTopic, 
+                   selectedTopic.name != "Notices" && selectedTopic.name != "App Suggestions" {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Category")
                             .font(.system(size: 16, weight: .semibold))
@@ -2562,66 +2644,67 @@ struct CreatePostView: View {
                             }
                         }
                     }
+                    }
                     
                     // Topic selector (if not provided)
                     if topic == nil {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Topic")
-                                .font(.system(size: 16, weight: .semibold))
-                                .fontDesign(.serif)
-                                .foregroundColor(AppConstants.primaryColor)
-                            
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    ForEach(topics) { topic in
-                                        Button(action: {
-                                            lightHaptic.impactOccurred(intensity: 0.5)
-                                            withAnimation(.spring(response: 0.3)) {
-                                                selectedTopic = topic
-                                            }
-                                        }) {
-                                            HStack(spacing: 8) {
-                                                Image(systemName: topic.icon)
-                                                    .font(.system(size: 14))
-                                                
-                                                Text(topic.name)
-                                                    .font(.system(size: 14, weight: .medium))
-                                                    .fontDesign(.serif)
-                                            }
-                                            .foregroundColor(selectedTopic?.id == topic.id ? .white : topic.swiftUIColor)
-                                            .padding(.horizontal, 16)
-                                            .padding(.vertical, 10)
-                                            .background(
-                                                selectedTopic?.id == topic.id ?
-                                                topic.swiftUIColor : topic.swiftUIColor.opacity(0.15)
-                                            )
-                                            .cornerRadius(20)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Topic")
+                            .font(.system(size: 16, weight: .semibold))
+                            .fontDesign(.serif)
+                            .foregroundColor(AppConstants.primaryColor)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(topics) { topic in
+                                    Button(action: {
+                                        lightHaptic.impactOccurred(intensity: 0.5)
+                                        withAnimation(.spring(response: 0.3)) {
+                                            selectedTopic = topic
                                         }
+                                    }) {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: topic.icon)
+                                                .font(.system(size: 14))
+                                            
+                                            Text(topic.name)
+                                                .font(.system(size: 14, weight: .medium))
+                                                .fontDesign(.serif)
+                                        }
+                                        .foregroundColor(selectedTopic?.id == topic.id ? .white : topic.swiftUIColor)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            selectedTopic?.id == topic.id ?
+                                            topic.swiftUIColor : topic.swiftUIColor.opacity(0.15)
+                                        )
+                                        .cornerRadius(20)
                                     }
                                 }
                             }
                         }
                     }
+                    }
                     
                     // Tags field
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Tags (optional)")
-                            .font(.system(size: 16, weight: .semibold))
-                            .fontDesign(.serif)
-                            .foregroundColor(AppConstants.primaryColor)
-                        
-                        TextField("e.g., anxiety, progress, therapy", text: $tagsText)
-                            .font(.system(size: 16))
-                            .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
-                            .padding(16)
-                            .background(AppConstants.cardBackgroundColor(for: colorScheme))
-                            .cornerRadius(12)
-                            .focused($focusedField, equals: .tags)
-                            .submitLabel(.done)
+                    Text("Tags (optional)")
+                        .font(.system(size: 16, weight: .semibold))
+                        .fontDesign(.serif)
+                        .foregroundColor(AppConstants.primaryColor)
+                    
+                    TextField("e.g., anxiety, progress, therapy", text: $tagsText)
+                        .font(.system(size: 16))
+                        .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
+                        .padding(16)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                        .cornerRadius(12)
+                        .focused($focusedField, equals: .tags)
+                        .submitLabel(.done)
 
-                        Text("Separate tags with commas")
-                            .font(.system(size: 12))
-                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
+                    Text("Separate tags with commas")
+                        .font(.system(size: 12))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                     }
                 }
                 .padding(20)
@@ -2630,14 +2713,6 @@ struct CreatePostView: View {
             .navigationTitle("Create Post")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        lightHaptic.impactOccurred(intensity: 0.5)
-                        dismiss()
-                    }
-                    .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
-                }
-                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: submitPost) {
                         if isSubmitting {
@@ -2653,6 +2728,13 @@ struct CreatePostView: View {
                 }
             }
             .task {
+                // Load user profile
+                do {
+                    _ = try await authManager.getProfile()
+                } catch {
+                    print("❌ Error loading user profile: \(error)")
+                }
+                
                 if topic == nil {
                     do {
                         topics = try await communityService.fetchTopics()
@@ -2675,13 +2757,30 @@ struct CreatePostView: View {
                 Text(errorMessage)
             }
         }
-    }
     
     private func submitPost() {
         guard canPost, let selectedTopic = selectedTopic else { return }
         
+        // Check if posting to Notices topic - only admins can post there
+        if selectedTopic.name == "Notices" {
+            guard let currentProfile = authManager.currentUserProfile,
+                  currentProfile.role == "admin" else {
+                errorMessage = "Only administrators can post in Notices."
+                showError = true
+                return
+            }
+        }
+        
         isSubmitting = true
         mediumHaptic.impactOccurred(intensity: 0.7)
+        
+        // Determine category - use "discussion" for Notices and App Suggestions
+        let categoryToUse: PostCategory
+        if selectedTopic.name == "Notices" || selectedTopic.name == "App Suggestions" {
+            categoryToUse = .discussion
+        } else {
+            categoryToUse = selectedCategory
+        }
         
         Task {
             do {
@@ -2689,7 +2788,7 @@ struct CreatePostView: View {
                     topicId: selectedTopic.id,
                     title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                     content: content.trimmingCharacters(in: .whitespacesAndNewlines),
-                    category: selectedCategory,
+                    category: categoryToUse,
                     tags: parsedTags
                 )
                 

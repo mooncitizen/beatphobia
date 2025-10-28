@@ -38,6 +38,12 @@ struct ContentView: View {
                     .task {
                         await loadProfile()
                     }
+                    .onChange(of: authManager.currentUserProfile) { newProfile in
+                        // Re-evaluate profileExists when profile changes
+                        if let profile = newProfile {
+                            profileExists = true
+                        }
+                    }
                     
                 case .signedOut:
                     SignInView()

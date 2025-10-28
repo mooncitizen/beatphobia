@@ -9,7 +9,7 @@ import SwiftUI
 
 struct AppConstants {
     
-    static let appName = "BeatPhobia"
+    static let appName = "Still Step"
     
     // MARK: - Typography
     static let defaultFontName: String = "SourceCodePro-Regular"
