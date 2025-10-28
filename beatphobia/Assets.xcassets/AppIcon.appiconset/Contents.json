@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "StillStep_v1_icon_white.png",
+      "filename" : "ss_light.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "StillStep_v1_icon_dark.png",
+      "filename" : "ss_dark.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,7 +25,7 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "StillStep_v1_icon 2.png",
+      "filename" : "ss_tinted.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
