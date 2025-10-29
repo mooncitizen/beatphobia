@@ -198,7 +198,7 @@ struct SubscriptionInfoView: View {
                     
                     HStack(spacing: 20) {
                         Button("Support") {
-                            if let url = URL(string: "https://stillstep.com/support") {
+                            if let url = URL(string: "mailto:support@stillstep.com") {
                                 openURL(url)
                             }
                         }

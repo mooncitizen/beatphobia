@@ -19,6 +19,7 @@ struct ProfileView: View {
     @State private var signOutError: String?
     @State private var showUsernameChange = false
     @State private var showPaywall = false
+    @State private var showAbout = false
     
     @State private var locationStatus: CLAuthorizationStatus = .notDetermined
     
@@ -76,6 +77,50 @@ struct ProfileView: View {
                     .cornerRadius(16)
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
+                    
+                    // About Button
+                    Button(action: {
+                        showAbout = true
+                    }) {
+                        HStack(alignment: .center, spacing: 12) {
+                            // Icon
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.blue, .cyan],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 40, height: 40)
+                                
+                                Image(systemName: "info.circle.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            // Text
+                            Text("About")
+                                .font(.system(size: 17, weight: .semibold))
+                                .fontDesign(.serif)
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                    .cornerRadius(16)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
                     
                     // Subscription Section
                     VStack(alignment: .leading, spacing: 0) {
@@ -343,6 +388,11 @@ struct ProfileView: View {
                         PaywallView()
                             .environmentObject(subscriptionManager)
                     }
+                }
+            }
+            .sheet(isPresented: $showAbout) {
+                NavigationStack {
+                    AboutView()
                 }
             }
         }
