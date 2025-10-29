@@ -15,6 +15,7 @@
 		<string>remote-notification</string>
 		<string>processing</string>
 		<string>activitykit</string>
+		<string>audio</string>
 	</array>
 	<key>UILaunchImageFile</key>
 	<string></string>
