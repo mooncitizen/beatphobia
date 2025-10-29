@@ -52,7 +52,7 @@ struct JourneyAgorahobiaView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var journalSyncService: JournalSyncService
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("anxietyLevel") private var anxietyLevel: Double = 5
+    @AppStorage("anxietyLevel") private var anxietyLevel: Double = 0
     @Binding var isTabBarVisible: Bool
     @State private var showEmergencyTools = false
     @State private var journeyCount: Int = 0
@@ -431,7 +431,7 @@ struct JourneyAgorahobiaView: View {
                                     )
                                     .frame(height: 8)
 
-                                Slider(value: $anxietyLevel, in: 1...10, step: 1)
+                                Slider(value: $anxietyLevel, in: 0...10, step: 1)
                                     .tint(anxietyColorForLevel(anxietyLevel))
                             }
 
@@ -612,31 +612,39 @@ struct JourneyAgorahobiaView: View {
                     Button(action: {
                         showEmergencyTools = true
                     }) {
-                        HStack(spacing: 10) {
+                        VStack(spacing: 12) {
                             Image(systemName: "bolt.heart.fill")
-                                .font(.system(size: 18, weight: .bold))
+                                .font(.system(size: 36, weight: .bold))
                                 .foregroundColor(.white)
                             
                             Text("Need Help Now")
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.system(size: 22, weight: .bold))
                                 .foregroundColor(.white)
+                            
+                            Text("Tap for quick relief")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white.opacity(0.9))
                         }
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 16)
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 32)
+                        .padding(.vertical, 32)
                         .background(
-                            Capsule()
+                            RoundedRectangle(cornerRadius: 24)
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color.red, Color.red.opacity(0.9)],
+                                        colors: [Color.red, Color.red.opacity(0.8)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
                                 )
-                                .shadow(color: Color.red.opacity(0.4), radius: 20, y: 8)
+                                .shadow(color: Color.red.opacity(0.5), radius: 30, y: 10)
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .padding(.horizontal, 24)
                     .padding(.bottom, 100) // Above tab bar
+                    
+                    Spacer()
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.spring(response: 0.4, dampingFraction: 0.7), value: anxietyLevel)
@@ -810,7 +818,7 @@ func anxietyColorForLevel(_ level: Double) -> Color {
 
 func anxietyMessageForLevel(_ level: Double) -> String {
     switch Int(level) {
-    case 1...3:
+    case 0...3:
         return "You're doing great! Try some relaxation techniques to maintain your calm state."
     case 4...6:
         return "You're experiencing moderate anxiety. Breathing exercises can help you stay grounded."
@@ -825,6 +833,8 @@ func anxietyMessageForLevel(_ level: Double) -> String {
 
 func anxietyLabelForLevel(_ level: Double) -> String {
     switch Int(level) {
+    case 0:
+        return "Calm"
     case 1...2:
         return "Very Calm"
     case 3...4:
@@ -978,6 +988,7 @@ struct EmergencyToolsSheet: View {
     let anxietyLevel: Double
     @State private var selectedTool: CalmingTool?
     @State private var showTool = false
+    @State private var showCrisisHotlines = false
     
     let emergencyTools = [
         CalmingTool(
@@ -1010,10 +1021,11 @@ struct EmergencyToolsSheet: View {
     ]
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                    // Header Message
-                    VStack(spacing: 12) {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+                        // Header Message
+                        VStack(spacing: 12) {
                         ZStack {
                             Circle()
                                 .fill(
@@ -1048,30 +1060,66 @@ struct EmergencyToolsSheet: View {
                     }
                     .padding(.horizontal, 20)
 
-                    // Emergency contact info
-                    VStack(spacing: 12) {
-                        HStack(spacing: 12) {
-                            Image(systemName: "phone.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(.blue)
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Need immediate help?")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-
-                                Text("Call emergency services or a crisis hotline")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                    // Crisis Hotlines Button
+                    Button(action: {
+                        showCrisisHotlines = true
+                    }) {
+                        VStack(spacing: 0) {
+                            HStack(spacing: 16) {
+                                ZStack {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [Color.blue, Color.blue.opacity(0.8)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 56, height: 56)
+                                    
+                                    Image(systemName: "phone.fill")
+                                        .font(.system(size: 24, weight: .bold))
+                                        .foregroundColor(.white)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("Crisis Hotlines")
+                                        .font(.system(size: 20, weight: .bold, design: .serif))
+                                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                                    
+                                    Text("24/7 support lines for immediate help")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                                        .lineLimit(2)
+                                }
+                                
+                                Spacer()
+                                
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(.blue)
                             }
-
-                            Spacer()
+                            .padding(20)
+                            .background(
+                                LinearGradient(
+                                    colors: [
+                                        Color.blue.opacity(0.1),
+                                        Color.blue.opacity(0.05)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .cornerRadius(16)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Color.blue.opacity(0.3), lineWidth: 2)
+                            )
                         }
-                        .padding(16)
-                        .background(Color.blue.opacity(0.1))
-                        .cornerRadius(12)
                     }
+                    .buttonStyle(PlainButtonStyle())
                     .padding(.horizontal, 20)
+                    .shadow(color: Color.blue.opacity(0.2), radius: 12, y: 4)
                     
                     // Quick Tools
                     VStack(spacing: 16) {
@@ -1112,6 +1160,10 @@ struct EmergencyToolsSheet: View {
                         }
                 }
             }
+            .sheet(isPresented: $showCrisisHotlines) {
+                CrisisHotlinesView()
+            }
+        }
         }
     }
 

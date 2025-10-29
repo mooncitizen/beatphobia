@@ -20,6 +20,7 @@ struct ProfileView: View {
     @State private var showUsernameChange = false
     @State private var showPaywall = false
     @State private var showAbout = false
+    @State private var showCrisisHotlines = false
     
     @State private var locationStatus: CLAuthorizationStatus = .notDetermined
     
@@ -78,6 +79,57 @@ struct ProfileView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
                     
+                    // Crisis Hotlines Button
+                    Button(action: {
+                        showCrisisHotlines = true
+                    }) {
+                        HStack(alignment: .center, spacing: 12) {
+                            // Icon
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.red, .orange],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 40, height: 40)
+                                
+                                Image(systemName: "phone.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            // Text
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Crisis Hotlines")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .fontDesign(.serif)
+                                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                                
+                                Text("24/7 support lines")
+                                    .font(.system(size: 12))
+                                    .fontDesign(.serif)
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                    .cornerRadius(16)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+                    
                     // About Button
                     Button(action: {
                         showAbout = true
@@ -120,7 +172,7 @@ struct ProfileView: View {
                     .background(AppConstants.cardBackgroundColor(for: colorScheme))
                     .cornerRadius(16)
                     .padding(.horizontal, 20)
-                    .padding(.top, 24)
+                    .padding(.top, 12)
                     
                     // Subscription Section
                     VStack(alignment: .leading, spacing: 0) {
@@ -394,6 +446,9 @@ struct ProfileView: View {
                 NavigationStack {
                     AboutView()
                 }
+            }
+            .sheet(isPresented: $showCrisisHotlines) {
+                CrisisHotlinesView()
             }
         }
     }

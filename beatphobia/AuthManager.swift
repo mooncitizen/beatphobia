@@ -9,6 +9,8 @@ import Foundation
 import SwiftUI
 import Supabase
 import Combine
+import AuthenticationServices
+import CryptoKit
 
 typealias User = Supabase.User
 
@@ -103,6 +105,35 @@ final class AuthManager: ObservableObject {
             try await supabase.auth.signOut()
         } catch {
             self.authError = error
+        }
+        
+        self.isLoading = false
+    }
+    
+    func signInWithApple(idToken: String, nonce: String) async {
+        self.isLoading = true
+        self.authError = nil
+        
+        print("🍎 Attempting Sign in with Apple...")
+        print("   - Token length: \(idToken.count)")
+        print("   - Nonce: \(nonce)")
+        
+        do {
+            let session = try await supabase.auth.signInWithIdToken(
+                credentials: .init(
+                    provider: .apple,
+                    idToken: idToken,
+                    nonce: nonce
+                )
+            )
+            print("✅ Sign in with Apple successful!")
+            print("   - User ID: \(session.user.id)")
+        } catch {
+            self.authError = error
+            print("❌ Sign in with Apple error: \(error.localizedDescription)")
+            if let decodingError = error as? DecodingError {
+                print("   Decoding error details: \(decodingError)")
+            }
         }
         
         self.isLoading = false

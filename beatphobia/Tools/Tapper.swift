@@ -18,6 +18,7 @@ struct TapperView: View {
     @State private var targets: [TapTarget] = []
     @State private var gameSession: Int = 0
     @State private var showInstructions = false
+    @State private var gameAreaSize: CGSize = .zero
     
     struct TapTarget: Identifiable {
         let id = UUID()
@@ -158,58 +159,74 @@ struct TapperView: View {
     
     // MARK: - Game Active View
     private var gameActiveView: some View {
-        ZStack {
-            // Game area
-            Color.clear
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-            
-            // Targets
-            ForEach(targets) { target in
-                if !target.isHit {
-                    Button(action: {
-                        tapTarget(target)
-                    }) {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        AppConstants.primaryColor,
-                                        AppConstants.primaryColor.opacity(0.8)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: target.size, height: target.size)
-                            .shadow(color: AppConstants.primaryColor.opacity(0.4), radius: 8, y: 4)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white.opacity(0.3), lineWidth: 3)
-                            )
-                    }
-                    .position(target.position)
-                    .opacity(target.isHit ? 0 : 1)
+        VStack(spacing: 0) {
+            // Score display at top
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Score")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                    
+                    Text("\(score)")
+                        .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .foregroundColor(AppConstants.primaryColor)
                 }
-            }
-            
-            // Score display
-            VStack {
-                Text("Score")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                 
-                Text("\(score)")
-                    .font(.system(size: 48, weight: .bold, design: .rounded))
-                    .foregroundColor(AppConstants.primaryColor)
+                Spacer()
             }
-            .padding(.horizontal, 32)
+            .padding(.horizontal, 24)
             .padding(.vertical, 16)
             .background(AppConstants.cardBackgroundColor(for: colorScheme))
-            .cornerRadius(20)
+            .cornerRadius(16)
             .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
+            
+            // Game area with GeometryReader for accurate positioning
+            GeometryReader { geometry in
+                ZStack {
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                    
+                    // Targets
+                    ForEach(targets) { target in
+                        if !target.isHit {
+                            Button(action: {
+                                tapTarget(target)
+                            }) {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [
+                                                AppConstants.primaryColor,
+                                                AppConstants.primaryColor.opacity(0.8)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: target.size, height: target.size)
+                                    .shadow(color: AppConstants.primaryColor.opacity(0.4), radius: 8, y: 4)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.white.opacity(0.3), lineWidth: 3)
+                                    )
+                            }
+                            .position(target.position)
+                            .opacity(target.isHit ? 0 : 1)
+                        }
+                    }
+                }
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .onAppear {
+                    gameAreaSize = geometry.size
+                }
+                .onChange(of: geometry.size) { oldSize, newSize in
+                    gameAreaSize = newSize
+                }
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     // MARK: - Bottom Controls
@@ -266,21 +283,24 @@ struct TapperView: View {
         targets.removeAll()
         gameSession += 1
         
-        // Start game timer
-        gameTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            if timeRemaining > 0 {
-                timeRemaining -= 1
-                spawnRandomTarget()
-            } else {
-                endGame()
+        // Wait a moment for game area to be sized properly
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // Start game timer
+            gameTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                if timeRemaining > 0 {
+                    timeRemaining -= 1
+                    spawnRandomTarget()
+                } else {
+                    endGame()
+                }
             }
+            
+            // Spawn first target
+            spawnRandomTarget()
+            
+            // Continuously spawn targets
+            spawnLoop()
         }
-        
-        // Spawn first target
-        spawnRandomTarget()
-        
-        // Continuously spawn targets
-        spawnLoop()
     }
     
     private func spawnLoop() {
@@ -296,12 +316,25 @@ struct TapperView: View {
     }
     
     private func spawnRandomTarget() {
-        guard let screen = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first?.screen.bounds else { return }
+        // Ensure we have valid game area dimensions
+        guard gameAreaSize.width > 0 && gameAreaSize.height > 0 else { return }
         
-        let randomX = CGFloat.random(in: 80...(screen.width - 80))
-        let randomY = CGFloat.random(in: 200...(screen.height - 300))
+        // Calculate safe zones within the game area
+        // Add padding to keep targets away from edges and bottom
+        let sidePadding: CGFloat = 80
+        let topPadding: CGFloat = 80    // Keep away from top of game area
+        let bottomPadding: CGFloat = 120 // Extra padding from bottom to avoid home bar area
+        
+        let minX = sidePadding
+        let maxX = gameAreaSize.width - sidePadding
+        let minY = topPadding
+        let maxY = gameAreaSize.height - bottomPadding
+        
+        // Only spawn if we have valid ranges
+        guard maxX > minX && maxY > minY else { return }
+        
+        let randomX = CGFloat.random(in: minX...maxX)
+        let randomY = CGFloat.random(in: minY...maxY)
         
         let newTarget = TapTarget(
             position: CGPoint(x: randomX, y: randomY),

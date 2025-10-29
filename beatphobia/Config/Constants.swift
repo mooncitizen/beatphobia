@@ -38,13 +38,12 @@ struct AppConstants {
 
 
 func colorForValue(_ value: Int) -> Color {
-    // 1. Clamp the value to the expected 1-10 range
-    let clampedValue = max(1, min(10, value))
+    // 1. Clamp the value to the expected 0-10 range
+    let clampedValue = max(0, min(10, value))
     
-    // 2. Normalize the 1-10 value to a 0.0-1.0 "percentage"
-    // (clampedValue - 1) gives a 0-9 range.
-    // Dividing by 9.0 scales it to 0.0-1.0.
-    let normalizedValue = Double(clampedValue - 1) / 9.0
+    // 2. Normalize the 0-10 value to a 0.0-1.0 "percentage"
+    // Dividing by 10.0 scales it to 0.0-1.0.
+    let normalizedValue = Double(clampedValue) / 10.0
     
     // 3. Map the percentage to the hue range
     // We want to go from Green (0.333) to Red (0.0).

@@ -75,7 +75,7 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showPaywall) {
                 NavigationStack {
-                    PaywallView()
+                    PaywallView(isFirstRun: true)
                         .environmentObject(subscriptionManager)
                 }
             }

@@ -8,6 +8,8 @@
 import SwiftUI
 import Combine
 import Supabase
+import AuthenticationServices
+import CryptoKit
 
 struct SignInView: View {
     @EnvironmentObject var authManager: AuthManager
@@ -367,6 +369,109 @@ struct DisclaimerPoint: View {
     }
 }
 
+// MARK: - Sign in with Apple Coordinator
+class SignInWithAppleCoordinator: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    var authManager: AuthManager?
+    var currentNonce: String?
+    
+    func signInWithApple() {
+        let nonce = randomNonceString()
+        currentNonce = nonce
+        
+        let provider = ASAuthorizationAppleIDProvider()
+        let request = provider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = sha256(nonce)
+        
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        controller.performRequests()
+    }
+    
+    // Provide presentation context
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
+            return UIWindow()
+        }
+        return window
+    }
+    
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        print("🍎 Apple authorization received")
+        
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+            print("❌ Failed to cast to ASAuthorizationAppleIDCredential")
+            return
+        }
+        
+        guard let identityToken = credential.identityToken else {
+            print("❌ No identity token in credential")
+            return
+        }
+        
+        guard let tokenString = String(data: identityToken, encoding: .utf8) else {
+            print("❌ Failed to decode identity token")
+            return
+        }
+        
+        guard let nonce = currentNonce else {
+            print("❌ No current nonce available")
+            return
+        }
+        
+        print("✅ Got Apple credential successfully")
+        print("   - User ID: \(credential.user)")
+        print("   - Token length: \(tokenString.count)")
+        print("   - Nonce: \(nonce)")
+        
+        Task {
+            await authManager?.signInWithApple(idToken: tokenString, nonce: nonce)
+        }
+    }
+    
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        // Error 1000 is user cancellation - don't show error for this
+        let nsError = error as NSError
+        if nsError.code == 1000 {
+            print("ℹ️ User canceled Apple Sign In")
+            return
+        }
+        
+        print("❌ Sign in with Apple error: \(error.localizedDescription)")
+        Task {
+            await MainActor.run {
+                self.authManager?.authError = error
+            }
+        }
+    }
+    
+    // Generate random nonce for security
+    private func randomNonceString(length: Int = 32) -> String {
+        precondition(length > 0)
+        var randomBytes = [UInt8](repeating: 0, count: length)
+        let errorCode = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
+        if errorCode != errSecSuccess {
+            fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+        }
+        
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        let nonce = randomBytes.map { byte in
+            charset[Int(byte) % charset.count]
+        }
+        
+        return String(nonce)
+    }
+    
+    // Hash nonce with SHA256
+    private func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashedData = SHA256.hash(data: inputData)
+        return hashedData.compactMap { String(format: "%02x", $0) }.joined()
+    }
+}
+
 // MARK: - Auth Screen
 struct AuthScreen: View {
     @EnvironmentObject var authManager: AuthManager
@@ -376,6 +481,7 @@ struct AuthScreen: View {
     @State private var isSigningUp = false
     @State private var displayErrorMessage: String?
     @State private var displaySuccessMessage: String?
+    @State private var appleSignInCoordinator = SignInWithAppleCoordinator()
     
     var body: some View {
         ScrollView {
@@ -441,6 +547,13 @@ struct AuthScreen: View {
                         .font(.system(size: 14))
                         .foregroundColor(.red)
                         .padding(.horizontal, 30)
+                        .multilineTextAlignment(.center)
+                } else if let authError = authManager.authError {
+                    Text(authError.localizedDescription)
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 30)
+                        .multilineTextAlignment(.center)
                 }
                 
                 if let successMessage = displaySuccessMessage {
@@ -477,6 +590,48 @@ struct AuthScreen: View {
                 .padding(.horizontal, 30)
                 .padding(.top, 10)
                 
+                // Divider with "or"
+                HStack(spacing: 16) {
+                    Rectangle()
+                        .fill(AppConstants.borderColor(for: colorScheme))
+                        .frame(height: 1)
+                    
+                    Text("or")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                    
+                    Rectangle()
+                        .fill(AppConstants.borderColor(for: colorScheme))
+                        .frame(height: 1)
+                }
+                .padding(.horizontal, 30)
+                .padding(.vertical, 8)
+                
+                // Sign in with Apple Button
+                Button(action: {
+                    // Clear any existing errors
+                    displayErrorMessage = nil
+                    displaySuccessMessage = nil
+                    authManager.authError = nil
+                    
+                    appleSignInCoordinator.signInWithApple()
+                }) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "apple.logo")
+                            .font(.system(size: 20, weight: .semibold))
+                        
+                        Text("Continue with Apple")
+                            .font(.system(size: 17, weight: .semibold))
+                            .fontDesign(.rounded)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.black)
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal, 30)
+                
                 // Toggle Button
                 Button(action: {
                     withAnimation {
@@ -495,11 +650,15 @@ struct AuthScreen: View {
                             .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                     }
                 }
-                .padding(.top, 10)
+                .padding(.top, 16)
                 
                 Spacer()
                     .frame(height: 100)
             }
+        }
+        .onAppear {
+            // Connect coordinator to authManager
+            appleSignInCoordinator.authManager = authManager
         }
     }
     

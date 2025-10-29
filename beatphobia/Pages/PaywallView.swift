@@ -14,6 +14,8 @@ struct PaywallView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.openURL) var openURL
     
+    var isFirstRun: Bool = false
+    
     @State private var selectedTier: SubscriptionTier = .proYearly
     @State private var isPurchasing = false
     @State private var showError = false
@@ -51,16 +53,62 @@ struct PaywallView: View {
                                     )
                             }
                             
-                            Text("Upgrade to Pro")
-                                .font(.system(size: 34, weight: .bold, design: .rounded))
-                                .multilineTextAlignment(.center)
-                            
-                            Text("Unlock advanced features for your journey. We only charge for cloud storage and sync.")
-                                .font(.system(size: 16, design: .rounded))
-                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
-                                .fixedSize(horizontal: false, vertical: true)
+                            // First-run specific messaging
+                            if isFirstRun {
+                                VStack(spacing: 16) {
+                                    Text("Welcome to Still Step")
+                                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                                        .multilineTextAlignment(.center)
+                                    
+                                    VStack(spacing: 8) {
+                                        Text("The majority of features are free and will continue to be free.")
+                                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                                            .multilineTextAlignment(.center)
+                                            .padding(.horizontal, 32)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        
+                                        Text("If you want to support this app and access features that incur real-world costs (like cloud storage and sync), you can upgrade to Pro.")
+                                            .font(.system(size: 15, design: .rounded))
+                                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                                            .multilineTextAlignment(.center)
+                                            .padding(.horizontal, 32)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    
+                                    // Continue as Free button
+                                    Button(action: {
+                                        dismiss()
+                                    }) {
+                                        HStack(spacing: 8) {
+                                            Text("Continue as Free")
+                                                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 54)
+                                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                                        .cornerRadius(16)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 16)
+                                                .stroke(AppConstants.borderColor(for: colorScheme), lineWidth: 1.5)
+                                        )
+                                    }
+                                    .padding(.horizontal, 32)
+                                    .padding(.top, 8)
+                                }
+                            } else {
+                                Text("Upgrade to Pro")
+                                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                                    .multilineTextAlignment(.center)
+                                
+                                Text("Unlock advanced features for your journey. We only charge for cloud storage and sync.")
+                                    .font(.system(size: 16, design: .rounded))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 32)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                         .padding(.top, 20)
                         .padding(.bottom, 8)
@@ -95,6 +143,41 @@ struct PaywallView: View {
                                 )
                             }
                         }
+                        .padding(.horizontal, 20)
+                        
+                        // Free Trial Banner
+                        HStack(spacing: 12) {
+                            Image(systemName: "gift.fill")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.green, .mint],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                            
+                            Text("7-Day Free Trial Included")
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                                .foregroundColor(.primary)
+                            
+                            Spacer()
+                        }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.green.opacity(0.1), Color.mint.opacity(0.1)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.green.opacity(0.3), lineWidth: 2)
+                        )
                         .padding(.horizontal, 20)
                         
                         // Pricing Cards
@@ -159,16 +242,22 @@ struct PaywallView: View {
                         
                         // Subscribe Button
                         Button(action: handlePurchase) {
-                            HStack(spacing: 12) {
+                            VStack(spacing: 4) {
                                 if isPurchasing {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 } else {
-                                    Text("Continue with \(selectedTier.displayName)")
-                                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    HStack(spacing: 8) {
+                                        Text("Start 7-Day Free Trial")
+                                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                                        
+                                        Image(systemName: "arrow.right")
+                                            .font(.system(size: 16, weight: .bold))
+                                    }
                                     
-                                    Image(systemName: "arrow.right")
-                                        .font(.system(size: 16, weight: .bold))
+                                    Text("Then \(selectedTier.displayName)")
+                                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                                        .foregroundColor(.white.opacity(0.9))
                                 }
                             }
                             .frame(maxWidth: .infinity)
@@ -199,7 +288,7 @@ struct PaywallView: View {
                         
                         // Terms and Privacy
                         VStack(spacing: 12) {
-                            Text("Subscription automatically renews unless auto-renew is turned off at least 24 hours before the end of the current period.")
+                            Text("Start with a 7-day free trial. Cancel anytime during the trial at no charge. After the trial, subscription automatically renews unless auto-renew is turned off at least 24 hours before the end of the current period.")
                                 .font(.system(size: 11, design: .rounded))
                                 .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                 .multilineTextAlignment(.center)
