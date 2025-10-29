@@ -1979,7 +1979,7 @@ class PanicTrackerPDFCreator {
     
     func createPDF() -> Data {
         let pdfMetaData = [
-            kCGPDFContextCreator: "BeatPhobia - Panic Tracker",
+            kCGPDFContextCreator: "Still Step - Panic Tracker",
             kCGPDFContextAuthor: "StillStep",
             kCGPDFContextTitle: "Panic Tracker Report"
         ]
