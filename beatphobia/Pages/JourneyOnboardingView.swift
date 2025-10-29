@@ -52,6 +52,7 @@ final class OnboardingViewModel: ObservableObject {
 
 struct OnboardingContainerView: View {
     @StateObject private var viewModel = OnboardingViewModel()
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         VStack {
@@ -67,7 +68,7 @@ struct OnboardingContainerView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(AppConstants.defaultBackgroundColor))
+        .background(AppConstants.backgroundColor(for: colorScheme))
         
     }
 }

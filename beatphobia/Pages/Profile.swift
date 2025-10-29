@@ -336,8 +336,13 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showPaywall) {
                 NavigationStack {
-                    PaywallView()
-                        .environmentObject(subscriptionManager)
+                    if subscriptionManager.isPro {
+                        SubscriptionInfoView()
+                            .environmentObject(subscriptionManager)
+                    } else {
+                        PaywallView()
+                            .environmentObject(subscriptionManager)
+                    }
                 }
             }
         }

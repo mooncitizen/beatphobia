@@ -13,9 +13,9 @@ enum SubscriptionTier: String, CaseIterable {
         case .free:
             return ""
         case .proMonthly:
-            return "com.beatphobia.pro.monthly"
+            return "pro_account_v1_monthly"
         case .proYearly:
-            return "com.beatphobia.pro.yearly"
+            return "pro_account_v2_yearly"
         }
     }
     
@@ -247,6 +247,7 @@ final class SubscriptionManager: ObservableObject {
         
         do {
             let storeProducts = try await Product.products(for: productIDs)
+            
             self.products = storeProducts.sorted { product1, product2 in
                 // Sort yearly before monthly
                 if product1.id.contains("yearly") { return true }
@@ -254,8 +255,12 @@ final class SubscriptionManager: ObservableObject {
                 return product1.price < product2.price
             }
             lastError = nil
+            
+            #if DEBUG
+            print("✅ Loaded \(storeProducts.count) subscription products")
+            #endif
         } catch {
-            print("Failed to fetch products: \(error)")
+            print("❌ Failed to fetch products: \(error.localizedDescription)")
             lastError = .purchaseFailed(error)
             self.products = []
         }
@@ -509,12 +514,16 @@ final class SubscriptionManager: ObservableObject {
             return nil
         }
         
-        let monthlyYearlyCost = monthlyProduct.price * 12
-        let yearlyCost = yearlyProduct.price
+        // Convert to Double for accurate calculation
+        let monthlyYearlyCost = NSDecimalNumber(decimal: monthlyProduct.price * 12).doubleValue
+        let yearlyCost = NSDecimalNumber(decimal: yearlyProduct.price).doubleValue
+        
+        guard monthlyYearlyCost > 0 else { return nil }
+        
         let savings = monthlyYearlyCost - yearlyCost
         let percentage = (savings / monthlyYearlyCost) * 100
         
-        return Int(truncating: percentage as NSNumber)
+        return max(0, Int(percentage.rounded()))
     }
     
     func getFormattedPrice(for tier: SubscriptionTier) -> String? {

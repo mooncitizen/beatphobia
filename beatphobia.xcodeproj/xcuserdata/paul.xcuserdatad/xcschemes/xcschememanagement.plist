@@ -7,12 +7,12 @@
 		<key>GettingStarted (Playground).xcscheme</key>
 		<dict>
 			<key>orderHint</key>
-			<integer>0</integer>
+			<integer>2</integer>
 		</dict>
 		<key>LocationLiveActivityExtension.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
-			<integer>0</integer>
+			<integer>1</integer>
 		</dict>
 		<key>Still StepExtension.xcscheme_^#shared#^_</key>
 		<dict>
@@ -22,7 +22,20 @@
 		<key>beatphobia.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
-			<integer>1</integer>
+			<integer>0</integer>
+		</dict>
+	</dict>
+	<key>SuppressBuildableAutocreation</key>
+	<dict>
+		<key>DA0610512EA43819001EBA37</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>DAE564632EB161D3001F4A5C</key>
+		<dict>
+			<key>primary</key>
+			<true/>
 		</dict>
 	</dict>
 </dict>

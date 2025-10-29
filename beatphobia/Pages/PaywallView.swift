@@ -26,64 +26,82 @@ struct PaywallView: View {
                 .ignoresSafeArea()
 
             ScrollView {
-                VStack(spacing: 24) {
-                        VStack(spacing: 12) {
-                            Image(systemName: "crown.fill")
-                                .font(.system(size: 60))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [.yellow, .orange],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
+                VStack(spacing: 32) {
+                        VStack(spacing: 16) {
+                            // Icon with animated gradient
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color.blue.opacity(0.3), Color.purple.opacity(0.2)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
                                     )
-                                )
+                                    .frame(width: 100, height: 100)
+                                
+                                Image(systemName: "crown.fill")
+                                    .font(.system(size: 48))
+                                    .foregroundStyle(
+                                        LinearGradient(
+                                            colors: [.yellow, .orange],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                            }
                             
                             Text("Upgrade to Pro")
-                                .font(.system(size: 32, weight: .bold, design: .serif))
+                                .font(.system(size: 34, weight: .bold, design: .rounded))
                                 .multilineTextAlignment(.center)
                             
-                            Text("Unlock advanced features for your journey. We only charge based on usage that requires storage or computation in the cloud.")
-                                .font(.system(size: 17, design: .serif))
+                            Text("Unlock advanced features for your journey. We only charge for cloud storage and sync.")
+                                .font(.system(size: 16, design: .rounded))
                                 .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                 .multilineTextAlignment(.center)
-                                .padding(.horizontal)
+                                .padding(.horizontal, 32)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(.top, 40)
+                        .padding(.top, 20)
                         .padding(.bottom, 8)
                         
-                        // Pro Features - Full Width
-                        VStack(spacing: 0) {
-                            ProFeatureCard(
-                                icon: "location.fill",
-                                title: "Unlimited Location Tracking",
-                                description: "Access your complete journey history. Free users limited to last 3 journeys.",
-                                gradient: [.blue, .cyan]
-                            )
+                        // Pro Features - Compact Grid
+                        VStack(spacing: 16) {
+                            HStack(spacing: 16) {
+                                CompactFeatureCard(
+                                    icon: "location.fill",
+                                    title: "Unlimited\nTracking",
+                                    gradient: [.blue, .cyan]
+                                )
+                                
+                                CompactFeatureCard(
+                                    icon: "icloud.fill",
+                                    title: "Cloud\nBackup",
+                                    gradient: [.purple, .pink]
+                                )
+                            }
                             
-                            ProFeatureCard(
-                                icon: "icloud.fill",
-                                title: "Cloud Journal Backup",
-                                description: "Securely sync your journal entries across all your devices.",
-                                gradient: [.purple, .pink]
-                            )
-                            
-                            ProFeatureCard(
-                                icon: "chart.xyaxis.line",
-                                title: "Detailed Metrics",
-                                description: "Get insights into your panic scale trends, journal patterns, and location analytics.",
-                                gradient: [.orange, .red]
-                            )
+                            HStack(spacing: 16) {
+                                CompactFeatureCard(
+                                    icon: "chart.xyaxis.line",
+                                    title: "Detailed\nMetrics",
+                                    gradient: [.orange, .red]
+                                )
+                                
+                                CompactFeatureCard(
+                                    icon: "arrow.triangle.2.circlepath",
+                                    title: "Multi-Device\nSync",
+                                    gradient: [.green, .mint]
+                                )
+                            }
                         }
-                        .background(AppConstants.cardBackgroundColor(for: colorScheme))
-                        .cornerRadius(16)
-                        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 12, x: 0, y: 4)
                         .padding(.horizontal, 20)
                         
                         // Pricing Cards
-                        VStack(spacing: 12) {
+                        VStack(spacing: 16) {
                             Text("Choose Your Plan")
-                                .font(.system(size: 20, weight: .semibold, design: .serif))
-                                .padding(.top, 24)
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .padding(.top, 8)
                             
                             if let yearlyProduct = subscriptionManager.getProduct(for: .proYearly),
                                let monthlyProduct = subscriptionManager.getProduct(for: .proMonthly) {
@@ -110,25 +128,51 @@ struct PaywallView: View {
                                     selectedTier = .proMonthly
                                 }
                             } else {
-                                ProgressView()
-                                    .padding()
+                                VStack(spacing: 16) {
+                                    ProgressView()
+                                    Text("Loading products...")
+                                        .font(.system(size: 14, design: .serif))
+                                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                                    
+                                    Button(action: {
+                                        Task {
+                                            await subscriptionManager.fetchProducts()
+                                        }
+                                    }) {
+                                        Label("Retry", systemImage: "arrow.clockwise")
+                                            .font(.system(size: 14, weight: .medium, design: .serif))
+                                            .foregroundColor(.blue)
+                                    }
+                                    
+                                    if let error = subscriptionManager.lastError {
+                                        Text(error.errorDescription ?? "Unknown error")
+                                            .font(.system(size: 12, design: .serif))
+                                            .foregroundColor(.red)
+                                            .multilineTextAlignment(.center)
+                                            .padding(.horizontal)
+                                    }
+                                }
+                                .padding()
                             }
                         }
                         .padding(.horizontal, 20)
                         
                         // Subscribe Button
                         Button(action: handlePurchase) {
-                            HStack {
+                            HStack(spacing: 12) {
                                 if isPurchasing {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 } else {
-                                    Text("Start Your Pro Journey")
-                                        .font(.system(size: 18, weight: .semibold, design: .serif))
+                                    Text("Continue with \(selectedTier.displayName)")
+                                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                                    
+                                    Image(systemName: "arrow.right")
+                                        .font(.system(size: 16, weight: .bold))
                                 }
                             }
                             .frame(maxWidth: .infinity)
-                            .frame(height: 56)
+                            .frame(height: 58)
                             .background(
                                 LinearGradient(
                                     colors: [.blue, .purple],
@@ -138,6 +182,7 @@ struct PaywallView: View {
                             )
                             .foregroundColor(.white)
                             .cornerRadius(16)
+                            .shadow(color: Color.blue.opacity(0.3), radius: 12, x: 0, y: 6)
                         }
                         .disabled(isPurchasing || subscriptionManager.isLoading)
                         .padding(.horizontal, 20)
@@ -146,37 +191,43 @@ struct PaywallView: View {
                         // Restore Purchases Button
                         Button(action: handleRestore) {
                             Text("Restore Purchases")
-                                .font(.system(size: 15, weight: .medium, design: .serif))
+                                .font(.system(size: 15, weight: .medium, design: .rounded))
                                 .foregroundColor(.blue)
                         }
                         .disabled(isPurchasing)
+                        .padding(.top, 8)
                         
                         // Terms and Privacy
-                        VStack(spacing: 8) {
+                        VStack(spacing: 12) {
                             Text("Subscription automatically renews unless auto-renew is turned off at least 24 hours before the end of the current period.")
-                                .font(.system(size: 11, design: .serif))
+                                .font(.system(size: 11, design: .rounded))
                                 .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                 .multilineTextAlignment(.center)
+                                .padding(.horizontal, 8)
                             
-                            HStack(spacing: 16) {
-                                Button("Terms of Service") {
+                            HStack(spacing: 20) {
+                                Button("Terms") {
                                     if let url = URL(string: "https://stillstep.com/terms") {
                                         openURL(url)
                                     }
                                 }
-                                .font(.system(size: 12, design: .serif))
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundColor(.blue)
                                 
-                                Button("Privacy Policy") {
+                                Text("•")
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                                
+                                Button("Privacy") {
                                     if let url = URL(string: "https://stillstep.com/privacy") {
                                         openURL(url)
                                     }
                                 }
-                                .font(.system(size: 12, design: .serif))
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundColor(.blue)
                             }
                         }
                         .padding(.horizontal, 20)
+                        .padding(.top, 16)
                         .padding(.bottom, 40)
                 }
             }
@@ -311,13 +362,13 @@ struct PricingCard: View {
         Button(action: onSelect) {
             VStack(spacing: 0) {
                 // Recommended Badge
-                if tier == .proYearly {
+                if tier == .proYearly, let savings = savingsPercentage, savings > 0 {
                     HStack {
                         Spacer()
-                        Text("BEST VALUE")
-                            .font(.system(size: 11, weight: .bold, design: .serif))
+                        Text("BEST VALUE • SAVE \(savings)%")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 14)
                             .padding(.vertical, 6)
                             .background(
                                 LinearGradient(
@@ -326,73 +377,135 @@ struct PricingCard: View {
                                     endPoint: .trailing
                                 )
                             )
-                            .cornerRadius(8)
+                            .cornerRadius(12, corners: [.topLeft, .topRight])
                         Spacer()
                     }
-                    .padding(.top, 12)
-                    .padding(.bottom, 8)
                 }
                 
-                HStack {
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 8) {
-                            Text(tier.displayName)
-                                .font(.system(size: 20, weight: .bold, design: .serif))
-                                .foregroundColor(.primary)
-                            
-                            if let savings = savingsPercentage {
-                                Text("Save \(savings)%")
-                                    .font(.system(size: 12, weight: .semibold, design: .serif))
-                                    .foregroundColor(.green)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.green.opacity(0.15))
-                                    .cornerRadius(6)
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(tier.displayName)
+                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .foregroundColor(.primary)
+                        
+                        if let pricePerMonth = pricePerMonth {
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text(pricePerMonth)
+                                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                                    .foregroundColor(.primary)
+                                Text("/month")
+                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             }
                         }
                         
-                        if let pricePerMonth = pricePerMonth {
-                            Text("\(pricePerMonth)/month")
-                                .font(.system(size: 15, design: .serif))
-                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
-                        }
-                        
                         if tier == .proYearly {
-                            Text("Billed annually at \(product.displayPrice)")
-                                .font(.system(size: 13, design: .serif))
+                            Text("Billed \(product.displayPrice) annually")
+                                .font(.system(size: 13, design: .rounded))
                                 .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         } else {
                             Text("Billed monthly")
-                                .font(.system(size: 13, design: .serif))
+                                .font(.system(size: 13, design: .rounded))
                                 .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         }
                     }
                     
                     Spacer()
                     
-                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 28))
-                        .foregroundColor(isSelected ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
+                    ZStack {
+                        Circle()
+                            .stroke(
+                                isSelected ? Color.blue : AppConstants.borderColor(for: colorScheme),
+                                lineWidth: 2
+                            )
+                            .frame(width: 28, height: 28)
+                        
+                        if isSelected {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 28, height: 28)
+                            
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    }
                 }
                 .padding(20)
+                .padding(.top, tier == .proYearly ? 8 : 20)
             }
-            .background(AppConstants.cardBackgroundColor(for: colorScheme))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(
-                        isSelected ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.borderColor(for: colorScheme).opacity(0.4),
-                        lineWidth: isSelected ? 2 : 1
-                    )
+            .background(
+                ZStack {
+                    AppConstants.cardBackgroundColor(for: colorScheme)
+                    
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [.blue, .purple],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 2
+                            )
+                    }
+                }
             )
-            .cornerRadius(16)
+            .cornerRadius(20)
             .shadow(
-                color: isSelected ? AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.2) : .clear,
-                radius: 8,
+                color: isSelected ? Color.blue.opacity(0.3) : AppConstants.shadowColor(for: colorScheme),
+                radius: isSelected ? 12 : 8,
                 x: 0,
                 y: 4
             )
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Compact Feature Card
+struct CompactFeatureCard: View {
+    let icon: String
+    let title: String
+    let gradient: [Color]
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        LinearGradient(
+                            colors: gradient.map { $0.opacity(0.15) },
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 60, height: 60)
+                
+                Image(systemName: icon)
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: gradient,
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            
+            Text(title)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .multilineTextAlignment(.center)
+                .foregroundColor(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+        .cornerRadius(16)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, x: 0, y: 2)
     }
 }
 

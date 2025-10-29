@@ -91,7 +91,7 @@ struct PillButtonStyle: ButtonStyle {
                 )
             case .neutral:
                 return StyleColors(
-                    background: AppConstants.defaultBackgroundColor,
+                    background: AppConstants.lightBackgroundColor,
                     foreground: .black,
                     border: commonBorderColor,
                     shadow: commonShadowColor,

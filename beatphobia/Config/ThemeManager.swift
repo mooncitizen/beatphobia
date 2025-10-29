@@ -86,9 +86,7 @@ extension AppConstants {
     
     /// The primary accent color adjusts slightly for dark mode
     static func adaptivePrimaryColor(for colorScheme: ColorScheme) -> Color {
-        colorScheme == .dark
-            ? Color(red: 100/255, green: 130/255, blue: 200/255) // Lighter blue for dark mode
-            : Color(red: 51/255, green: 77/255, blue: 128/255)
+        Color.blue // System blue works well in both light and dark mode
     }
     
     // MARK: - Adaptive Border/Divider Colors

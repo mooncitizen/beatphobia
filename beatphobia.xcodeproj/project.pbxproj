@@ -14,6 +14,8 @@
 		DA0610882EA43A7C001EBA37 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610872EA43A7C001EBA37 /* Storage */; };
 		DA06108A2EA43A7C001EBA37 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610892EA43A7C001EBA37 /* Supabase */; };
 		DA259C3B2EA70B3100BF64D4 /* CoreHaptics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DA259C3A2EA70B3100BF64D4 /* CoreHaptics.framework */; };
+		DA8EECC52EB2473B00DA8E87 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DA8EECC42EB2473B00DA8E87 /* StoreKit.framework */; };
+		DA8EECC72EB24AA000DA8E87 /* stillstep.storekit in Resources */ = {isa = PBXBuildFile; fileRef = DA8EECC62EB24AA000DA8E87 /* stillstep.storekit */; };
 		DAE564652EB161D3001F4A5C /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DAE564462EB16034001F4A5C /* WidgetKit.framework */; };
 		DAE564662EB161D3001F4A5C /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DAE564482EB16034001F4A5C /* SwiftUI.framework */; };
 		DAE564732EB161D3001F4A5C /* LocationLiveActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DAE564642EB161D3001F4A5C /* LocationLiveActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -75,6 +77,8 @@
 		DA0610612EA4381B001EBA37 /* beatphobiaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = beatphobiaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA06106B2EA4381B001EBA37 /* beatphobiaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = beatphobiaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA259C3A2EA70B3100BF64D4 /* CoreHaptics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreHaptics.framework; path = System/Library/Frameworks/CoreHaptics.framework; sourceTree = SDKROOT; };
+		DA8EECC42EB2473B00DA8E87 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
+		DA8EECC62EB24AA000DA8E87 /* stillstep.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = stillstep.storekit; sourceTree = "<group>"; };
 		DAE564462EB16034001F4A5C /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		DAE564482EB16034001F4A5C /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		DAE564642EB161D3001F4A5C /* LocationLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = LocationLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -139,6 +143,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA8EECC52EB2473B00DA8E87 /* StoreKit.framework in Frameworks */,
 				DAE564812EB1660B001F4A5C /* RealmSwift in Frameworks */,
 				DA0610842EA43A7C001EBA37 /* PostgREST in Frameworks */,
 				DA0610822EA43A7C001EBA37 /* Functions in Frameworks */,
@@ -179,6 +184,7 @@
 		DA0610492EA43819001EBA37 = {
 			isa = PBXGroup;
 			children = (
+				DA8EECC62EB24AA000DA8E87 /* stillstep.storekit */,
 				DA0610542EA43819001EBA37 /* beatphobia */,
 				DA0610642EA4381B001EBA37 /* beatphobiaTests */,
 				DA06106E2EA4381B001EBA37 /* beatphobiaUITests */,
@@ -202,6 +208,7 @@
 		DA259C392EA70B3100BF64D4 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				DA8EECC42EB2473B00DA8E87 /* StoreKit.framework */,
 				DA259C3A2EA70B3100BF64D4 /* CoreHaptics.framework */,
 				DAE564462EB16034001F4A5C /* WidgetKit.framework */,
 				DAE564482EB16034001F4A5C /* SwiftUI.framework */,
@@ -369,6 +376,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA8EECC72EB24AA000DA8E87 /* stillstep.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

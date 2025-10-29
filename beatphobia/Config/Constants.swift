@@ -17,12 +17,11 @@ struct AppConstants {
     
     // MARK: - Colors (Core)
     
-//    rgb(252, 245, 238)
+    /// Light background color for light mode
+    static let lightBackgroundColor: Color = Color(red: 252/255, green: 245/255, blue: 238/255)
     
-    /// Deep Blue used for the main screen background and base dark theme. (24, 48, 89)
-    static let defaultBackgroundColor: Color = Color(red: 252/255, green: 245/255, blue: 238/255)
-    
-    // MARK: - Colors (Design Theme)
+    /// Dark background color for dark mode
+    static let darkBackgroundColor: Color = Color(red: 18/255, green: 18/255, blue: 20/255)
     
     /// The primary accent color for prominent elements like the header (51, 77, 128).
     static let primaryColor: Color = Color(red: 51/255, green: 77/255, blue: 128/255)
