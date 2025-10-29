@@ -1999,7 +1999,7 @@ class PanicTrackerPDFCreator {
             var yPosition: CGFloat = 60
             
             // Header
-            "BeatPhobia - Panic Tracker Report".draw(at: CGPoint(x: 60, y: yPosition), withAttributes: [
+            "Still Step - Panic Tracker Report".draw(at: CGPoint(x: 60, y: yPosition), withAttributes: [
                 .font: UIFont.systemFont(ofSize: 24, weight: .bold),
                 .foregroundColor: UIColor.black
             ])
