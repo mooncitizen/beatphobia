@@ -10,13 +10,11 @@
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>fetch</string>
 		<string>location</string>
 		<string>remote-notification</string>
-		<string>processing</string>
-		<string>activitykit</string>
-		<string>audio</string>
 	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UILaunchImageFile</key>
 	<string></string>
 </dict>
