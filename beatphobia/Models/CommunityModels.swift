@@ -113,6 +113,7 @@ struct CommunityPostDB: Codable, Identifiable {
     let commentsCount: Int
     let viewsCount: Int
     let tags: [String]
+    let imageUrl: String?
     let isDeleted: Bool
     let isFlagged: Bool
     let trending: Bool
@@ -133,6 +134,7 @@ struct CommunityPostDB: Codable, Identifiable {
         case commentsCount = "comments_count"
         case viewsCount = "views_count"
         case tags
+        case imageUrl = "image_url"
         case isDeleted = "is_deleted"
         case isFlagged = "is_flagged"
         case trending
@@ -142,7 +144,7 @@ struct CommunityPostDB: Codable, Identifiable {
     }
     
     init(id: UUID, userId: UUID, topicId: UUID, title: String, content: String, category: String, 
-         likesCount: Int, commentsCount: Int, viewsCount: Int, tags: [String], 
+         likesCount: Int, commentsCount: Int, viewsCount: Int, tags: [String], imageUrl: String? = nil,
          isDeleted: Bool, isFlagged: Bool, trending: Bool, createdAt: Date, updatedAt: Date, 
          authorUsername: String? = nil) {
         self.id = id
@@ -155,6 +157,7 @@ struct CommunityPostDB: Codable, Identifiable {
         self.commentsCount = commentsCount
         self.viewsCount = viewsCount
         self.tags = tags
+        self.imageUrl = imageUrl
         self.isDeleted = isDeleted
         self.isFlagged = isFlagged
         self.trending = trending
@@ -166,11 +169,12 @@ struct CommunityPostDB: Codable, Identifiable {
 
 // MARK: - Display Model for Posts
 
-struct PostDisplayModel: Identifiable {
+struct PostDisplayModel: Identifiable, Codable {
     let id: UUID
     let userId: UUID
     let author: String // This is the username
     let authorInitials: String
+    let authorProfileImageUrl: String?
     let category: PostCategory
     let title: String
     let content: String
@@ -180,10 +184,12 @@ struct PostDisplayModel: Identifiable {
     let commentsCount: Int
     let viewsCount: Int
     let tags: [String]
+    let imageUrl: String? // Legacy support
+    var attachments: [Attachment]
     var isLiked: Bool
     var isBookmarked: Bool
     
-    init(from post: CommunityPostDB, isLiked: Bool = false, isBookmarked: Bool = false) {
+    init(from post: CommunityPostDB, isLiked: Bool = false, isBookmarked: Bool = false, attachments: [Attachment] = [], authorProfileImageUrl: String? = nil) {
         self.id = post.id
         self.userId = post.userId
         self.author = post.authorUsername ?? "anonymous"
@@ -191,6 +197,7 @@ struct PostDisplayModel: Identifiable {
         // Create initials from username (first 2 chars uppercased)
         let username = post.authorUsername ?? "??"
         self.authorInitials = String(username.prefix(2)).uppercased()
+        self.authorProfileImageUrl = authorProfileImageUrl
         
         // Map category string to enum
         switch post.category {
@@ -216,6 +223,8 @@ struct PostDisplayModel: Identifiable {
         self.commentsCount = post.commentsCount
         self.viewsCount = post.viewsCount
         self.tags = post.tags
+        self.imageUrl = post.imageUrl
+        self.attachments = attachments
         self.isLiked = isLiked
         self.isBookmarked = isBookmarked
     }
@@ -278,14 +287,16 @@ struct CommentDisplayModel: Identifiable {
     let userId: UUID
     let author: String // This is the username
     let authorInitials: String
+    let authorProfileImageUrl: String?
     let content: String
     let timestamp: Date
     let likesCount: Int
     let parentCommentId: UUID?
+    var attachments: [Attachment]
     var isLiked: Bool
     var replies: [CommentDisplayModel]
     
-    init(from comment: CommunityCommentDB, isLiked: Bool = false, replies: [CommentDisplayModel] = []) {
+    init(from comment: CommunityCommentDB, isLiked: Bool = false, replies: [CommentDisplayModel] = [], attachments: [Attachment] = [], authorProfileImageUrl: String? = nil) {
         self.id = comment.id
         self.postId = comment.postId
         self.userId = comment.userId
@@ -294,11 +305,13 @@ struct CommentDisplayModel: Identifiable {
         // Create initials from username (first 2 chars uppercased)
         let username = comment.authorUsername ?? "??"
         self.authorInitials = String(username.prefix(2)).uppercased()
+        self.authorProfileImageUrl = authorProfileImageUrl
         
         self.content = comment.content
         self.timestamp = comment.createdAt
         self.likesCount = comment.likesCount
         self.parentCommentId = comment.parentCommentId
+        self.attachments = attachments
         self.isLiked = isLiked
         self.replies = replies
     }
@@ -369,6 +382,86 @@ struct CreatePostRequest: Codable {
         case content
         case category
         case tags
+    }
+}
+
+// MARK: - Attachment
+
+struct Attachment: Codable, Identifiable {
+    let id: UUID
+    let postId: UUID?
+    let commentId: UUID?
+    let userId: UUID
+    let fileUrl: String
+    let fileType: String
+    let fileSize: Int?
+    let mimeType: String?
+    let width: Int?
+    let height: Int?
+    var isNsfw: Bool = false
+    var isDeleted: Bool = false
+    var isFlagged: Bool = false
+    let createdAt: Date
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        postId = try container.decodeIfPresent(UUID.self, forKey: .postId)
+        commentId = try container.decodeIfPresent(UUID.self, forKey: .commentId)
+        userId = try container.decode(UUID.self, forKey: .userId)
+        fileUrl = try container.decode(String.self, forKey: .fileUrl)
+        fileType = try container.decode(String.self, forKey: .fileType)
+        fileSize = try container.decodeIfPresent(Int.self, forKey: .fileSize)
+        mimeType = try container.decodeIfPresent(String.self, forKey: .mimeType)
+        width = try container.decodeIfPresent(Int.self, forKey: .width)
+        height = try container.decodeIfPresent(Int.self, forKey: .height)
+        isNsfw = (try? container.decode(Bool.self, forKey: .isNsfw)) ?? false
+        isDeleted = (try? container.decode(Bool.self, forKey: .isDeleted)) ?? false
+        isFlagged = (try? container.decode(Bool.self, forKey: .isFlagged)) ?? false
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case postId = "post_id"
+        case commentId = "comment_id"
+        case userId = "user_id"
+        case fileUrl = "file_url"
+        case fileType = "file_type"
+        case fileSize = "file_size"
+        case mimeType = "mime_type"
+        case width
+        case height
+        case isNsfw = "is_nsfw"
+        case isDeleted = "is_deleted"
+        case isFlagged = "is_flagged"
+        case createdAt = "created_at"
+    }
+}
+
+// MARK: - Create Attachment Request
+
+struct CreateAttachmentRequest: Codable {
+    let postId: UUID?
+    let commentId: UUID?
+    let userId: UUID
+    let fileUrl: String
+    let fileType: String
+    let fileSize: Int?
+    let mimeType: String?
+    let width: Int?
+    let height: Int?
+    
+    enum CodingKeys: String, CodingKey {
+        case postId = "post_id"
+        case commentId = "comment_id"
+        case userId = "user_id"
+        case fileUrl = "file_url"
+        case fileType = "file_type"
+        case fileSize = "file_size"
+        case mimeType = "mime_type"
+        case width
+        case height
     }
 }
 

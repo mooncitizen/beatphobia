@@ -14,6 +14,95 @@ class CommunityService: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
     
+    // MARK: - Caching
+    private var cachedPosts: [String: [PostDisplayModel]] = [:] // In-memory cache
+    private var cacheTimestamps: [String: Date] = [:]
+    private let cacheValidityDuration: TimeInterval = 30 // 30 seconds cache
+    
+    // Local persistent storage keys
+    private let userDefaults = UserDefaults.standard
+    private let cachePrefix = "community_cache_"
+    
+    // MARK: - Cache Helpers
+    
+    private func getCacheKey(topicId: UUID? = nil, category: PostCategory? = nil, type: String = "posts") -> String {
+        if type == "trending" { return "trending" }
+        if type == "user" { return "user" }
+        
+        var key = topicId?.uuidString ?? "all"
+        if let category = category, category != .all {
+            key += "_\(category.rawValue)"
+        }
+        return key
+    }
+    
+    private func isCacheValid(for key: String) -> Bool {
+        guard let timestamp = cacheTimestamps[key] else { return false }
+        return Date().timeIntervalSince(timestamp) < cacheValidityDuration
+    }
+    
+    func invalidateCache() {
+        cachedPosts.removeAll()
+        cacheTimestamps.removeAll()
+        
+        // Clear ALL persistent cache entries (not just common keys)
+        let allKeys = userDefaults.dictionaryRepresentation().keys
+        for key in allKeys where key.hasPrefix(cachePrefix) {
+            userDefaults.removeObject(forKey: key)
+        }
+        
+        print("🗑️ Cleared all caches (memory + persistent)")
+    }
+    
+    func invalidateCache(for key: String) {
+        cachedPosts.removeValue(forKey: key)
+        cacheTimestamps.removeValue(forKey: key)
+        
+        // Clear persistent cache too
+        userDefaults.removeObject(forKey: cachePrefix + key)
+        userDefaults.removeObject(forKey: cachePrefix + key + "_timestamp")
+    }
+    
+    // MARK: - Persistent Cache (UserDefaults)
+    
+    private func saveToPersistentCache(posts: [PostDisplayModel], key: String) {
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(posts)
+            userDefaults.set(data, forKey: cachePrefix + key)
+            userDefaults.set(Date(), forKey: cachePrefix + key + "_timestamp")
+            print("💾 Saved \(posts.count) posts to persistent cache: \(key)")
+        } catch {
+            print("❌ Failed to save to persistent cache: \(error)")
+        }
+    }
+    
+    private func loadFromPersistentCache(key: String) -> [PostDisplayModel]? {
+        guard let data = userDefaults.data(forKey: cachePrefix + key) else {
+            return nil
+        }
+        
+        do {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let posts = try decoder.decode([PostDisplayModel].self, from: data)
+            
+            if let timestamp = userDefaults.object(forKey: cachePrefix + key + "_timestamp") as? Date {
+                let age = Date().timeIntervalSince(timestamp)
+                print("📂 Loaded \(posts.count) posts from persistent cache: \(key) (age: \(Int(age))s)")
+            }
+            
+            return posts
+        } catch {
+            print("❌ Failed to load from persistent cache: \(error)")
+            // Clear corrupted cache
+            userDefaults.removeObject(forKey: cachePrefix + key)
+            userDefaults.removeObject(forKey: cachePrefix + key + "_timestamp")
+            return nil
+        }
+    }
+    
     // MARK: - Fetch Topics
     
     func fetchTopics() async throws -> [CommunityTopic] {
@@ -47,14 +136,62 @@ class CommunityService: ObservableObject {
     
     // MARK: - Fetch Posts
     
-    func fetchPosts(topicId: UUID? = nil, category: PostCategory? = nil, searchText: String = "") async throws -> [PostDisplayModel] {
+    func fetchPosts(topicId: UUID? = nil, category: PostCategory? = nil, searchText: String = "", forceRefresh: Bool = false) async throws -> [PostDisplayModel] {
+        let cacheKey = getCacheKey(topicId: topicId, category: category)
+        
+        // Check in-memory cache first (skip if searching or force refresh)
+        if !forceRefresh && searchText.isEmpty && isCacheValid(for: cacheKey), let cached = cachedPosts[cacheKey] {
+            print("⚡️ Using in-memory cache for: \(cacheKey)")
+            return cached
+        }
+        
+        // Check persistent cache and return immediately if available
+        if !forceRefresh && searchText.isEmpty, let persistentCached = loadFromPersistentCache(key: cacheKey) {
+            // Return cached data immediately (don't set isLoading)
+            // Store in memory cache too
+            cachedPosts[cacheKey] = persistentCached
+            cacheTimestamps[cacheKey] = Date()
+            
+            // Fetch fresh data in background without blocking
+            Task {
+                do {
+                    let freshPosts = try await fetchPostsFromDatabase(topicId: topicId, category: category, searchText: searchText)
+                    await MainActor.run {
+                        cachedPosts[cacheKey] = freshPosts
+                        cacheTimestamps[cacheKey] = Date()
+                        saveToPersistentCache(posts: freshPosts, key: cacheKey)
+                    }
+                } catch {
+                    print("❌ Background refresh failed: \(error)")
+                }
+            }
+            
+            return persistentCached
+        }
+        
+        // No cache available, fetch from database
         isLoading = true
         defer { isLoading = false }
         
+        let posts = try await fetchPostsFromDatabase(topicId: topicId, category: category, searchText: searchText)
+        
+        // Cache the results (only if not searching)
+        if searchText.isEmpty {
+            cachedPosts[cacheKey] = posts
+            cacheTimestamps[cacheKey] = Date()
+            saveToPersistentCache(posts: posts, key: cacheKey)
+        }
+        
+        return posts
+    }
+    
+    // MARK: - Fetch Posts from Database (Internal)
+    
+    private func fetchPostsFromDatabase(topicId: UUID? = nil, category: PostCategory? = nil, searchText: String = "") async throws -> [PostDisplayModel] {
         let response: [CommunityPostDBResponse] = try await {
             var query = supabase
                 .from("community_posts")
-                .select("*, profile(username)")
+                .select("*, profile(username, profile_image_url)")
                 .eq("is_deleted", value: false)
                 .eq("is_flagged", value: false)
             
@@ -84,23 +221,81 @@ class CommunityService: ObservableObject {
         let likedPostIds = try await fetchUserLikedPosts(userId: userId)
         let bookmarkedPostIds = try await fetchUserBookmarks(userId: userId)
         
-        return response.map { postResponse in
+        // Fetch attachments for each post
+        var posts: [PostDisplayModel] = []
+        for postResponse in response {
             var post = postResponse.post
             post.authorUsername = postResponse.profile?.username
             
             let isLiked = likedPostIds.contains(post.id)
             let isBookmarked = bookmarkedPostIds.contains(post.id)
             
-            return PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked)
+            // Fetch attachments (don't fail the whole query if attachments fail)
+            let attachments = (try? await fetchAttachments(postId: post.id)) ?? []
+            
+            // Debug logging for profile images
+            if let profileImageUrl = postResponse.profile?.profileImageUrl {
+                print("✅ Post \(post.id) has profile image: \(profileImageUrl)")
+            } else {
+                print("⚠️ Post \(post.id) by @\(post.authorUsername ?? "unknown") has no profile image")
+            }
+            
+            posts.append(PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked, attachments: attachments, authorProfileImageUrl: postResponse.profile?.profileImageUrl))
         }
+        
+        return posts
     }
     
     // MARK: - Fetch Trending Posts
     
-    func fetchTrendingPosts() async throws -> [PostDisplayModel] {
+    func fetchTrendingPosts(forceRefresh: Bool = false) async throws -> [PostDisplayModel] {
+        let cacheKey = getCacheKey(type: "trending")
+        
+        // Check in-memory cache first
+        if !forceRefresh && isCacheValid(for: cacheKey), let cached = cachedPosts[cacheKey] {
+            print("⚡️ Using in-memory cache for trending")
+            return cached
+        }
+        
+        // Check persistent cache and return immediately if available
+        if !forceRefresh, let persistentCached = loadFromPersistentCache(key: cacheKey) {
+            cachedPosts[cacheKey] = persistentCached
+            cacheTimestamps[cacheKey] = Date()
+            
+            // Fetch fresh data in background
+            Task {
+                do {
+                    let freshPosts = try await fetchTrendingFromDatabase()
+                    await MainActor.run {
+                        cachedPosts[cacheKey] = freshPosts
+                        cacheTimestamps[cacheKey] = Date()
+                        saveToPersistentCache(posts: freshPosts, key: cacheKey)
+                    }
+                } catch {
+                    print("❌ Background trending refresh failed: \(error)")
+                }
+            }
+            
+            return persistentCached
+        }
+        
+        // No cache available, fetch from database
         isLoading = true
         defer { isLoading = false }
         
+        let posts = try await fetchTrendingFromDatabase()
+        
+        // Cache the results
+        cachedPosts[cacheKey] = posts
+        cacheTimestamps[cacheKey] = Date()
+        saveToPersistentCache(posts: posts, key: cacheKey)
+        
+        return posts
+    }
+    
+    // MARK: - Fetch Trending from Database (Internal)
+    
+    private func fetchTrendingFromDatabase() async throws -> [PostDisplayModel] {
         let response: [CommunityPostDBResponse] = try await supabase
             .from("community_posts")
             .select("*, profile(username)")
@@ -116,28 +311,79 @@ class CommunityService: ObservableObject {
         let likedPostIds = try await fetchUserLikedPosts(userId: userId)
         let bookmarkedPostIds = try await fetchUserBookmarks(userId: userId)
         
-        return response.map { postResponse in
+        // Fetch attachments for each post
+        var posts: [PostDisplayModel] = []
+        for postResponse in response {
             var post = postResponse.post
             post.authorUsername = postResponse.profile?.username
             
             let isLiked = likedPostIds.contains(post.id)
             let isBookmarked = bookmarkedPostIds.contains(post.id)
             
-            return PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked)
+            // Fetch attachments (don't fail if attachments fail)
+            let attachments = (try? await fetchAttachments(postId: post.id)) ?? []
+            
+            posts.append(PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked, attachments: attachments))
         }
+        
+        return posts
     }
     
     // MARK: - Fetch User's Posts
     
-    func fetchUserPosts() async throws -> [PostDisplayModel] {
+    func fetchUserPosts(forceRefresh: Bool = false) async throws -> [PostDisplayModel] {
+        let cacheKey = getCacheKey(type: "user")
+        
+        // Check in-memory cache first
+        if !forceRefresh && isCacheValid(for: cacheKey), let cached = cachedPosts[cacheKey] {
+            print("⚡️ Using in-memory cache for user posts")
+            return cached
+        }
+        
+        // Check persistent cache and return immediately if available
+        if !forceRefresh, let persistentCached = loadFromPersistentCache(key: cacheKey) {
+            cachedPosts[cacheKey] = persistentCached
+            cacheTimestamps[cacheKey] = Date()
+            
+            // Fetch fresh data in background
+            Task {
+                do {
+                    let freshPosts = try await fetchUserPostsFromDatabase()
+                    await MainActor.run {
+                        cachedPosts[cacheKey] = freshPosts
+                        cacheTimestamps[cacheKey] = Date()
+                        saveToPersistentCache(posts: freshPosts, key: cacheKey)
+                    }
+                } catch {
+                    print("❌ Background user posts refresh failed: \(error)")
+                }
+            }
+            
+            return persistentCached
+        }
+        
+        // No cache available, fetch from database
         isLoading = true
         defer { isLoading = false }
         
+        let posts = try await fetchUserPostsFromDatabase()
+        
+        // Cache the results
+        cachedPosts[cacheKey] = posts
+        cacheTimestamps[cacheKey] = Date()
+        saveToPersistentCache(posts: posts, key: cacheKey)
+        
+        return posts
+    }
+    
+    // MARK: - Fetch User Posts from Database (Internal)
+    
+    private func fetchUserPostsFromDatabase() async throws -> [PostDisplayModel] {
         let userId = try await supabase.auth.session.user.id
         
         let response: [CommunityPostDBResponse] = try await supabase
             .from("community_posts")
-            .select("*, profile(username)")
+            .select("*, profile(username, profile_image_url)")
             .eq("is_deleted", value: false)
             .eq("is_flagged", value: false)
             .eq("user_id", value: userId.uuidString)
@@ -149,15 +395,22 @@ class CommunityService: ObservableObject {
         let likedPostIds = try await fetchUserLikedPosts(userId: userId)
         let bookmarkedPostIds = try await fetchUserBookmarks(userId: userId)
         
-        return response.map { postResponse in
+        // Fetch attachments for each post
+        var posts: [PostDisplayModel] = []
+        for postResponse in response {
             var post = postResponse.post
             post.authorUsername = postResponse.profile?.username
             
             let isLiked = likedPostIds.contains(post.id)
             let isBookmarked = bookmarkedPostIds.contains(post.id)
             
-            return PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked)
+            // Fetch attachments (don't fail if attachments fail)
+            let attachments = (try? await fetchAttachments(postId: post.id)) ?? []
+            
+            posts.append(PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked, attachments: attachments, authorProfileImageUrl: postResponse.profile?.profileImageUrl))
         }
+        
+        return posts
     }
     
     // MARK: - Fetch Single Post
@@ -183,6 +436,9 @@ class CommunityService: ObservableObject {
         let isLiked = likedPostIds.contains(post.id)
         let isBookmarked = bookmarkedPostIds.contains(post.id)
         
+        // Fetch attachments
+        let attachments = (try? await fetchAttachments(postId: post.id)) ?? []
+        
         // Increment view count
         struct IncrementViewCountRequest: Encodable {
             let views_count: Int
@@ -194,14 +450,18 @@ class CommunityService: ObservableObject {
             .eq("id", value: id.uuidString)
             .execute()
         
-        return PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked)
+        return PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked, attachments: attachments, authorProfileImageUrl: response.profile?.profileImageUrl)
     }
     
     // MARK: - Create Post
     
-    func createPost(topicId: UUID, title: String, content: String, category: PostCategory, tags: [String]) async throws -> UUID {
+    func createPost(topicId: UUID, title: String, content: String, category: PostCategory, tags: [String], attachmentUrls: [String] = []) async throws -> UUID {
         isLoading = true
-        defer { isLoading = false }
+        defer { 
+            isLoading = false
+            // Invalidate cache after post is created
+            invalidateCache()
+        }
         
         let userId = try await supabase.auth.session.user.id
         
@@ -222,7 +482,84 @@ class CommunityService: ObservableObject {
             .execute()
             .value
         
+        print("✅ Post created with ID: \(response.id)")
+        
+        // Create attachments if any
+        if !attachmentUrls.isEmpty {
+            print("📎 Creating \(attachmentUrls.count) attachments...")
+            try await createAttachments(postId: response.id, userId: userId, fileUrls: attachmentUrls)
+        }
+        
+        print("🔄 Invalidating cache after post creation")
+        
         return response.id
+    }
+    
+    // MARK: - Create Attachments
+    
+    func createAttachments(postId: UUID? = nil, commentId: UUID? = nil, userId: UUID, fileUrls: [String]) async throws {
+        // Limit to 3 attachments
+        let limitedUrls = Array(fileUrls.prefix(3))
+        
+        let attachmentRequests = limitedUrls.map { url in
+            CreateAttachmentRequest(
+                postId: postId,
+                commentId: commentId,
+                userId: userId,
+                fileUrl: url,
+                fileType: "image",
+                fileSize: nil,
+                mimeType: "image/jpeg",
+                width: nil,
+                height: nil
+            )
+        }
+        
+        // Insert attachments without requiring a response
+        // (We don't need the returned data, just successful creation)
+        if !attachmentRequests.isEmpty {
+            do {
+                try await supabase
+                    .from("community_attachments")
+                    .insert(attachmentRequests)
+                    .execute()
+                
+                print("✅ Created \(attachmentRequests.count) attachments")
+            } catch {
+                print("❌ Error creating attachments: \(error)")
+                // Don't throw - post was already created, attachments failing shouldn't break the post
+            }
+        }
+    }
+    
+    // MARK: - Fetch Attachments
+    
+    func fetchAttachments(postId: UUID) async throws -> [Attachment] {
+        let attachments: [Attachment] = try await supabase
+            .from("community_attachments")
+            .select()
+            .eq("post_id", value: postId.uuidString)
+            .eq("is_deleted", value: false)
+            .eq("is_flagged", value: false)
+            .order("created_at", ascending: true)
+            .execute()
+            .value
+        
+        return attachments
+    }
+    
+    func fetchCommentAttachments(commentId: UUID) async throws -> [Attachment] {
+        let attachments: [Attachment] = try await supabase
+            .from("community_attachments")
+            .select()
+            .eq("comment_id", value: commentId.uuidString)
+            .eq("is_deleted", value: false)
+            .eq("is_flagged", value: false)
+            .order("created_at", ascending: true)
+            .execute()
+            .value
+        
+        return attachments
     }
     
     // MARK: - Update Post
@@ -278,7 +615,7 @@ class CommunityService: ObservableObject {
     func fetchComments(postId: UUID) async throws -> [CommentDisplayModel] {
         let response: [CommunityCommentDBResponse] = try await supabase
             .from("community_comments")
-            .select("*, profile(username)")
+            .select("*, profile(username, profile_image_url)")
             .eq("post_id", value: postId.uuidString)
             .eq("is_deleted", value: false)
             .eq("is_flagged", value: false)
@@ -293,7 +630,7 @@ class CommunityService: ObservableObject {
             var comment = commentResponse.comment
             comment.authorUsername = commentResponse.profile?.username
             let isLiked = likedCommentIds.contains(comment.id)
-            return CommentDisplayModel(from: comment, isLiked: isLiked)
+            return CommentDisplayModel(from: comment, isLiked: isLiked, replies: [], attachments: [], authorProfileImageUrl: commentResponse.profile?.profileImageUrl)
         }
         
         // Organize into threaded structure
@@ -304,7 +641,11 @@ class CommunityService: ObservableObject {
     
     func createComment(postId: UUID, content: String, parentCommentId: UUID? = nil) async throws {
         isLoading = true
-        defer { isLoading = false }
+        defer { 
+            isLoading = false
+            // Invalidate cache after comment is created
+            invalidateCache()
+        }
         
         let userId = try await supabase.auth.session.user.id
         
@@ -682,6 +1023,12 @@ struct CommunityCommentDBResponse: Codable {
 
 struct ProfileInfo: Codable {
     let username: String?
+    let profileImageUrl: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case username
+        case profileImageUrl = "profile_image_url"
+    }
 }
 
 struct EmptyResponse: Codable {}

@@ -13,6 +13,7 @@ struct Profile: Codable, Identifiable, Equatable {
     var username: String?
     var biography: String?
     var role: String?
+    var profileImageUrl: String?
     let createdAt: Date
     var updatedAt: Date
 
@@ -22,6 +23,7 @@ struct Profile: Codable, Identifiable, Equatable {
         case username
         case biography
         case role
+        case profileImageUrl = "profile_image_url"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

@@ -21,6 +21,9 @@ struct ProfileView: View {
     @State private var showPaywall = false
     @State private var showAbout = false
     @State private var showCrisisHotlines = false
+    @State private var showProfileImagePicker = false
+    @State private var isUploadingProfileImage = false
+    @StateObject private var imageManager = ImageManager()
     
     @State private var locationStatus: CLAuthorizationStatus = .notDetermined
     
@@ -48,16 +51,62 @@ struct ProfileView: View {
                 VStack(spacing: 0) {
                     // Profile Card at the top
                     VStack(spacing: 16) {
-                        // Profile Avatar Circle
-                        Circle()
-                            .fill(Color.blue.opacity(0.2))
-                            .frame(width: 80, height: 80)
-                            .overlay(
-                                Text(String(name.prefix(1)).uppercased())
-                                    .font(.system(size: 36, weight: .bold))
-                                    .fontDesign(.serif)
-                                    .foregroundColor(.blue)
-                            )
+                        // Profile Avatar Circle with image
+                        Button(action: {
+                            showProfileImagePicker = true
+                        }) {
+                            ZStack(alignment: .bottomTrailing) {
+                                if let imageUrl = authManager.currentUserProfile?.profileImageUrl {
+                                    // Show profile image
+                                    CachedAsyncImage(urlString: imageUrl) { image in
+                                        Image(uiImage: image)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 100, height: 100)
+                                            .clipShape(Circle())
+                                            .overlay(
+                                                Circle()
+                                                    .stroke(AppConstants.primaryColor, lineWidth: 3)
+                                            )
+                                    } placeholder: {
+                                        Circle()
+                                            .fill(Color.blue.opacity(0.2))
+                                            .frame(width: 100, height: 100)
+                                            .overlay(
+                                                ProgressView()
+                                                    .tint(AppConstants.primaryColor)
+                                            )
+                                    }
+                                } else {
+                                    // Fallback to initials
+                                    Circle()
+                                        .fill(Color.blue.opacity(0.2))
+                                        .frame(width: 100, height: 100)
+                                        .overlay(
+                                            Text(String(name.prefix(1)).uppercased())
+                                                .font(.system(size: 40, weight: .bold))
+                                                .fontDesign(.serif)
+                                                .foregroundColor(.blue)
+                                        )
+                                }
+                                
+                                // Camera badge
+                                ZStack {
+                                    Circle()
+                                        .fill(AppConstants.primaryColor)
+                                        .frame(width: 32, height: 32)
+                                    
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.white)
+                                }
+                                .overlay(
+                                    Circle()
+                                        .stroke(AppConstants.backgroundColor(for: colorScheme), lineWidth: 2)
+                                )
+                            }
+                        }
+                        .disabled(isUploadingProfileImage)
                         
                         // Name and Email
                         VStack(spacing: 4) {
@@ -450,6 +499,73 @@ struct ProfileView: View {
             .sheet(isPresented: $showCrisisHotlines) {
                 CrisisHotlinesView()
             }
+            .sheet(isPresented: $showProfileImagePicker) {
+                SquareImagePicker { image in
+                    Task {
+                        await uploadProfileImage(image)
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Profile Image Upload
+    
+    private func uploadProfileImage(_ image: UIImage) async {
+        isUploadingProfileImage = true
+        
+        do {
+            guard let userId = authManager.currentUser?.id else {
+                throw NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "No user logged in"])
+            }
+            
+            print("🔐 User ID: \(userId)")
+            
+            // Upload to profile-images bucket with user ID as folder
+            print("📤 Uploading to bucket: profile-images, folder: \(userId)")
+            let imageUrl = try await imageManager.uploadImage(
+                image, 
+                folder: userId.uuidString,
+                bucket: "profile-images"
+            )
+            
+            print("✅ Image uploaded: \(imageUrl)")
+            print("🔄 Updating profile in database...")
+            
+            // Update profile in database
+            struct ProfileImageUpdate: Encodable {
+                let profile_image_url: String
+                let updated_at: String
+            }
+            
+            let update = ProfileImageUpdate(
+                profile_image_url: imageUrl,
+                updated_at: Date().ISO8601Format()
+            )
+            
+            let _: EmptyResponse = try await supabase
+                .from("profile")
+                .update(update)
+                .eq("id", value: userId.uuidString)
+                .execute()
+                .value
+            
+            print("✅ Profile updated in database")
+            
+            // Refresh profile data
+            try await authManager.getProfile()
+            
+            await MainActor.run {
+                isUploadingProfileImage = false
+            }
+            
+            print("✅ Profile image updated successfully")
+        } catch {
+            await MainActor.run {
+                isUploadingProfileImage = false
+            }
+            print("❌ Failed to upload profile image: \(error)")
+            print("❌ Error details: \(error.localizedDescription)")
         }
     }
     
@@ -602,6 +718,50 @@ struct PermissionRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - Square Image Picker
+
+struct SquareImagePicker: UIViewControllerRepresentable {
+    let onImageSelected: (UIImage) -> Void
+    @Environment(\.dismiss) var dismiss
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.sourceType = .photoLibrary
+        picker.allowsEditing = true // Enable editing for square crop
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: SquareImagePicker
+        
+        init(_ parent: SquareImagePicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            // Use edited image (cropped to square) if available, otherwise original
+            if let editedImage = info[.editedImage] as? UIImage {
+                parent.onImageSelected(editedImage)
+            } else if let originalImage = info[.originalImage] as? UIImage {
+                parent.onImageSelected(originalImage)
+            }
+            
+            parent.dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
     }
 }
 

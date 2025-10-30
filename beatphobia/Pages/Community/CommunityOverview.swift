@@ -108,6 +108,13 @@ struct CommunityOverview: View {
         .task {
             await checkUsername()
         }
+        .onAppear {
+            // Clear cache on first appear to ensure we get fresh data with profile images
+            // TODO: Remove this after users have fresh data
+            let communityService = CommunityService()
+            communityService.invalidateCache()
+            print("🗑️ Cleared community cache to fetch fresh profile images")
+        }
     }
     
     private var communityContent: some View {
@@ -200,7 +207,7 @@ struct CommunityOverview: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
-                .padding(.bottom, 24)
+                .padding(.bottom, 100)
             }
             .background(AppConstants.backgroundColor(for: colorScheme))
             .navigationBarHidden(true)
@@ -417,7 +424,7 @@ struct CommunityForumView: View {
                 
                 // Topics Grid
                 if communityService.isLoading {
-                    FullScreenLoading(text: "Loading Community")
+                    MinimalLoadingView(text: "Loading Community")
                 } else if let error = communityService.error {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
@@ -492,7 +499,7 @@ struct CommunityForumView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 24)
+            .padding(.bottom, 100)
         }
         .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationTitle("Forum")
@@ -554,7 +561,7 @@ struct YourPostsView: View {
                 
                 // Posts List
                 if communityService.isLoading && posts.isEmpty {
-                    FullScreenLoading(text: "Loading Your Posts")
+                    MinimalLoadingView(text: "Loading Your Posts")
                 } else if let error = communityService.error {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
@@ -747,7 +754,7 @@ struct TopicDetailView: View {
                 
                 // Posts List
                 if communityService.isLoading {
-                    FullScreenLoading(text: "Loading Posts")
+                    MinimalLoadingView(text: "Loading Posts")
                 } else if let error = communityService.error {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
@@ -804,7 +811,7 @@ struct TopicDetailView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
-            .padding(.bottom, 24)
+            .padding(.bottom, 100)
         }
         .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationBarTitleDisplayMode(.inline)
@@ -813,7 +820,8 @@ struct TopicDetailView: View {
                 if canCreatePost {
                     NavigationLink(destination: CreatePostView(topic: topic, onPostCreated: {
                         Task {
-                            await loadPosts()
+                            // Force refresh to bypass cache and show new post
+                            await loadPosts(forceRefresh: true)
                         }
                     })
                     .environmentObject(authManager)) {
@@ -844,15 +852,17 @@ struct TopicDetailView: View {
             await loadPosts()
         }
         .refreshable {
-            await loadPosts()
+            await loadPosts(forceRefresh: true)
         }
     }
     
-    private func loadPosts() async {
+    private func loadPosts(forceRefresh: Bool = false) async {
         do {
+            print("🔄 Loading posts (forceRefresh: \(forceRefresh))...")
             let category = selectedCategory == .all ? nil : selectedCategory
-            posts = try await communityService.fetchPosts(topicId: topic.id, category: category, searchText: searchText)
+            posts = try await communityService.fetchPosts(topicId: topic.id, category: category, searchText: searchText, forceRefresh: forceRefresh)
             communityService.error = nil
+            print("✅ Loaded \(posts.count) posts")
         } catch is CancellationError {
             return
         } catch let error as NSError where error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled {
@@ -1113,7 +1123,7 @@ struct TrendingTopicsView: View {
                 
                 // Posts List
                 if communityService.isLoading && posts.isEmpty {
-                    FullScreenLoading(text: "Loading Trending Posts")
+                    MinimalLoadingView(text: "Loading Trending Posts")
                 } else if let error = communityService.error {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
@@ -1422,12 +1432,25 @@ struct PostCard: View {
     let communityService: CommunityService
     @State private var isLiked: Bool
     @State private var isBookmarked: Bool
+    @State private var displayLikesCount: Int
+    @State private var displayCommentsCount: Int
 
     init(post: PostDisplayModel, communityService: CommunityService) {
         self.post = post
         self.communityService = communityService
         self._isLiked = State(initialValue: post.isLiked)
+        // The likesCount from DB should already include the user's like if they liked it
+        // So we use it directly without any adjustment
+        self._displayLikesCount = State(initialValue: max(0, post.likesCount))
+        self._displayCommentsCount = State(initialValue: post.commentsCount)
         self._isBookmarked = State(initialValue: post.isBookmarked)
+        
+        // Debug logging for profile images
+        if let profileImageUrl = post.authorProfileImageUrl {
+            print("🖼️ PostCard for '\(post.title)' by @\(post.author) has profile image: \(profileImageUrl)")
+        } else {
+            print("📝 PostCard for '\(post.title)' by @\(post.author) - No profile image (showing initials: \(post.authorInitials))")
+        }
     }
 
     var body: some View {
@@ -1435,16 +1458,34 @@ struct PostCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 // Header: Author Info
                 HStack(spacing: 12) {
-                    // Avatar
-                    ZStack {
+                    // Avatar with profile image support
+                    if let profileImageUrl = post.authorProfileImageUrl {
+                        CachedAsyncImage(urlString: profileImageUrl) { image in
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 40, height: 40)
+                                .clipShape(Circle())
+                        } placeholder: {
+                            Circle()
+                                .fill(post.category.color.opacity(0.2))
+                                .frame(width: 40, height: 40)
+                                .overlay(
+                                    Text(post.authorInitials)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(post.category.color)
+                                )
+                        }
+                    } else {
                         Circle()
                             .fill(post.category.color.opacity(0.2))
-
-                        Text(post.authorInitials)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(post.category.color)
+                            .frame(width: 40, height: 40)
+                            .overlay(
+                                Text(post.authorInitials)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(post.category.color)
+                            )
                     }
-                    .frame(width: 40, height: 40)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(post.author)
@@ -1488,7 +1529,52 @@ struct PostCard: View {
                         .multilineTextAlignment(.leading)
                 }
                 .padding(.horizontal, 16)
+                .padding(.bottom, !post.attachments.isEmpty ? 8 : 12)
+                
+                // Attachments preview - only show first image
+                if !post.attachments.isEmpty {
+                    ZStack(alignment: .bottomTrailing) {
+                        CachedAsyncImage(urlString: post.attachments[0].fileUrl) { image in
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 200)
+                                .clipped()
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        } placeholder: {
+                            Rectangle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(height: 200)
+                                .overlay(
+                                    ProgressView()
+                                        .tint(AppConstants.primaryColor)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                        
+                        // Image count badge if multiple images
+                        if post.attachments.count > 1 {
+                            HStack(spacing: 4) {
+                                Image(systemName: "photo.stack")
+                                    .font(.system(size: 12, weight: .semibold))
+                                
+                                Text("\(post.attachments.count)")
+                                    .font(.system(size: 13, weight: .bold))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color.black.opacity(0.7))
+                            )
+                            .padding(10)
+                        }
+                }
+                .padding(.horizontal, 16)
                 .padding(.bottom, 12)
+                }
 
                 // Tags
                 if !post.tags.isEmpty {
@@ -1516,15 +1602,29 @@ struct PostCard: View {
                 HStack(spacing: 24) {
                     Button(action: {
                         Task {
+                            let wasLiked = isLiked
                             do {
+                                // Optimistically update UI before API call
                                 withAnimation(.spring(response: 0.3)) {
                                     isLiked.toggle()
+                                    // Update count based on action: if we're now liked, add 1, else subtract 1
+                                    if isLiked {
+                                        displayLikesCount += 1
+                                    } else {
+                                        displayLikesCount = max(0, displayLikesCount - 1) // Prevent negative
+                                    }
                                 }
                                 _ = try await communityService.togglePostLike(postId: post.id)
                             } catch {
                                 // Revert on error
                                 withAnimation(.spring(response: 0.3)) {
-                                    isLiked.toggle()
+                                    isLiked = wasLiked
+                                    // Recalculate from original post data
+                                    if wasLiked {
+                                        displayLikesCount = max(0, post.likesCount)
+                                    } else {
+                                        displayLikesCount = post.likesCount + 1
+                                    }
                                 }
                                 print("❌ Error toggling like: \(error)")
                             }
@@ -1535,7 +1635,7 @@ struct PostCard: View {
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(isLiked ? .pink : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
 
-                            Text("\(post.likesCount + (isLiked != post.isLiked ? (isLiked ? 1 : -1) : 0))")
+                            Text("\(displayLikesCount)")
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         }
@@ -1546,7 +1646,7 @@ struct PostCard: View {
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
 
-                        Text("\(post.commentsCount)")
+                        Text("\(displayCommentsCount)")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                     }
@@ -1732,6 +1832,7 @@ struct CommentView: View {
     let isReply: Bool
 
     @State private var isLiked: Bool
+    @State private var displayLikesCount: Int
     @State private var currentUserId: UUID?
     @State private var showEditComment = false
     @State private var showDeleteAlert = false
@@ -1749,21 +1850,40 @@ struct CommentView: View {
         self.onDelete = onDelete
         self.isReply = isReply
         self._isLiked = State(initialValue: comment.isLiked)
+        self._displayLikesCount = State(initialValue: comment.likesCount)
     }
     
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
-                // Avatar
-                ZStack {
+                // Avatar with profile image support
+                if let profileImageUrl = comment.authorProfileImageUrl {
+                    CachedAsyncImage(urlString: profileImageUrl) { image in
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 36, height: 36)
+                            .clipShape(Circle())
+                    } placeholder: {
+                        Circle()
+                            .fill(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.2))
+                            .frame(width: 36, height: 36)
+                            .overlay(
+                                Text(comment.authorInitials)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
+                            )
+                    }
+                } else {
                     Circle()
                         .fill(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.2))
-
-                    Text(comment.authorInitials)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
+                        .frame(width: 36, height: 36)
+                        .overlay(
+                            Text(comment.authorInitials)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
+                        )
                 }
-                .frame(width: 36, height: 36)
 
                 VStack(alignment: .leading, spacing: 8) {
                     // Author and time
@@ -1790,15 +1910,24 @@ struct CommentView: View {
                     HStack(spacing: 20) {
                         Button(action: {
                             Task {
+                                let wasLiked = isLiked
                                 do {
                                     lightHaptic.impactOccurred(intensity: 0.5)
                                     withAnimation(.spring(response: 0.3)) {
                                         isLiked.toggle()
+                                        // Update count based on action
+                                        if isLiked {
+                                            displayLikesCount += 1
+                                        } else {
+                                            displayLikesCount = max(0, displayLikesCount - 1)
+                                        }
                                     }
                                     _ = try await communityService.toggleCommentLike(commentId: comment.id)
                                 } catch {
                                     withAnimation(.spring(response: 0.3)) {
-                                        isLiked.toggle()
+                                        isLiked = wasLiked
+                                        // Revert count
+                                        displayLikesCount = comment.likesCount
                                     }
                                     print("❌ Error toggling comment like: \(error)")
                                 }
@@ -1809,8 +1938,8 @@ struct CommentView: View {
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(isLiked ? .pink : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
 
-                                if comment.likesCount > 0 || isLiked {
-                                    Text("\(comment.likesCount + (isLiked != comment.isLiked ? (isLiked ? 1 : -1) : 0))")
+                                if displayLikesCount > 0 {
+                                    Text("\(displayLikesCount)")
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                                 }
@@ -1855,11 +1984,19 @@ struct CommentView: View {
                 }
             }
             .padding(16)
-            .background(AppConstants.cardBackgroundColor(for: colorScheme))
+            .background(
+                RoundedRectangle(cornerRadius: isReply ? 12 : 16)
+                    .fill(AppConstants.cardBackgroundColor(for: colorScheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: isReply ? 12 : 16)
+                    .stroke(AppConstants.borderColor(for: colorScheme).opacity(0.3), lineWidth: 1)
+            )
             .padding(.leading, isReply ? 40 : 0)
             
             // Nested replies
             if !comment.replies.isEmpty {
+                VStack(spacing: 8) {
                 ForEach(comment.replies) { reply in
                     CommentView(
                         comment: reply,
@@ -1868,7 +2005,10 @@ struct CommentView: View {
                         onDelete: onDelete,
                         isReply: true
                     )
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
                 }
+                }
+                .padding(.top, 8)
             }
         }
         .task {
@@ -1922,9 +2062,15 @@ struct PostDetailView: View {
     @State private var currentUserId: UUID?
     @State private var showEditPost = false
     @State private var showDeletePostAlert = false
+    @State private var displayCommentsCount: Int
     @Environment(\.dismiss) var dismiss
     
     private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
+    
+    init(post: PostDisplayModel) {
+        self.post = post
+        self._displayCommentsCount = State(initialValue: post.commentsCount)
+    }
     
     var isPostAuthor: Bool {
         guard let currentUserId = currentUserId else { return false }
@@ -1932,6 +2078,7 @@ struct PostDetailView: View {
     }
     
     var body: some View {
+        ZStack {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -1940,14 +2087,29 @@ struct PostDetailView: View {
                         .padding(20)
                     
                     Divider()
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 20)
                     
-                    // Comments Section - NO horizontal padding
-                    VStack(alignment: .leading, spacing: 16) {
+                    // Comments Section Header
+                    HStack {
+                        Text("Comments")
+                            .font(.system(size: 18, weight: .bold, design: .serif))
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                         
-                        // Comments List - flush left
+                        Text("(\(displayCommentsCount))")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 12)
+                    
+                    // Comments List
+                    VStack(alignment: .leading, spacing: 0) {
                         if communityService.isLoading && comments.isEmpty {
-                            FullScreenLoading(text: "Loading Comments")
+                            MinimalLoadingView(text: "Loading Comments")
+                                .padding(.horizontal, 20)
                         } else if comments.isEmpty {
                             VStack(spacing: 12) {
                                 Image(systemName: "bubble.left")
@@ -1964,8 +2126,9 @@ struct PostDetailView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 40)
+                            .padding(.horizontal, 20)
                         } else {
-                            VStack(spacing: 1) {
+                            VStack(spacing: 12) {
                                 ForEach(comments) { comment in
                                     CommentView(
                                         comment: comment,
@@ -1978,11 +2141,13 @@ struct PostDetailView: View {
                                         },
                                         isReply: false
                                     )
+                                    .padding(.horizontal, 20)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
                                 }
                             }
                         }
                     }
-                    .padding(.bottom, 80) // Space for fixed comment input
+                    .padding(.bottom, 100) // Space for fixed comment input
                 }
             }
             
@@ -1995,6 +2160,42 @@ struct PostDetailView: View {
                     .padding(.vertical, 12)
                     .padding(.bottom, 80) // Add space for tab bar
                     .background(AppConstants.cardBackgroundColor(for: colorScheme))
+            }
+            }
+            
+            // Full screen loading overlay when posting comment
+            if isSubmittingComment {
+                ZStack {
+                    // Semi-transparent backdrop
+                    AppConstants.backgroundColor(for: colorScheme).opacity(0.95)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 24) {
+                        // Animated progress indicator
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(AppConstants.primaryColor)
+                        
+                        VStack(spacing: 8) {
+                            Text("Posting Comment")
+                                .font(.system(size: 20, weight: .bold, design: .rounded))
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                            
+                            Text("Just a moment...")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        }
+                    }
+                    .padding(48)
+                    .background(
+                        RoundedRectangle(cornerRadius: 24)
+                            .fill(AppConstants.cardBackgroundColor(for: colorScheme))
+                            .shadow(color: AppConstants.shadowColor(for: colorScheme).opacity(0.5), radius: 30, y: 15)
+                    )
+                    .padding(.horizontal, 40)
+                }
+                .transition(.opacity)
+                .zIndex(999) // Ensure it's above everything
             }
         }
         .background(AppConstants.backgroundColor(for: colorScheme))
@@ -2049,15 +2250,34 @@ struct PostDetailView: View {
         VStack(alignment: .leading, spacing: 20) {
             // Author Info
             HStack(spacing: 12) {
-                ZStack {
+                // Avatar with profile image support
+                if let profileImageUrl = post.authorProfileImageUrl {
+                    CachedAsyncImage(urlString: profileImageUrl) { image in
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                    } placeholder: {
+                        Circle()
+                            .fill(post.category.color.opacity(0.2))
+                            .frame(width: 40, height: 40)
+                            .overlay(
+                                Text(post.authorInitials)
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(post.category.color)
+                            )
+                    }
+                } else {
                     Circle()
                         .fill(post.category.color.opacity(0.2))
-                    
-                    Text(post.authorInitials)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(post.category.color)
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text(post.authorInitials)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(post.category.color)
+                        )
                 }
-                .frame(width: 40, height: 40)
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(post.author)
@@ -2097,6 +2317,11 @@ struct PostDetailView: View {
                 .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 .lineSpacing(4)
             
+            // Attachments carousel (if any)
+            if !post.attachments.isEmpty {
+                ImageCarouselView(attachments: post.attachments)
+            }
+            
             // Tags
             if !post.tags.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -2128,7 +2353,7 @@ struct PostDetailView: View {
                     Image(systemName: "bubble.left.fill")
                         .font(.system(size: 14))
                         .foregroundColor(.blue)
-                    Text("\(post.commentsCount)")
+                    Text("\(displayCommentsCount)")
                         .font(.system(size: 14, weight: .medium))
                 }
                 
@@ -2201,7 +2426,12 @@ struct PostDetailView: View {
     
     private func loadComments() async {
         do {
-            comments = try await communityService.fetchComments(postId: post.id)
+            let fetchedComments = try await communityService.fetchComments(postId: post.id)
+            await MainActor.run {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    comments = fetchedComments
+                }
+            }
         } catch {
             print("❌ Error loading comments: \(error)")
         }
@@ -2211,7 +2441,10 @@ struct PostDetailView: View {
         guard !commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         
         lightHaptic.impactOccurred(intensity: 0.5)
+        
+        withAnimation(.easeInOut(duration: 0.2)) {
         isSubmittingComment = true
+        }
         
         Task {
             do {
@@ -2224,14 +2457,24 @@ struct PostDetailView: View {
                 await MainActor.run {
                     commentText = ""
                     replyingTo = nil
-                    isSubmittingComment = false
-                    isCommentFieldFocused = false
+                    // Increment comment count optimistically
+                    displayCommentsCount += 1
                 }
                 
+                // Load fresh comments with animation
                 await loadComments()
+                
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        isSubmittingComment = false
+                    }
+                    isCommentFieldFocused = false
+                }
             } catch {
                 await MainActor.run {
+                    withAnimation {
                     isSubmittingComment = false
+                    }
                 }
                 print("❌ Error submitting comment: \(error)")
             }
@@ -2493,6 +2736,11 @@ struct CreatePostView: View {
     @State private var isSubmitting = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var selectedImages: [UIImage] = []
+    @State private var uploadedImageUrls: [String] = [] // Track uploaded URLs
+    @State private var uploadingImageIndex: Int? = nil // Track which image is uploading
+    @State private var showImagePicker = false
+    @StateObject private var imageManager = ImageManager()
     @FocusState private var focusedField: PostField?
     
     init(topic: CommunityTopic? = nil, onPostCreated: @escaping () -> Void) {
@@ -2526,7 +2774,91 @@ struct CreatePostView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Topic display (if topic is provided)
+                topicDisplaySection
+                titleField
+                contentField
+                imagePickerSection
+                categorySection
+                topicSelectorSection
+                tagsField
+                submitButton
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 40)
+        }
+        .background(AppConstants.backgroundColor(for: colorScheme))
+        .navigationTitle("Create Post")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Cancel") {
+                    dismiss()
+                }
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+            }
+            
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: submitPost) {
+                    if isSubmitting {
+                        ProgressView()
+                            .tint(AppConstants.primaryColor)
+                    } else {
+                        Text("Post")
+                            .font(.system(size: 17, weight: .semibold))
+                            .fontDesign(.serif)
+                    }
+                }
+                .foregroundColor(canPost && !isSubmitting ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
+                .disabled(!canPost || isSubmitting)
+            }
+        }
+        .task {
+            if topic == nil {
+                do {
+                    topics = try await communityService.fetchTopics()
+                } catch {
+                    print("❌ Error loading topics: \(error)")
+                }
+            }
+        }
+        .onAppear {
+            lightHaptic.prepare()
+            mediumHaptic.prepare()
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                focusedField = .title
+            }
+        }
+        .alert("Error", isPresented: $showError) {
+            Button("OK") { }
+        } message: {
+            Text(errorMessage)
+        }
+        .sheet(isPresented: $showImagePicker) {
+            MultiImagePicker(selectedImages: $selectedImages, maxImages: 3)
+        }
+        .onChange(of: selectedImages.count) { oldCount, newCount in
+            // New image added - upload it immediately
+            if newCount > oldCount && newCount > uploadedImageUrls.count {
+                let newImageIndex = newCount - 1
+                Task {
+                    await uploadImage(at: newImageIndex)
+                }
+            }
+        }
+        .onDisappear {
+            // Clean up any uploaded images if post wasn't created
+            Task {
+                await cleanupUnusedImages()
+            }
+        }
+    }
+    
+    // MARK: - View Components
+    
+    private var topicDisplaySection: some View {
+        Group {
                 if let selectedTopic = selectedTopic {
                     Card(backgroundColor: selectedTopic.swiftUIColor.opacity(0.1), cornerRadius: 12, padding: 0) {
                         HStack(spacing: 12) {
@@ -2553,10 +2885,12 @@ struct CreatePostView: View {
                             Spacer()
                         }
                         .padding(12)
+                }
+            }
                     }
                 }
                 
-                // Title field
+    private var titleField: some View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Title")
                         .font(.system(size: 16, weight: .semibold))
@@ -2573,10 +2907,11 @@ struct CreatePostView: View {
                         .submitLabel(.next)
                         .onSubmit {
                             focusedField = .content
+                }
                         }
                 }
                 
-                // Content field
+    private var contentField: some View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Details")
                         .font(.system(size: 16, weight: .semibold))
@@ -2603,9 +2938,160 @@ struct CreatePostView: View {
                     }
                     .background(AppConstants.cardBackgroundColor(for: colorScheme))
                     .cornerRadius(12)
+        }
+    }
+    
+    private var imagePickerSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Images (Optional)")
+                    .font(.system(size: 16, weight: .semibold))
+                    .fontDesign(.serif)
+                    .foregroundColor(AppConstants.primaryColor)
+                
+                Spacer()
+                
+                Text("\(selectedImages.count)/3")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+            }
+            
+            imageGridView
+        }
+    }
+    
+    private var imageGridView: some View {
+        Group {
+            if !selectedImages.isEmpty {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, image in
+                        selectedImageCard(image: image, index: index)
+                    }
+                    
+                    if selectedImages.count < 3 {
+                        addMoreImageButton
+                    }
+                }
+            } else {
+                addFirstImageButton
+            }
+        }
+    }
+    
+    private func selectedImageCard(image: UIImage, index: Int) -> some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .topTrailing) {
+                // Image with consistent sizing
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                
+                // Upload progress indicator
+                if uploadingImageIndex == index {
+                    ZStack {
+                        Rectangle()
+                            .fill(Color.black.opacity(0.5))
+                        
+                        VStack(spacing: 8) {
+                            ProgressView()
+                                .tint(.white)
+                            
+                            Text("Uploading...")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
                 
-                // Category selector (only show for topics that allow categories)
+                // Success checkmark if uploaded
+                if index < uploadedImageUrls.count {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            ZStack {
+                                Circle()
+                                    .fill(Color.green)
+                                    .frame(width: 24, height: 24)
+                                
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                            .padding(6)
+                        }
+                        Spacer()
+                    }
+                }
+                
+                // Remove button
+                Button(action: {
+                    Task {
+                        await removeImage(at: index)
+                    }
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.white)
+                        .background(Circle().fill(Color.black.opacity(0.5)).padding(-3))
+                }
+                .padding(6)
+            }
+        }
+        .aspectRatio(1, contentMode: .fit) // Force square aspect ratio
+    }
+    
+    private var addMoreImageButton: some View {
+        Button(action: { showImagePicker = true }) {
+            VStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundColor(AppConstants.primaryColor)
+                
+                Text("Add")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppConstants.primaryColor)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(style: StrokeStyle(lineWidth: 2, dash: [6, 3]))
+                    .foregroundColor(AppConstants.borderColor(for: colorScheme))
+            )
+        }
+        .aspectRatio(1, contentMode: .fit) // Match image cards
+    }
+    
+    private var addFirstImageButton: some View {
+        Button(action: { showImagePicker = true }) {
+            VStack(spacing: 12) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 32))
+                    .foregroundColor(AppConstants.primaryColor.opacity(0.6))
+                
+                Text("Add Photos (up to 3)")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(AppConstants.primaryColor)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(style: StrokeStyle(lineWidth: 2, dash: [8, 4]))
+                    .foregroundColor(AppConstants.borderColor(for: colorScheme))
+            )
+        }
+    }
+    
+    private var categorySection: some View {
+        Group {
                 if let selectedTopic = selectedTopic, 
                    selectedTopic.name != "Notices" && selectedTopic.name != "App Suggestions" {
                     VStack(alignment: .leading, spacing: 8) {
@@ -2614,9 +3100,23 @@ struct CreatePostView: View {
                             .fontDesign(.serif)
                             .foregroundColor(AppConstants.primaryColor)
                         
+                    categoryButtons
+                }
+            }
+        }
+    }
+    
+    private var categoryButtons: some View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 ForEach(PostCategory.allCases.filter { $0 != .all }) { category in
+                    categoryButton(category)
+                }
+            }
+        }
+    }
+    
+    private func categoryButton(_ category: PostCategory) -> some View {
                                     Button(action: {
                                         lightHaptic.impactOccurred(intensity: 0.5)
                                         withAnimation(.spring(response: 0.3)) {
@@ -2634,19 +3134,13 @@ struct CreatePostView: View {
                                         .foregroundColor(selectedCategory == category ? .white : category.color)
                                         .padding(.horizontal, 16)
                                         .padding(.vertical, 10)
-                                        .background(
-                                            selectedCategory == category ?
-                                            category.color : category.color.opacity(0.15)
-                                        )
+            .background(selectedCategory == category ? category.color : category.color.opacity(0.15))
                                         .cornerRadius(20)
-                                    }
-                                }
-                            }
-                        }
                     }
                     }
                     
-                    // Topic selector (if not provided)
+    private var topicSelectorSection: some View {
+        Group {
                     if topic == nil {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Topic")
@@ -2654,9 +3148,23 @@ struct CreatePostView: View {
                             .fontDesign(.serif)
                             .foregroundColor(AppConstants.primaryColor)
                         
+                    topicButtons
+                }
+            }
+        }
+    }
+    
+    private var topicButtons: some View {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
                                 ForEach(topics) { topic in
+                    topicButton(topic)
+                }
+            }
+        }
+    }
+    
+    private func topicButton(_ topic: CommunityTopic) -> some View {
                                     Button(action: {
                                         lightHaptic.impactOccurred(intensity: 0.5)
                                         withAnimation(.spring(response: 0.3)) {
@@ -2674,19 +3182,12 @@ struct CreatePostView: View {
                                         .foregroundColor(selectedTopic?.id == topic.id ? .white : topic.swiftUIColor)
                                         .padding(.horizontal, 16)
                                         .padding(.vertical, 10)
-                                        .background(
-                                            selectedTopic?.id == topic.id ?
-                                            topic.swiftUIColor : topic.swiftUIColor.opacity(0.15)
-                                        )
+            .background(selectedTopic?.id == topic.id ? topic.swiftUIColor : topic.swiftUIColor.opacity(0.15))
                                         .cornerRadius(20)
-                                    }
-                                }
-                            }
-                        }
                     }
                     }
                     
-                    // Tags field
+    private var tagsField: some View {
                     VStack(alignment: .leading, spacing: 8) {
                     Text("Tags (optional)")
                         .font(.system(size: 16, weight: .semibold))
@@ -2707,54 +3208,85 @@ struct CreatePostView: View {
                         .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
                     }
                 }
-                .padding(20)
+    
+    private var submitButton: some View {
+        EmptyView() // Submit button is in toolbar
+    }
+    
+    // MARK: - Image Upload Functions
+    
+    private func uploadImage(at index: Int) async {
+        guard index < selectedImages.count else { return }
+        
+        await MainActor.run {
+            uploadingImageIndex = index
+        }
+        
+        do {
+            let image = selectedImages[index]
+            print("📤 Immediately uploading image \(index + 1)/\(selectedImages.count)")
+            
+            let url = try await imageManager.uploadImage(image, folder: "posts")
+            
+            await MainActor.run {
+                uploadedImageUrls.append(url)
+                uploadingImageIndex = nil
+                print("✅ Image \(index + 1) uploaded and ready: \(url)")
             }
-            .background(AppConstants.backgroundColor(for: colorScheme))
-            .navigationTitle("Create Post")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: submitPost) {
-                        if isSubmitting {
-                            FullScreenLoading(text: "Submitting Post")
-                        } else {
-                            Text("Post")
-                                .font(.system(size: 17, weight: .semibold))
-                                .fontDesign(.serif)
-                        }
-                    }
-                    .foregroundColor(canPost && !isSubmitting ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
-                    .disabled(!canPost || isSubmitting)
+        } catch {
+            await MainActor.run {
+                uploadingImageIndex = nil
+                // Remove the failed image
+                if index < selectedImages.count {
+                    _ = selectedImages.remove(at: index)
                 }
+                errorMessage = "Failed to upload image: \(error.localizedDescription)"
+                showError = true
             }
-            .task {
-                // Load user profile
-                do {
-                    _ = try await authManager.getProfile()
-                } catch {
-                    print("❌ Error loading user profile: \(error)")
-                }
-                
-                if topic == nil {
-                    do {
-                        topics = try await communityService.fetchTopics()
+            print("❌ Failed to upload image \(index + 1): \(error)")
+        }
+    }
+    
+    private func removeImage(at index: Int) async {
+        guard index < selectedImages.count else { return }
+        
+        // Delete from server if it was uploaded
+        if index < uploadedImageUrls.count {
+            let urlToDelete = uploadedImageUrls[index]
+            
+            do {
+                try await imageManager.deleteImage(urlString: urlToDelete)
+                print("🗑️ Deleted image from server: \(urlToDelete)")
                     } catch {
-                        print("❌ Error loading topics: \(error)")
-                    }
+                print("❌ Failed to delete image from server: \(error)")
+                // Continue anyway - remove from UI
+            }
+            
+            await MainActor.run {
+                uploadedImageUrls.remove(at: index)
+            }
+        }
+        
+        await MainActor.run {
+            withAnimation {
+                _ = selectedImages.remove(at: index)
+            }
+        }
+    }
+    
+    private func cleanupUnusedImages() async {
+        // If we have uploaded images but didn't create a post, delete them
+        if !uploadedImageUrls.isEmpty {
+            print("🧹 Cleaning up \(uploadedImageUrls.count) unused uploaded images")
+            
+            for urlString in uploadedImageUrls {
+                do {
+                    try await imageManager.deleteImage(urlString: urlString)
+                    print("🗑️ Cleaned up: \(urlString)")
+                } catch {
+                    print("❌ Failed to cleanup: \(error)")
                 }
             }
-            .onAppear {
-                lightHaptic.prepare()
-                mediumHaptic.prepare()
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    focusedField = .title
-                }
-            }
-            .alert("Error", isPresented: $showError) {
-                Button("OK") { }
-            } message: {
-                Text(errorMessage)
             }
         }
     
@@ -2782,24 +3314,37 @@ struct CreatePostView: View {
             categoryToUse = selectedCategory
         }
         
+        // Ensure all images are uploaded before posting
+        guard uploadedImageUrls.count == selectedImages.count else {
+            errorMessage = "Please wait for all images to finish uploading"
+            showError = true
+            isSubmitting = false
+            return
+        }
+        
         Task {
             do {
+                // Images are already uploaded! Just create the post
                 _ = try await communityService.createPost(
                     topicId: selectedTopic.id,
                     title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                     content: content.trimmingCharacters(in: .whitespacesAndNewlines),
                     category: categoryToUse,
-                    tags: parsedTags
+                    tags: parsedTags,
+                    attachmentUrls: uploadedImageUrls
                 )
                 
                 await MainActor.run {
+                    print("✅ Post created successfully with \(uploadedImageUrls.count) images")
+                    // Clear the uploaded URLs so onDisappear doesn't delete them
+                    uploadedImageUrls.removeAll()
                     dismiss()
                     onPostCreated()
                 }
             } catch {
                 await MainActor.run {
                     isSubmitting = false
-                    errorMessage = error.localizedDescription
+                    errorMessage = "Failed to create post: \(error.localizedDescription)"
                     showError = true
                 }
             }
@@ -3019,15 +3564,34 @@ struct PostEntryView: View {
                 .foregroundColor(.gray)
             
             HStack(alignment: .top, spacing: 12) {
-                // Author initials
-                Circle()
-                    .fill(AppConstants.primaryColor.opacity(0.2))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Text(post.authorInitials)
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(AppConstants.primaryColor)
-                    )
+                // Author avatar with profile image support
+                if let profileImageUrl = post.authorProfileImageUrl {
+                    CachedAsyncImage(urlString: profileImageUrl) { image in
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 40, height: 40)
+                            .clipShape(Circle())
+                    } placeholder: {
+                        Circle()
+                            .fill(AppConstants.primaryColor.opacity(0.2))
+                            .frame(width: 40, height: 40)
+                            .overlay(
+                                Text(post.authorInitials)
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(AppConstants.primaryColor)
+                            )
+                    }
+                } else {
+                    Circle()
+                        .fill(AppConstants.primaryColor.opacity(0.2))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text(post.authorInitials)
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(AppConstants.primaryColor)
+                        )
+                }
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(post.author)
@@ -3068,6 +3632,55 @@ func timeAgoString(from date: Date) -> String {
     } else {
         let weeks = seconds / 604800
         return "\(weeks)w ago"
+    }
+}
+
+// MARK: - Multi Image Picker
+
+struct MultiImagePicker: UIViewControllerRepresentable {
+    @Binding var selectedImages: [UIImage]
+    let maxImages: Int
+    @Environment(\.dismiss) var dismiss
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.delegate = context.coordinator
+        picker.sourceType = .photoLibrary
+        picker.allowsEditing = false // Don't crop to square
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: MultiImagePicker
+        
+        init(_ parent: MultiImagePicker) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+            // Only add if under max limit
+            guard parent.selectedImages.count < parent.maxImages else {
+                parent.dismiss()
+                return
+            }
+            
+            // Always use original image (no cropping)
+            if let originalImage = info[.originalImage] as? UIImage {
+                parent.selectedImages.append(originalImage)
+            }
+            
+            parent.dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
     }
 }
 
