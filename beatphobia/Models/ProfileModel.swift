@@ -14,6 +14,8 @@ struct Profile: Codable, Identifiable, Equatable {
     var biography: String?
     var role: String?
     var profileImageUrl: String?
+    var markedForDeletion: Bool?
+    var deletionScheduledAt: Date?
     let createdAt: Date
     var updatedAt: Date
 
@@ -24,6 +26,8 @@ struct Profile: Codable, Identifiable, Equatable {
         case biography
         case role
         case profileImageUrl = "profile_image_url"
+        case markedForDeletion = "marked_for_deletion"
+        case deletionScheduledAt = "deletion_scheduled_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }

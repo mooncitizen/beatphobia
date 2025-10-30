@@ -189,6 +189,14 @@ struct PaywallView: View {
                             if let yearlyProduct = subscriptionManager.getProduct(for: .proYearly),
                                let monthlyProduct = subscriptionManager.getProduct(for: .proMonthly) {
                                 
+                                let _ = {
+                                    print("💰 StoreKit Prices:")
+                                    print("   - Yearly: \(yearlyProduct.displayPrice) (ID: \(yearlyProduct.id))")
+                                    print("   - Monthly: \(monthlyProduct.displayPrice) (ID: \(monthlyProduct.id))")
+                                    print("   - Price per month: \(subscriptionManager.getPricePerMonth(for: .proYearly) ?? "N/A")")
+                                    print("   - Savings: \(subscriptionManager.getSavingsPercentage() ?? 0)%")
+                                }()
+                                
                                 // Yearly Plan (Recommended)
                                 PricingCard(
                                     tier: .proYearly,
@@ -450,51 +458,65 @@ struct PricingCard: View {
     var body: some View {
         Button(action: onSelect) {
             VStack(spacing: 0) {
-                // Recommended Badge
+                // Recommended Badge (redesigned)
                 if tier == .proYearly, let savings = savingsPercentage, savings > 0 {
                     HStack {
                         Spacer()
-                        Text("BEST VALUE • SAVE \(savings)%")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 6)
-                            .background(
-                                LinearGradient(
-                                    colors: [.orange, .red],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                        
+                        HStack(spacing: 6) {
+                            Image(systemName: "star.fill")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.yellow)
+                            
+                            Text("SAVE \(savings)%")
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            LinearGradient(
+                                colors: [.green, .green.opacity(0.8)],
+                                startPoint: .leading,
+                                endPoint: .trailing
                             )
-                            .cornerRadius(12, corners: [.topLeft, .topRight])
+                        )
+                        .clipShape(Capsule())
+                        .shadow(color: Color.green.opacity(0.4), radius: 6, y: 3)
+                        
                         Spacer()
                     }
+                    .padding(.top, 12)
+                    .padding(.bottom, 4)
                 }
                 
                 HStack(spacing: 16) {
                     VStack(alignment: .leading, spacing: 10) {
                         Text(tier.displayName)
-                            .font(.system(size: 22, weight: .bold, design: .rounded))
+                            .font(.system(size: 18, weight: .semibold, design: .rounded))
                             .foregroundColor(.primary)
                         
-                        if let pricePerMonth = pricePerMonth {
-                            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                Text(pricePerMonth)
-                                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                                    .foregroundColor(.primary)
+                        // Show actual billed amount MOST prominently (Apple requirement)
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(product.displayPrice)
+                                .font(.system(size: 36, weight: .bold, design: .rounded))
+                                .foregroundColor(.primary)
+                            
+                            if tier == .proYearly {
+                                Text("/year")
+                                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                            } else {
                                 Text("/month")
-                                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                                    .font(.system(size: 16, weight: .medium, design: .rounded))
                                     .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                             }
                         }
                         
-                        if tier == .proYearly {
-                            Text("Billed \(product.displayPrice) annually")
-                                .font(.system(size: 13, design: .rounded))
-                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
-                        } else {
-                            Text("Billed monthly")
-                                .font(.system(size: 13, design: .rounded))
+                        // Show monthly equivalent SMALLER and subordinate
+                        if tier == .proYearly, let pricePerMonth = pricePerMonth {
+                            Text("Just \(pricePerMonth)/month")
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
                                 .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         }
                     }

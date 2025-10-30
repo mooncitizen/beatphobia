@@ -23,6 +23,8 @@ struct ProfileView: View {
     @State private var showCrisisHotlines = false
     @State private var showProfileImagePicker = false
     @State private var isUploadingProfileImage = false
+    @State private var showDeleteAccountAlert = false
+    @State private var isDeletingAccount = false
     @StateObject private var imageManager = ImageManager()
     
     @State private var locationStatus: CLAuthorizationStatus = .notDetermined
@@ -45,10 +47,66 @@ struct ProfileView: View {
         return authManager.currentUser?.email ?? "Loading..."
     }
     
+    private var isMarkedForDeletion: Bool {
+        return authManager.currentUserProfile?.markedForDeletion == true
+    }
+    
+    private var deletionDate: Date? {
+        return authManager.currentUserProfile?.deletionScheduledAt
+    }
+    
+    private var daysUntilDeletion: Int? {
+        guard let deletionDate = deletionDate else { return nil }
+        let days = Calendar.current.dateComponents([.day], from: Date(), to: deletionDate).day
+        return max(0, days ?? 0)
+    }
+    
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 0) {
+                    // Deletion Warning Banner (if marked for deletion)
+                    if isMarkedForDeletion, let days = daysUntilDeletion, let deletionDate = deletionDate {
+                        VStack(spacing: 12) {
+                            HStack(spacing: 12) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.orange)
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Account Deletion Scheduled")
+                                        .font(.system(size: 16, weight: .bold))
+                                        .foregroundColor(.primary)
+                                    
+                                    Text("Your account will be permanently deleted in \(days) day\(days == 1 ? "" : "s") on \(deletionDate.formatted(date: .abbreviated, time: .omitted))")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                            }
+                            
+                            Button(action: {
+                                Task {
+                                    await cancelDeletion()
+                                }
+                            }) {
+                                Text("Cancel Deletion")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(Color.blue)
+                                    .cornerRadius(10)
+                            }
+                        }
+                        .padding(16)
+                        .background(Color.orange.opacity(0.1))
+                        .cornerRadius(12)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                    }
+                    
                     // Profile Card at the top
                     VStack(spacing: 16) {
                         // Profile Avatar Circle with image
@@ -440,6 +498,27 @@ struct ProfileView: View {
                         .padding(.horizontal, 20)
                     }
                     
+                    // Delete Account Button (only show if not already marked)
+                    if !isMarkedForDeletion {
+                        Button(action: {
+                            showDeleteAccountAlert = true
+                        }) {
+                            HStack {
+                                Spacer()
+                                Text("Delete Account")
+                                    .font(.body.bold())
+                                    .fontDesign(.serif)
+                                Spacer()
+                            }
+                            .padding()
+                            .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                            .foregroundColor(.red)
+                            .cornerRadius(12)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 32)
+                    }
+                    
                     // Logout Button
                     Button(action: {
                         Task {
@@ -455,12 +534,12 @@ struct ProfileView: View {
                         }
                         .padding()
                         .background(AppConstants.cardBackgroundColor(for: colorScheme))
-                        .foregroundColor(.red)
+                        .foregroundColor(.orange)
                         .cornerRadius(12)
                     }
                     .padding(.horizontal, 20)
-                    .padding(.top, 32)
-                    .padding(.bottom, 40)
+                    .padding(.top, 16)
+                    .padding(.bottom, 100)
                 }
             }
             .background(AppConstants.backgroundColor(for: colorScheme))
@@ -506,6 +585,70 @@ struct ProfileView: View {
                     }
                 }
             }
+            .alert("Schedule Account Deletion", isPresented: $showDeleteAccountAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Schedule Deletion", role: .destructive) {
+                    Task {
+                        await deleteAccount()
+                    }
+                }
+            } message: {
+                Text("Your account will be scheduled for deletion in 7 days. You can cancel this at any time during the 7-day period. After 7 days, all your data including journeys, journal entries, and community posts will be permanently deleted.")
+            }
+        }
+    }
+    
+    // MARK: - Account Deletion
+    
+    private func deleteAccount() async {
+        isDeletingAccount = true
+        
+        do {
+            print("🗑️ Marking account for deletion...")
+            
+            // Call database function to mark account for deletion (7-day grace period)
+            struct DeletionResponse: Decodable {
+                let deletion_date: String
+            }
+            
+            let response: [DeletionResponse] = try await supabase
+                .rpc("mark_account_for_deletion")
+                .execute()
+                .value
+            
+            if let deletionDateString = response.first?.deletion_date {
+                print("✅ Account marked for deletion. Scheduled for: \(deletionDateString)")
+            }
+            
+            // Refresh profile to show deletion banner
+            _ = try await authManager.getProfile()
+            
+            await MainActor.run {
+                isDeletingAccount = false
+            }
+            
+            print("✅ Account marked for deletion successfully")
+        } catch {
+            await MainActor.run {
+                isDeletingAccount = false
+            }
+            print("❌ Failed to mark account for deletion: \(error)")
+        }
+    }
+    
+    private func cancelDeletion() async {
+        do {
+            print("🔄 Cancelling account deletion...")
+            
+            // Call database function to cancel deletion
+            try await supabase.rpc("cancel_account_deletion").execute()
+            
+            // Refresh profile to hide deletion banner
+            _ = try await authManager.getProfile()
+            
+            print("✅ Account deletion cancelled successfully")
+        } catch {
+            print("❌ Failed to cancel deletion: \(error)")
         }
     }
     
@@ -553,7 +696,7 @@ struct ProfileView: View {
             print("✅ Profile updated in database")
             
             // Refresh profile data
-            try await authManager.getProfile()
+            _ = try await authManager.getProfile()
             
             await MainActor.run {
                 isUploadingProfileImage = false

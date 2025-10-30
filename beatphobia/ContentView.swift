@@ -38,9 +38,9 @@ struct ContentView: View {
                     .task {
                         await loadProfile()
                     }
-                    .onChange(of: authManager.currentUserProfile) { newProfile in
+                    .onChange(of: authManager.currentUserProfile) { oldProfile, newProfile in
                         // Re-evaluate profileExists when profile changes
-                        if let profile = newProfile {
+                        if newProfile != nil {
                             profileExists = true
                         }
                     }
