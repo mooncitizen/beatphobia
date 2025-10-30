@@ -17,7 +17,7 @@ class CommunityService: ObservableObject {
     // MARK: - Caching
     private var cachedPosts: [String: [PostDisplayModel]] = [:] // In-memory cache
     private var cacheTimestamps: [String: Date] = [:]
-    private let cacheValidityDuration: TimeInterval = 30 // 30 seconds cache
+    private let cacheValidityDuration: TimeInterval = 300 // 5 minutes cache (300 seconds)
     
     // Local persistent storage keys
     private let userDefaults = UserDefaults.standard
@@ -61,6 +61,36 @@ class CommunityService: ObservableObject {
         // Clear persistent cache too
         userDefaults.removeObject(forKey: cachePrefix + key)
         userDefaults.removeObject(forKey: cachePrefix + key + "_timestamp")
+    }
+    
+    // Update a specific post's like state in all caches
+    func updatePostLikeState(postId: UUID, isLiked: Bool) {
+        var cacheUpdated = false
+        
+        for (key, posts) in cachedPosts {
+            if let index = posts.firstIndex(where: { $0.id == postId }) {
+                var updatedPosts = posts
+                
+                // Create a mutable copy and update it
+                var updatedPost = updatedPosts[index]
+                let oldLikeState = updatedPost.isLiked
+                updatedPost.isLiked = isLiked
+                updatedPosts[index] = updatedPost
+                
+                // Update the cache
+                cachedPosts[key] = updatedPosts
+                
+                // Update persistent cache too
+                saveToPersistentCache(posts: updatedPosts, key: key)
+                
+                print("✅ Updated post \(postId) in cache '\(key)': isLiked \(oldLikeState) → \(isLiked)")
+                cacheUpdated = true
+            }
+        }
+        
+        if !cacheUpdated {
+            print("⚠️ Post \(postId) not found in any cache (cache might be empty)")
+        }
     }
     
     // MARK: - Persistent Cache (UserDefaults)
@@ -707,6 +737,8 @@ class CommunityService: ObservableObject {
     func togglePostLike(postId: UUID) async throws -> Bool {
         let userId = try await supabase.auth.session.user.id
         
+        print("🔍 Checking if post \(postId) is liked by user \(userId)")
+        
         // Check if already liked
         let existing: [PostLike] = try await supabase
             .from("community_post_likes")
@@ -715,6 +747,8 @@ class CommunityService: ObservableObject {
             .eq("user_id", value: userId.uuidString)
             .execute()
             .value
+        
+        print("📊 Found \(existing.count) existing likes")
         
         if existing.isEmpty {
             // Like the post
@@ -732,6 +766,12 @@ class CommunityService: ObservableObject {
                 .from("community_post_likes")
                 .insert(like)
                 .execute()
+            
+            print("✅ Post liked successfully")
+            
+            // Update cache to reflect new like state
+            updatePostLikeState(postId: postId, isLiked: true)
+            
             return true
         } else {
             // Unlike the post
@@ -741,6 +781,12 @@ class CommunityService: ObservableObject {
                 .eq("post_id", value: postId.uuidString)
                 .eq("user_id", value: userId.uuidString)
                 .execute()
+            
+            print("✅ Post unliked successfully")
+            
+            // Update cache to reflect new like state
+            updatePostLikeState(postId: postId, isLiked: false)
+            
             return false
         }
     }

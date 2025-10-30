@@ -58,11 +58,29 @@ struct MoodPill: View {
     }
 }
 
+enum JournalTimePeriod: String, CaseIterable {
+    case week = "7D"
+    case month = "1M"
+    case sixMonths = "6M"
+    case year = "1Y"
+    
+    var days: Int {
+        switch self {
+        case .week: return 7
+        case .month: return 30
+        case .sixMonths: return 180
+        case .year: return 365
+        }
+    }
+}
+
 struct JournalHome: View {
     @EnvironmentObject var subscriptionManager: SubscriptionManager
     @Environment(\.colorScheme) var colorScheme
     
     @State private var selectedMood: Mood?
+    @State private var moodChartPage: Int? = 0
+    @State private var selectedTimePeriod: JournalTimePeriod = .week
     private let allMoods: [Mood] = [.happy, .excited, .angry, .stressed, .sad]
     
     @ObservedResults(
@@ -206,11 +224,38 @@ struct JournalHome: View {
                             .padding(.horizontal, 20)
                             .padding(.top, 24)
                         
-                        // Mood Insights
-                        if !moodDistribution.filter({ $0.count > 0 }).isEmpty {
-                            moodInsightsSection
-                                .padding(.horizontal, 20)
-                                .padding(.top, 16)
+                        // Mood Insights & Chart - Horizontal scroll with paging
+                        if !moodDistribution.filter({ $0.count > 0 }).isEmpty && journalEntries.count > 3 {
+                            VStack(spacing: 12) {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    LazyHStack(spacing: 0) {
+                                        // Page 1: Mood Insights (First)
+                                        moodInsightsSection
+                                            .containerRelativeFrame(.horizontal)
+                                            .id(0)
+                                        
+                                        // Page 2: Mood Chart (Second)
+                                        moodChartView
+                                            .containerRelativeFrame(.horizontal)
+                                            .id(1)
+                                    }
+                                    .scrollTargetLayout()
+                                }
+                                .scrollTargetBehavior(.paging)
+                                .scrollPosition(id: $moodChartPage)
+                                .frame(height: 280)
+                                
+                                // Page indicators
+                                HStack(spacing: 8) {
+                                    ForEach(0..<2, id: \.self) { index in
+                                        Circle()
+                                            .fill((moodChartPage ?? 0) == index ? AppConstants.primaryColor : AppConstants.borderColor(for: colorScheme).opacity(0.4))
+                                            .frame(width: 8, height: 8)
+                                            .animation(.easeInOut(duration: 0.2), value: moodChartPage)
+                                    }
+                                }
+                            }
+                            .padding(.top, 1)
                         }
                     }
                     
@@ -340,6 +385,10 @@ struct JournalHome: View {
     }
     
     // MARK: - Mood Insights Section
+    private var moodInsightsCompact: some View {
+        moodInsightsSection
+    }
+    
     private var moodInsightsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Mood Insights")
@@ -357,6 +406,7 @@ struct JournalHome: View {
         .background(AppConstants.cardBackgroundColor(for: colorScheme))
         .cornerRadius(20)
         .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 2)
+        .padding(.horizontal, 20)
     }
     
     private func moodInsightRow(mood: Mood, count: Int, total: Int) -> some View {
@@ -440,12 +490,22 @@ struct JournalHome: View {
         .padding(.vertical, 40)
     }
     
+    // Group entries by day
+    private var entriesByDay: [(date: Date, entries: [JournalEntryModel])] {
+        let calendar = Calendar.current
+        let grouped = Dictionary(grouping: Array(journalEntries)) { entry in
+            calendar.startOfDay(for: entry.date)
+        }
+        return grouped.map { (date: $0.key, entries: $0.value) }
+            .sorted { $0.date > $1.date }
+    }
+    
     // MARK: - Entries Section
     private var entriesSection: some View {
         VStack(spacing: 16) {
             // Section Header
             HStack {
-                Text("Recent Entries")
+                Text("Journal Entries")
                     .font(.system(size: 24, weight: .bold))
                     .fontDesign(.serif)
                     .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
@@ -453,16 +513,193 @@ struct JournalHome: View {
                 Spacer()
             }
             
-            // Entry Cards
-            VStack(spacing: 12) {
-                ForEach(journalEntries.prefix(5)) { entry in
-                    NavigationLink(destination: entryDetailView(entry: entry)) {
-                        entryCard(entry: entry)
+            // Entries grouped by day
+            VStack(spacing: 20) {
+                ForEach(entriesByDay.prefix(10), id: \.date) { dayGroup in
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Day header
+                        Text(dayHeaderText(for: dayGroup.date))
+                            .font(.system(size: 16, weight: .bold))
+                            .fontDesign(.serif)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                            .padding(.leading, 4)
+                        
+                        // Entries for this day
+                        VStack(spacing: 12) {
+                            ForEach(dayGroup.entries) { entry in
+                                NavigationLink(destination: JournalEntryDetailView(entry: entry)) {
+                                    entryCard(entry: entry)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                            }
+                        }
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
             }
         }
+    }
+    
+    private func dayHeaderText(for date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            return "Today"
+        } else {
+            // Use same format as journey list
+            return date.formatted(date: .abbreviated, time: .omitted)
+        }
+    }
+    
+    // MARK: - Mood Chart (Pro Feature)
+    private var moodChartView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Header
+            HStack {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.purple)
+                
+                Text("Mood Over Time")
+                    .font(.system(size: 18, weight: .bold))
+                    .fontDesign(.serif)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                
+                Spacer()
+            }
+            
+            // Time period selector
+            HStack(spacing: 8) {
+                ForEach(JournalTimePeriod.allCases, id: \.self) { period in
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            selectedTimePeriod = period
+                        }
+                    }) {
+                        Text(period.rawValue)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(selectedTimePeriod == period ? .white : AppConstants.primaryTextColor(for: colorScheme))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                selectedTimePeriod == period ? 
+                                Color.purple : Color.gray.opacity(0.1)
+                            )
+                            .cornerRadius(8)
+                    }
+                }
+            }
+            
+            // Bar chart based on selected period
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .bottom, spacing: 8) {
+                    ForEach(moodDataForPeriod(selectedTimePeriod), id: \.date) { dayData in
+                        VStack(spacing: 4) {
+                            // Bar
+                            if let mood = dayData.mood {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [mood.color, mood.color.opacity(0.6)],
+                                            startPoint: .top,
+                                            endPoint: .bottom
+                                        )
+                                    )
+                                    .frame(width: 35, height: CGFloat(dayData.entries) * 20 + 30)
+                                    .overlay(
+                                        Text("\(dayData.entries)")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .foregroundColor(.white)
+                                            .padding(.bottom, 4),
+                                        alignment: .bottom
+                                    )
+                            } else {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color.gray.opacity(0.2))
+                                    .frame(width: 35, height: 30)
+                            }
+                            
+                            // Day label
+                            Text(dayData.label)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .frame(height: 140)
+        }
+        .padding(20)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.purple.opacity(0.08),
+                    Color.purple.opacity(0.03)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .cornerRadius(20)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.purple.opacity(0.2), lineWidth: 1)
+        )
+        .padding(.horizontal, 20)
+    }
+    
+    private func moodDataForPeriod(_ period: JournalTimePeriod) -> [(date: Date, mood: Mood?, entries: Int, label: String)] {
+        let calendar = Calendar.current
+        var result: [(date: Date, mood: Mood?, entries: Int, label: String)] = []
+        let days = period.days
+        
+        // Adjust bar count based on period
+        let barCount = min(days, period == .week ? 7 : (period == .month ? 30 : 12))
+        let interval = days / barCount // Group days if showing longer periods
+        
+        for i in (0..<barCount).reversed() {
+            let daysBack = i * interval
+            guard let date = calendar.date(byAdding: .day, value: -daysBack, to: Date()) else { continue }
+            let startOfDay = calendar.startOfDay(for: date)
+            
+            // For longer periods, aggregate multiple days
+            var dayEntries: [JournalEntryModel] = []
+            if interval > 1 {
+                // Aggregate entries over the interval
+                for j in 0..<interval {
+                    guard let checkDate = calendar.date(byAdding: .day, value: -j, to: startOfDay) else { continue }
+                    dayEntries.append(contentsOf: journalEntries.filter { entry in
+                        calendar.isDate(entry.date, inSameDayAs: checkDate)
+                    })
+                }
+            } else {
+                dayEntries = journalEntries.filter { entry in
+                    calendar.isDate(entry.date, inSameDayAs: startOfDay)
+                }
+            }
+            
+            let dominantMood = dayEntries.max(by: { e1, e2 in
+                dayEntries.filter { $0.mood == e1.mood }.count < dayEntries.filter { $0.mood == e2.mood }.count
+            })?.mood
+            
+            let label: String
+            if period == .week {
+                if calendar.isDateInToday(startOfDay) {
+                    label = "Today"
+                } else if calendar.isDateInYesterday(startOfDay) {
+                    label = "Yest"
+                } else {
+                    label = startOfDay.formatted(.dateTime.weekday(.abbreviated))
+                }
+            } else if period == .month {
+                label = startOfDay.formatted(.dateTime.day())
+            } else {
+                label = startOfDay.formatted(.dateTime.month(.abbreviated))
+            }
+            
+            result.append((date: startOfDay, mood: dominantMood, entries: dayEntries.count, label: label))
+        }
+        
+        return result
     }
     
     private func entryCard(entry: JournalEntryModel) -> some View {
@@ -518,7 +755,18 @@ struct JournalHome: View {
         )
     }
     
-    private func entryDetailView(entry: JournalEntryModel) -> some View {
+}
+
+// MARK: - Journal Entry Detail View
+
+struct JournalEntryDetailView: View {
+    let entry: JournalEntryModel
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    @State private var showEditSheet = false
+    @State private var showDeleteAlert = false
+    
+    var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 // Header
@@ -544,6 +792,8 @@ struct JournalHome: View {
                                 .font(.system(size: 14))
                                 .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                         }
+                        
+                        Spacer()
                     }
                 }
                 
@@ -563,8 +813,163 @@ struct JournalHome: View {
         .background(AppConstants.backgroundColor(for: colorScheme))
         .navigationTitle("Journal Entry")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button(action: { showEditSheet = true }) {
+                        Label("Edit Entry", systemImage: "pencil")
+                    }
+                    
+                    Button(role: .destructive, action: { showDeleteAlert = true }) {
+                        Label("Delete Entry", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundColor(AppConstants.primaryColor)
+                }
+            }
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditJournalEntryView(entry: entry)
+        }
+        .alert("Delete Entry", isPresented: $showDeleteAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                deleteEntry()
+            }
+        } message: {
+            Text("Are you sure you want to delete this journal entry? This action cannot be undone.")
+        }
+    }
+    
+    private func deleteEntry() {
+        guard let realm = try? Realm() else { return }
+        
+        if let entryToDelete = realm.object(ofType: JournalEntryModel.self, forPrimaryKey: entry.id) {
+            try? realm.write {
+                realm.delete(entryToDelete)
+            }
+            dismiss()
+        }
     }
 }
+
+// MARK: - Edit Journal Entry View
+
+struct EditJournalEntryView: View {
+    let entry: JournalEntryModel
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    @State private var editedText: String
+    @State private var selectedMood: Mood
+    @FocusState private var isTextFieldFocused: Bool
+    
+    private let allMoods: [Mood] = [.happy, .excited, .angry, .stressed, .sad]
+    
+    init(entry: JournalEntryModel) {
+        self.entry = entry
+        self._editedText = State(initialValue: entry.text)
+        self._selectedMood = State(initialValue: entry.mood)
+    }
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Mood selector
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("How are you feeling?")
+                            .font(.system(size: 18, weight: .bold))
+                            .fontDesign(.serif)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                        
+                        HStack(spacing: 12) {
+                            ForEach(allMoods) { mood in
+                                Button(action: {
+                                    selectedMood = mood
+                                }) {
+                                    VStack(spacing: 8) {
+                                        ZStack {
+                                            Circle()
+                                                .fill(mood.color.opacity(selectedMood == mood ? 0.2 : 0.1))
+                                                .frame(width: 50, height: 50)
+                                            
+                                            Image(systemName: mood.iconName)
+                                                .font(.system(size: 22, weight: .semibold))
+                                                .foregroundColor(mood.color)
+                                        }
+                                        .scaleEffect(selectedMood == mood ? 1.1 : 1.0)
+                                        
+                                        Text(mood.text)
+                                            .font(.system(size: 11, weight: .semibold))
+                                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    
+                    // Text editor
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("What's on your mind?")
+                            .font(.system(size: 18, weight: .bold))
+                            .fontDesign(.serif)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                        
+                        TextEditor(text: $editedText)
+                            .font(.system(size: 17))
+                            .fontDesign(.serif)
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                            .frame(minHeight: 200)
+                            .padding(12)
+                            .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                            .cornerRadius(12)
+                            .focused($isTextFieldFocused)
+                    }
+                }
+                .padding(20)
+            }
+            .background(AppConstants.backgroundColor(for: colorScheme))
+            .navigationTitle("Edit Entry")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        saveChanges()
+                    }
+                    .foregroundColor(AppConstants.primaryColor)
+                    .disabled(editedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    isTextFieldFocused = true
+                }
+            }
+        }
+    }
+    
+    private func saveChanges() {
+        guard let realm = try? Realm() else { return }
+        
+        if let entryToEdit = realm.object(ofType: JournalEntryModel.self, forPrimaryKey: entry.id) {
+            try? realm.write {
+                entryToEdit.text = editedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                entryToEdit.mood = selectedMood
+            }
+            dismiss()
+        }
+    }
+}
+
 
 // MARK: - Flow Layout
 struct FlowLayout: Layout {

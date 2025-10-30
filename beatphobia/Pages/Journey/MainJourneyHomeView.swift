@@ -143,6 +143,15 @@ struct JourneyAgorahobiaView: View {
             destinationView: { AnyView(SafeSpaceView()) }
         ),
         CalmingTool(
+            name: "Tapper",
+            category: .distraction,
+            icon: "hand.tap.fill",
+            description: "Tap the targets quickly in this Whack-a-Mole style game",
+            duration: "1-2 min",
+            difficulty: "Easy",
+            destinationView: { AnyView(TapperView()) }
+        ),
+        CalmingTool(
             name: "Counting Game",
             category: .distraction,
             icon: "number.circle.fill",
@@ -159,15 +168,6 @@ struct JourneyAgorahobiaView: View {
             duration: "3-5 min",
             difficulty: "Easy",
             destinationView: { AnyView(ColorHuntView()) }
-        ),
-        CalmingTool(
-            name: "Tapper",
-            category: .distraction,
-            icon: "hand.tap.fill",
-            description: "Tap the targets quickly in this Whack-a-Mole style game",
-            duration: "1-2 min",
-            difficulty: "Easy",
-            destinationView: { AnyView(TapperView()) }
         ),
         CalmingTool(
             name: "Positive Affirmations",

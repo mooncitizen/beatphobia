@@ -108,13 +108,6 @@ struct CommunityOverview: View {
         .task {
             await checkUsername()
         }
-        .onAppear {
-            // Clear cache on first appear to ensure we get fresh data with profile images
-            // TODO: Remove this after users have fresh data
-            let communityService = CommunityService()
-            communityService.invalidateCache()
-            print("🗑️ Cleared community cache to fetch fresh profile images")
-        }
     }
     
     private var communityContent: some View {
@@ -1434,6 +1427,7 @@ struct PostCard: View {
     @State private var isBookmarked: Bool
     @State private var displayLikesCount: Int
     @State private var displayCommentsCount: Int
+    @State private var showUserProfile = false
 
     init(post: PostDisplayModel, communityService: CommunityService) {
         self.post = post
@@ -1456,46 +1450,53 @@ struct PostCard: View {
     var body: some View {
         Card(backgroundColor: AppConstants.cardBackgroundColor(for: colorScheme), cornerRadius: 16, padding: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                // Header: Author Info
+                // Header: Author Info (Tappable)
                 HStack(spacing: 12) {
-                    // Avatar with profile image support
-                    if let profileImageUrl = post.authorProfileImageUrl {
-                        CachedAsyncImage(urlString: profileImageUrl) { image in
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 40, height: 40)
-                                .clipShape(Circle())
-                        } placeholder: {
-                            Circle()
-                                .fill(post.category.color.opacity(0.2))
-                                .frame(width: 40, height: 40)
-                                .overlay(
-                                    Text(post.authorInitials)
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundColor(post.category.color)
-                                )
+                    Button(action: {
+                        showUserProfile = true
+                    }) {
+                        HStack(spacing: 12) {
+                            // Avatar with profile image support
+                            if let profileImageUrl = post.authorProfileImageUrl {
+                                CachedAsyncImage(urlString: profileImageUrl) { image in
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 40, height: 40)
+                                        .clipShape(Circle())
+                                } placeholder: {
+                                    Circle()
+                                        .fill(post.category.color.opacity(0.2))
+                                        .frame(width: 40, height: 40)
+                                        .overlay(
+                                            Text(post.authorInitials)
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundColor(post.category.color)
+                                        )
+                                }
+                            } else {
+                                Circle()
+                                    .fill(post.category.color.opacity(0.2))
+                                    .frame(width: 40, height: 40)
+                                    .overlay(
+                                        Text(post.authorInitials)
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(post.category.color)
+                                    )
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(post.author)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
+                                Text(timeAgoString(from: post.timestamp))
+                                    .font(.system(size: 13))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
+                            }
                         }
-                    } else {
-                        Circle()
-                            .fill(post.category.color.opacity(0.2))
-                            .frame(width: 40, height: 40)
-                            .overlay(
-                                Text(post.authorInitials)
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(post.category.color)
-                            )
                     }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(post.author)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-
-                        Text(timeAgoString(from: post.timestamp))
-                            .font(.system(size: 13))
-                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
-                    }
+                    .buttonStyle(PlainButtonStyle())
                     
                     Spacer()
                     
@@ -1603,6 +1604,8 @@ struct PostCard: View {
                     Button(action: {
                         Task {
                             let wasLiked = isLiked
+                            print("❤️ Like button tapped - Post: \(post.id), Current state: \(wasLiked)")
+                            
                             do {
                                 // Optimistically update UI before API call
                                 withAnimation(.spring(response: 0.3)) {
@@ -1614,7 +1617,10 @@ struct PostCard: View {
                                         displayLikesCount = max(0, displayLikesCount - 1) // Prevent negative
                                     }
                                 }
-                                _ = try await communityService.togglePostLike(postId: post.id)
+                                
+                                print("🔄 Calling togglePostLike API...")
+                                let result = try await communityService.togglePostLike(postId: post.id)
+                                print("✅ Like toggled successfully, new state: \(result)")
                             } catch {
                                 // Revert on error
                                 withAnimation(.spring(response: 0.3)) {
@@ -1627,6 +1633,7 @@ struct PostCard: View {
                                     }
                                 }
                                 print("❌ Error toggling like: \(error)")
+                                print("❌ Error details: \(error.localizedDescription)")
                             }
                         }
                     }) {
@@ -1676,6 +1683,9 @@ struct PostCard: View {
                 }
                 .padding(16)
             }
+        }
+        .fullScreenCover(isPresented: $showUserProfile) {
+            UserProfileView(userId: post.userId, username: post.author)
         }
     }
 }
@@ -1836,6 +1846,7 @@ struct CommentView: View {
     @State private var currentUserId: UUID?
     @State private var showEditComment = false
     @State private var showDeleteAlert = false
+    @State private var showUserProfile = false
     private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
     
     var isCommentAuthor: Bool {
@@ -1856,15 +1867,28 @@ struct CommentView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
-                // Avatar with profile image support
-                if let profileImageUrl = comment.authorProfileImageUrl {
-                    CachedAsyncImage(urlString: profileImageUrl) { image in
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 36, height: 36)
-                            .clipShape(Circle())
-                    } placeholder: {
+                // Avatar (tappable)
+                Button(action: {
+                    showUserProfile = true
+                }) {
+                    if let profileImageUrl = comment.authorProfileImageUrl {
+                        CachedAsyncImage(urlString: profileImageUrl) { image in
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 36, height: 36)
+                                .clipShape(Circle())
+                        } placeholder: {
+                            Circle()
+                                .fill(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.2))
+                                .frame(width: 36, height: 36)
+                                .overlay(
+                                    Text(comment.authorInitials)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
+                                )
+                        }
+                    } else {
                         Circle()
                             .fill(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.2))
                             .frame(width: 36, height: 36)
@@ -1874,23 +1898,20 @@ struct CommentView: View {
                                     .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
                             )
                     }
-                } else {
-                    Circle()
-                        .fill(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.2))
-                        .frame(width: 36, height: 36)
-                        .overlay(
-                            Text(comment.authorInitials)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme))
-                        )
                 }
+                .buttonStyle(PlainButtonStyle())
 
                 VStack(alignment: .leading, spacing: 8) {
                     // Author and time
                     HStack(spacing: 8) {
-                        Text(comment.author)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                        Button(action: {
+                            showUserProfile = true
+                        }) {
+                            Text(comment.author)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                        }
+                        .buttonStyle(PlainButtonStyle())
                         
                         Text("•")
                             .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
@@ -2029,6 +2050,9 @@ struct CommentView: View {
         } message: {
             Text("Are you sure you want to delete this comment? This action cannot be undone.")
         }
+        .fullScreenCover(isPresented: $showUserProfile) {
+            UserProfileView(userId: comment.userId, username: comment.author)
+        }
     }
     
     private func loadCurrentUser() async {
@@ -2050,6 +2074,70 @@ struct CommentView: View {
     }
 }
 
+// MARK: - Post Author Detail (used in PostDetailView header)
+
+struct PostAuthorDetailView: View {
+    let post: PostDisplayModel
+    let colorScheme: ColorScheme
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Avatar with profile image support
+            if let profileImageUrl = post.authorProfileImageUrl {
+                CachedAsyncImage(urlString: profileImageUrl) { image in
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 40, height: 40)
+                        .clipShape(Circle())
+                } placeholder: {
+                    Circle()
+                        .fill(post.category.color.opacity(0.2))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Text(post.authorInitials)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(post.category.color)
+                        )
+                }
+            } else {
+                Circle()
+                    .fill(post.category.color.opacity(0.2))
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Text(post.authorInitials)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(post.category.color)
+                    )
+            }
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(post.author)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                
+                Text(timeAgoString(from: post.timestamp))
+                    .font(.system(size: 13))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
+            }
+            
+            Spacer()
+            
+            HStack(spacing: 4) {
+                Image(systemName: post.category.icon)
+                    .font(.system(size: 10))
+                Text(post.category.rawValue)
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(post.category.color.opacity(0.15))
+            .foregroundColor(post.category.color)
+            .clipShape(Capsule())
+        }
+    }
+}
+
 struct PostDetailView: View {
     let post: PostDisplayModel
     @StateObject private var communityService = CommunityService()
@@ -2062,6 +2150,7 @@ struct PostDetailView: View {
     @State private var currentUserId: UUID?
     @State private var showEditPost = false
     @State private var showDeletePostAlert = false
+    @State private var showUserProfile = false
     @State private var displayCommentsCount: Int
     @Environment(\.dismiss) var dismiss
     
@@ -2244,67 +2333,21 @@ struct PostDetailView: View {
         } message: {
             Text("Are you sure you want to delete this post? This action cannot be undone.")
         }
+        .fullScreenCover(isPresented: $showUserProfile) {
+            UserProfileView(userId: post.userId, username: post.author)
+        }
     }
     
     private var postContentView: some View {
         VStack(alignment: .leading, spacing: 20) {
-            // Author Info
-            HStack(spacing: 12) {
-                // Avatar with profile image support
-                if let profileImageUrl = post.authorProfileImageUrl {
-                    CachedAsyncImage(urlString: profileImageUrl) { image in
-                        Image(uiImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 40, height: 40)
-                            .clipShape(Circle())
-                    } placeholder: {
-                        Circle()
-                            .fill(post.category.color.opacity(0.2))
-                            .frame(width: 40, height: 40)
-                            .overlay(
-                                Text(post.authorInitials)
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(post.category.color)
-                            )
-                    }
-                } else {
-                    Circle()
-                        .fill(post.category.color.opacity(0.2))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Text(post.authorInitials)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(post.category.color)
-                        )
-                }
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(post.author)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-
-                    Text(timeAgoString(from: post.timestamp))
-                        .font(.system(size: 13))
-                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
-                }
-                
-                Spacer()
-                
-                // Category Badge
-                HStack(spacing: 4) {
-                    Image(systemName: post.category.icon)
-                        .font(.system(size: 10))
-                    
-                    Text(post.category.rawValue)
-                        .font(.system(size: 11, weight: .medium))
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(post.category.color.opacity(0.15))
-                .foregroundColor(post.category.color)
-                .clipShape(Capsule())
+            
+            // **Updated Author Info Section** (tappable to show profile)
+            Button(action: {
+                showUserProfile = true
+            }) {
+                PostAuthorDetailView(post: post, colorScheme: colorScheme)
             }
+            .buttonStyle(PlainButtonStyle())
             
             // Title
             Text(post.title)
@@ -2356,15 +2399,6 @@ struct PostDetailView: View {
                     Text("\(displayCommentsCount)")
                         .font(.system(size: 14, weight: .medium))
                 }
-                
-                // View count hidden
-                // HStack(spacing: 6) {
-                //     Image(systemName: "eye.fill")
-                //         .font(.system(size: 14))
-                //         .foregroundColor(.gray)
-                //     Text("\(post.viewsCount)")
-                //         .font(.system(size: 14, weight: .medium))
-                // }
             }
             .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
             .padding(.top, 8)

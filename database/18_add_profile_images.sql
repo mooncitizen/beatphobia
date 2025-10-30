@@ -25,7 +25,7 @@ SELECT 'Profile image column added successfully!' as status;
 -- - Allowed MIME types: image/jpeg, image/png, image/webp
 
 -- Then apply these storage policies in SQL Editor:
-/*
+
 CREATE POLICY "Authenticated users can upload profile images"
 ON storage.objects FOR INSERT
 TO authenticated
@@ -54,5 +54,5 @@ USING (
   bucket_id = 'profile-images' AND
   (storage.foldername(name))[1] = auth.uid()::text
 );
-*/
+
 
