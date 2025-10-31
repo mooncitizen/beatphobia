@@ -135,6 +135,7 @@ struct ProfileView: View {
                                                     .tint(AppConstants.primaryColor)
                                             )
                                     }
+                                    .id(imageUrl) // Force reload when URL changes
                                 } else {
                                     // Fallback to initials
                                     Circle()
@@ -660,6 +661,11 @@ struct ProfileView: View {
         do {
             guard let userId = authManager.currentUser?.id else {
                 throw NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "No user logged in"])
+            }
+            
+            // Clear old profile image from cache if it exists
+            if let oldImageUrl = authManager.currentUserProfile?.profileImageUrl {
+                imageManager.removeFromCache(urlString: oldImageUrl)
             }
             
             print("🔐 User ID: \(userId)")

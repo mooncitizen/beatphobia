@@ -54,7 +54,7 @@ struct InitialProfileView: View {
                         .fontDesign(.serif)
                         .fontWeight(.bold)
                         .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-                    Text("We just need a few more details from you to get started.")
+                    Text("We just need a few more details from you to get started. No one will see your name.")
                         .font(.system(size: 12))
                         .fontDesign(.serif)
                         .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))

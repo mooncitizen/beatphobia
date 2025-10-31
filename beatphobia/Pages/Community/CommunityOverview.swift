@@ -1486,9 +1486,14 @@ struct PostCard: View {
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(post.author)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                                HStack(spacing: 4) {
+                                    Text(post.author)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                                    if post.authorRole == "admin" {
+                                        Text("admin").font(.system(size: 10, weight: .medium)).padding(.horizontal, 8).padding(.vertical, 4).background(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.15)).foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme)).clipShape(Capsule())
+                                    }
+                                }
 
                                 Text(timeAgoString(from: post.timestamp))
                                     .font(.system(size: 13))
@@ -1913,6 +1918,10 @@ struct CommentView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                         
+                        if comment.authorRole == "admin" {
+                            Text("admin").font(.system(size: 9, weight: .medium)).padding(.horizontal, 6).padding(.vertical, 3).background(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.15)).foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme)).clipShape(Capsule())
+                        }
+                        
                         Text("•")
                             .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
 
@@ -2112,10 +2121,15 @@ struct PostAuthorDetailView: View {
             }
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(post.author)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-                
+
+                HStack(spacing: 4) {
+                    Text(post.author)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                    if post.authorRole == "admin" {
+                        Text("admin").font(.system(size: 10, weight: .medium)).padding(.horizontal, 8).padding(.vertical, 4).background(AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.15)).foregroundColor(AppConstants.adaptivePrimaryColor(for: colorScheme)).clipShape(Capsule())
+                    }
+                }
                 Text(timeAgoString(from: post.timestamp))
                     .font(.system(size: 13))
                     .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))

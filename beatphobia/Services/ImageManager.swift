@@ -170,6 +170,21 @@ class ImageManager: ObservableObject {
         }
     }
     
+    /// Removes a specific image from cache by URL
+    func removeFromCache(urlString: String) {
+        let cacheKey = cacheKey(from: urlString)
+        let filePath = cacheDirectory.appendingPathComponent(cacheKey)
+        
+        do {
+            if FileManager.default.fileExists(atPath: filePath.path) {
+                try FileManager.default.removeItem(at: filePath)
+                print("🗑️ Removed image from cache: \(urlString)")
+            }
+        } catch {
+            print("❌ Error removing image from cache: \(error)")
+        }
+    }
+    
     /// Returns cache size in bytes
     func getCacheSize() -> Int {
         do {

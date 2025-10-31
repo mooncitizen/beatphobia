@@ -221,7 +221,7 @@ class CommunityService: ObservableObject {
         let response: [CommunityPostDBResponse] = try await {
             var query = supabase
                 .from("community_posts")
-                .select("*, profile(username, profile_image_url)")
+                .select("*, profile(username, profile_image_url, role)")
                 .eq("is_deleted", value: false)
                 .eq("is_flagged", value: false)
             
@@ -270,7 +270,7 @@ class CommunityService: ObservableObject {
                 print("⚠️ Post \(post.id) by @\(post.authorUsername ?? "unknown") has no profile image")
             }
             
-            posts.append(PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked, attachments: attachments, authorProfileImageUrl: postResponse.profile?.profileImageUrl))
+            posts.append(PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked, attachments: attachments, authorProfileImageUrl: postResponse.profile?.profileImageUrl, authorRole: postResponse.profile?.role))
         }
         
         return posts
@@ -328,7 +328,7 @@ class CommunityService: ObservableObject {
     private func fetchTrendingFromDatabase() async throws -> [PostDisplayModel] {
         let response: [CommunityPostDBResponse] = try await supabase
             .from("community_posts")
-            .select("*, profile(username)")
+            .select("*, profile(username, role)")
             .eq("is_deleted", value: false)
             .eq("is_flagged", value: false)
             .eq("trending", value: true)
@@ -353,7 +353,7 @@ class CommunityService: ObservableObject {
             // Fetch attachments (don't fail if attachments fail)
             let attachments = (try? await fetchAttachments(postId: post.id)) ?? []
             
-            posts.append(PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked, attachments: attachments))
+            posts.append(PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked, attachments: attachments, authorRole: postResponse.profile?.role))
         }
         
         return posts
@@ -413,7 +413,7 @@ class CommunityService: ObservableObject {
         
         let response: [CommunityPostDBResponse] = try await supabase
             .from("community_posts")
-            .select("*, profile(username, profile_image_url)")
+            .select("*, profile(username, profile_image_url, role)")
             .eq("is_deleted", value: false)
             .eq("is_flagged", value: false)
             .eq("user_id", value: userId.uuidString)
@@ -437,7 +437,7 @@ class CommunityService: ObservableObject {
             // Fetch attachments (don't fail if attachments fail)
             let attachments = (try? await fetchAttachments(postId: post.id)) ?? []
             
-            posts.append(PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked, attachments: attachments, authorProfileImageUrl: postResponse.profile?.profileImageUrl))
+            posts.append(PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked, attachments: attachments, authorProfileImageUrl: postResponse.profile?.profileImageUrl, authorRole: postResponse.profile?.role))
         }
         
         return posts
@@ -448,7 +448,7 @@ class CommunityService: ObservableObject {
     func fetchPost(id: UUID) async throws -> PostDisplayModel {
         let response: CommunityPostDBResponse = try await supabase
             .from("community_posts")
-            .select("*, profile(username)")
+            .select("*, profile(username, role)")
             .eq("id", value: id.uuidString)
             .eq("is_deleted", value: false)
             .eq("is_flagged", value: false)
@@ -480,7 +480,7 @@ class CommunityService: ObservableObject {
             .eq("id", value: id.uuidString)
             .execute()
         
-        return PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked, attachments: attachments, authorProfileImageUrl: response.profile?.profileImageUrl)
+        return PostDisplayModel(from: post, isLiked: isLiked, isBookmarked: isBookmarked, attachments: attachments, authorProfileImageUrl: response.profile?.profileImageUrl, authorRole: response.profile?.role)
     }
     
     // MARK: - Create Post
@@ -645,7 +645,7 @@ class CommunityService: ObservableObject {
     func fetchComments(postId: UUID) async throws -> [CommentDisplayModel] {
         let response: [CommunityCommentDBResponse] = try await supabase
             .from("community_comments")
-            .select("*, profile(username, profile_image_url)")
+            .select("*, profile(username, profile_image_url, role)")
             .eq("post_id", value: postId.uuidString)
             .eq("is_deleted", value: false)
             .eq("is_flagged", value: false)
@@ -660,7 +660,7 @@ class CommunityService: ObservableObject {
             var comment = commentResponse.comment
             comment.authorUsername = commentResponse.profile?.username
             let isLiked = likedCommentIds.contains(comment.id)
-            return CommentDisplayModel(from: comment, isLiked: isLiked, replies: [], attachments: [], authorProfileImageUrl: commentResponse.profile?.profileImageUrl)
+            return CommentDisplayModel(from: comment, isLiked: isLiked, replies: [], attachments: [], authorProfileImageUrl: commentResponse.profile?.profileImageUrl, authorRole: commentResponse.profile?.role)
         }
         
         // Organize into threaded structure
@@ -1070,10 +1070,12 @@ struct CommunityCommentDBResponse: Codable {
 struct ProfileInfo: Codable {
     let username: String?
     let profileImageUrl: String?
+    let role: String?
     
     enum CodingKeys: String, CodingKey {
         case username
         case profileImageUrl = "profile_image_url"
+        case role
     }
 }
 

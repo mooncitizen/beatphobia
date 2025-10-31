@@ -13,6 +13,8 @@
 		DA0610862EA43A7C001EBA37 /* Realtime in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610852EA43A7C001EBA37 /* Realtime */; };
 		DA0610882EA43A7C001EBA37 /* Storage in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610872EA43A7C001EBA37 /* Storage */; };
 		DA06108A2EA43A7C001EBA37 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DA0610892EA43A7C001EBA37 /* Supabase */; };
+		DA190C342EB402FC00B97CDE /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = DA190C332EB402FC00B97CDE /* Launch Screen.storyboard */; };
+		DA190C382EB404FD00B97CDE /* ss_web.png in Resources */ = {isa = PBXBuildFile; fileRef = DA190C372EB404FD00B97CDE /* ss_web.png */; };
 		DA259C3B2EA70B3100BF64D4 /* CoreHaptics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DA259C3A2EA70B3100BF64D4 /* CoreHaptics.framework */; };
 		DA8EECC52EB2473B00DA8E87 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DA8EECC42EB2473B00DA8E87 /* StoreKit.framework */; };
 		DA8EECC72EB24AA000DA8E87 /* stillstep.storekit in Resources */ = {isa = PBXBuildFile; fileRef = DA8EECC62EB24AA000DA8E87 /* stillstep.storekit */; };
@@ -76,6 +78,8 @@
 		DA0610522EA43819001EBA37 /* beatphobia.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = beatphobia.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA0610612EA4381B001EBA37 /* beatphobiaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = beatphobiaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA06106B2EA4381B001EBA37 /* beatphobiaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = beatphobiaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DA190C332EB402FC00B97CDE /* Launch Screen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = "Launch Screen.storyboard"; sourceTree = "<group>"; };
+		DA190C372EB404FD00B97CDE /* ss_web.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ss_web.png; sourceTree = "<group>"; };
 		DA259C3A2EA70B3100BF64D4 /* CoreHaptics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreHaptics.framework; path = System/Library/Frameworks/CoreHaptics.framework; sourceTree = SDKROOT; };
 		DA8EECC42EB2473B00DA8E87 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		DA8EECC62EB24AA000DA8E87 /* stillstep.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = stillstep.storekit; sourceTree = "<group>"; };
@@ -184,6 +188,8 @@
 		DA0610492EA43819001EBA37 = {
 			isa = PBXGroup;
 			children = (
+				DA190C372EB404FD00B97CDE /* ss_web.png */,
+				DA190C332EB402FC00B97CDE /* Launch Screen.storyboard */,
 				DA8EECC62EB24AA000DA8E87 /* stillstep.storekit */,
 				DA0610542EA43819001EBA37 /* beatphobia */,
 				DA0610642EA4381B001EBA37 /* beatphobiaTests */,
@@ -376,6 +382,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA190C342EB402FC00B97CDE /* Launch Screen.storyboard in Resources */,
+				DA190C382EB404FD00B97CDE /* ss_web.png in Resources */,
 				DA8EECC72EB24AA000DA8E87 /* stillstep.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

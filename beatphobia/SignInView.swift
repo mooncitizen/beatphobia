@@ -656,6 +656,12 @@ struct AuthScreen: View {
                     .frame(height: 100)
             }
         }
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                // Dismiss keyboard when tapping outside text fields
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
+        )
         .onAppear {
             // Connect coordinator to authManager
             appleSignInCoordinator.authManager = authManager

@@ -175,6 +175,7 @@ struct PostDisplayModel: Identifiable, Codable {
     let author: String // This is the username
     let authorInitials: String
     let authorProfileImageUrl: String?
+    let authorRole: String?
     let category: PostCategory
     let title: String
     let content: String
@@ -189,7 +190,7 @@ struct PostDisplayModel: Identifiable, Codable {
     var isLiked: Bool
     var isBookmarked: Bool
     
-    init(from post: CommunityPostDB, isLiked: Bool = false, isBookmarked: Bool = false, attachments: [Attachment] = [], authorProfileImageUrl: String? = nil) {
+    init(from post: CommunityPostDB, isLiked: Bool = false, isBookmarked: Bool = false, attachments: [Attachment] = [], authorProfileImageUrl: String? = nil, authorRole: String? = nil) {
         self.id = post.id
         self.userId = post.userId
         self.author = post.authorUsername ?? "anonymous"
@@ -198,6 +199,7 @@ struct PostDisplayModel: Identifiable, Codable {
         let username = post.authorUsername ?? "??"
         self.authorInitials = String(username.prefix(2)).uppercased()
         self.authorProfileImageUrl = authorProfileImageUrl
+        self.authorRole = authorRole
         
         // Map category string to enum
         switch post.category {
@@ -288,6 +290,7 @@ struct CommentDisplayModel: Identifiable {
     let author: String // This is the username
     let authorInitials: String
     let authorProfileImageUrl: String?
+    let authorRole: String?
     let content: String
     let timestamp: Date
     let likesCount: Int
@@ -296,7 +299,7 @@ struct CommentDisplayModel: Identifiable {
     var isLiked: Bool
     var replies: [CommentDisplayModel]
     
-    init(from comment: CommunityCommentDB, isLiked: Bool = false, replies: [CommentDisplayModel] = [], attachments: [Attachment] = [], authorProfileImageUrl: String? = nil) {
+    init(from comment: CommunityCommentDB, isLiked: Bool = false, replies: [CommentDisplayModel] = [], attachments: [Attachment] = [], authorProfileImageUrl: String? = nil, authorRole: String? = nil) {
         self.id = comment.id
         self.postId = comment.postId
         self.userId = comment.userId
@@ -306,6 +309,7 @@ struct CommentDisplayModel: Identifiable {
         let username = comment.authorUsername ?? "??"
         self.authorInitials = String(username.prefix(2)).uppercased()
         self.authorProfileImageUrl = authorProfileImageUrl
+        self.authorRole = authorRole
         
         self.content = comment.content
         self.timestamp = comment.createdAt
