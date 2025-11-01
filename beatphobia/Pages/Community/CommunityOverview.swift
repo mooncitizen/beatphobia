@@ -56,22 +56,22 @@ struct CommunityOverview: View {
                 badge: nil,
                 destination: .yourPosts
             ),
-            CommunitySection(
-                title: "Your Friends",
-                subtitle: "Connect with supporters",
-                icon: "person.2.fill",
-                color: .pink,
-                badge: nil,
-                destination: .friends
-            ),
-            CommunitySection(
-                title: "Your Chats",
-                subtitle: "Private conversations",
-                icon: "message.fill",
-                color: .green,
-                badge: unreadMessages > 0 ? unreadMessages : nil,
-                destination: .chats
-            ),
+            // CommunitySection(
+            //     title: "Your Friends",
+            //     subtitle: "Connect with supporters",
+            //     icon: "person.2.fill",
+            //     color: .pink,
+            //     badge: nil,
+            //     destination: .friends
+            // ),
+            // CommunitySection(
+            //     title: "Your Chats",
+            //     subtitle: "Private conversations",
+            //     icon: "message.fill",
+            //     color: .green,
+            //     badge: unreadMessages > 0 ? unreadMessages : nil,
+            //     destination: .chats
+            // ),
             CommunitySection(
                 title: "Trending Topics",
                 subtitle: "Popular discussions now",
