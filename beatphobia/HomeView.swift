@@ -6,6 +6,8 @@
 //
 
 import SwiftUI
+import UserNotifications
+import UIKit
 
 struct HomeView: View {
     // Injecting the AuthManager for potential Sign Out functionality in the Profile tab
@@ -122,6 +124,17 @@ struct HomeView: View {
             // Haptic feedback
             let generator = UIImpactFeedbackGenerator(style: .light)
             generator.impactOccurred()
+            
+            // Ask to register for push notifications when tapping Community tab
+            if tab == .community {
+                Task {
+                    let status = await NotificationManager.authorizationStatus()
+                    if status == .notDetermined {
+                        await NotificationManager.shared.requestAuthorizationIfNeeded()
+                        UIApplication.shared.registerForRemoteNotifications()
+                    }
+                }
+            }
         }) {
             Image(systemName: icon)
                 .font(.system(size: 26, weight: selectedTab == tab ? .semibold : .regular))

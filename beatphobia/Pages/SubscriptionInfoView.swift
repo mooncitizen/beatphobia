@@ -125,15 +125,23 @@ struct SubscriptionInfoView: View {
                         
                         FeatureRow(
                             icon: "icloud.fill",
-                            title: "Cloud Journal Backup",
+                            title: "Cloud Journal Backup & Sync",
                             description: "Secure sync across all devices",
                             gradient: [.purple, .pink],
                             colorScheme: colorScheme
                         )
                         
                         FeatureRow(
+                            icon: "map.fill",
+                            title: "Cloud Journey Backup & Sync",
+                            description: "Securely save and sync your journeys to the cloud. Access your journey data from any device.",
+                            gradient: [.green, .mint],
+                            colorScheme: colorScheme
+                        )
+                        
+                        FeatureRow(
                             icon: "chart.xyaxis.line",
-                            title: "Detailed Metrics",
+                            title: "Detailed Metrics & Analytics",
                             description: "Track patterns and insights over time",
                             gradient: [.orange, .red],
                             colorScheme: colorScheme

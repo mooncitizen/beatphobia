@@ -16,12 +16,28 @@ struct SignInView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var currentPage: Int = 0
     
+    // Computed property to check if EULA is accepted
+    private var isEULAAccepted: Bool {
+        UserDefaults.standard.bool(forKey: "eula_accepted")
+    }
+    
     var body: some View {
         ZStack {
             AppConstants.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
             
-            TabView(selection: $currentPage) {
+            TabView(selection: Binding(
+                get: { currentPage },
+                set: { newValue in
+                    // Prevent navigation to AuthScreen (page 4) unless EULA is accepted
+                    if newValue == 4 && !isEULAAccepted {
+                        // Force back to EULA screen
+                        currentPage = 3
+                    } else {
+                        currentPage = newValue
+                    }
+                }
+            )) {
                 WelcomeScreen(currentPage: $currentPage, colorScheme: colorScheme)
                     .tag(0)
                 
@@ -31,17 +47,37 @@ struct SignInView: View {
                 DisclaimerScreen(currentPage: $currentPage, colorScheme: colorScheme)
                     .tag(2)
                 
-                AuthScreen(colorScheme: colorScheme)
+                EULAScreen(currentPage: $currentPage, colorScheme: colorScheme)
                     .tag(3)
+                
+                AuthScreen(colorScheme: colorScheme)
+                    .tag(4)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea()
+            .highPriorityGesture(
+                // Block horizontal swipes when on EULA screen without acceptance
+                currentPage == 3 && !isEULAAccepted ?
+                DragGesture(minimumDistance: 10)
+                    .onChanged { gesture in
+                        // Only block horizontal swipes (left swipe = forward)
+                        let horizontalDistance = abs(gesture.translation.width)
+                        let verticalDistance = abs(gesture.translation.height)
+                        
+                        // If horizontal swipe is dominant, block it
+                        if horizontalDistance > verticalDistance && gesture.translation.width < -10 {
+                            // This gesture consumes the swipe, preventing TabView from responding
+                        }
+                    }
+                    .onEnded { _ in }
+                : nil
+            )
             
             // Custom page indicators
             VStack {
                 Spacer()
                 HStack(spacing: 8) {
-                    ForEach(0..<4, id: \.self) { index in
+                    ForEach(0..<5, id: \.self) { index in
                         Circle()
                             .fill(currentPage == index ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.3))
                             .frame(width: 8, height: 8)
@@ -49,6 +85,23 @@ struct SignInView: View {
                     }
                 }
                 .padding(.bottom, 50)
+            }
+        }
+        .onAppear {
+            // On app start, if EULA not accepted, ensure we're not on AuthScreen
+            if !isEULAAccepted && currentPage == 4 {
+                currentPage = 3
+            }
+        }
+        .onChange(of: currentPage) { oldValue, newValue in
+            // Aggressively prevent bypassing EULA - reset immediately if someone swipes to page 4 without acceptance
+            if newValue == 4 && !isEULAAccepted {
+                // Small delay to ensure smooth animation
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation {
+                        currentPage = 3
+                    }
+                }
             }
         }
     }
@@ -469,6 +522,177 @@ class SignInWithAppleCoordinator: NSObject, ASAuthorizationControllerDelegate, A
         let inputData = Data(input.utf8)
         let hashedData = SHA256.hash(data: inputData)
         return hashedData.compactMap { String(format: "%02x", $0) }.joined()
+    }
+}
+
+// MARK: - EULA Screen
+struct EULAScreen: View {
+    @Binding var currentPage: Int
+    let colorScheme: ColorScheme
+    @State private var eulaText: String = ""
+    @State private var hasAcceptedEULA: Bool = false
+    @State private var isLoadingEULA: Bool = true
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(Color.blue.opacity(0.15))
+                        .frame(width: 100, height: 100)
+                    
+                    Image(systemName: "doc.text.fill")
+                        .font(.system(size: 50, weight: .semibold))
+                        .foregroundColor(.blue)
+                }
+                
+                Text("End User License Agreement")
+                    .font(.system(size: 32, weight: .bold))
+                    .fontDesign(.serif)
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 30)
+                
+                Text("Please read and accept the terms to continue")
+                    .font(.system(size: 15))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 30)
+            }
+            .padding(.top, 40)
+            .padding(.bottom, 20)
+            
+            // EULA Content
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    if isLoadingEULA {
+                        VStack(spacing: 16) {
+                            ProgressView()
+                            Text("Loading EULA...")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 40)
+                    } else {
+                        Text(eulaText)
+                            .font(.system(size: 13, design: .serif))
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                            .lineSpacing(4)
+                            .textSelection(.enabled)
+                    }
+                }
+                .padding(.horizontal, 30)
+                .padding(.bottom, 20)
+            }
+            .frame(maxHeight: .infinity)
+            
+            // Acceptance Checkbox
+            HStack(spacing: 12) {
+                Button(action: {
+                    withAnimation {
+                        hasAcceptedEULA.toggle()
+                    }
+                }) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(hasAcceptedEULA ? AppConstants.adaptivePrimaryColor(for: colorScheme) : Color.clear)
+                            .frame(width: 24, height: 24)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(AppConstants.borderColor(for: colorScheme), lineWidth: 2)
+                            )
+                        
+                        if hasAcceptedEULA {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                Text("I have read and agree to the End User License Agreement")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 30)
+            .padding(.bottom, 20)
+            
+            // Accept Button
+            Button(action: {
+                if hasAcceptedEULA {
+                    // Save acceptance to UserDefaults
+                    UserDefaults.standard.set(true, forKey: "eula_accepted")
+                    UserDefaults.standard.set(Date(), forKey: "eula_accepted_date")
+                    
+                    withAnimation {
+                        currentPage = 4
+                    }
+                }
+            }) {
+                HStack(spacing: 12) {
+                    Text("Accept & Continue")
+                        .font(.system(size: 18, weight: .bold))
+                        .fontDesign(.rounded)
+                    
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 16, weight: .bold))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 18)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            hasAcceptedEULA ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.secondaryTextColor(for: colorScheme),
+                            hasAcceptedEULA ? AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.8) : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .cornerRadius(16)
+                .shadow(color: hasAcceptedEULA ? AppConstants.shadowColor(for: colorScheme) : Color.clear, radius: 15, y: 8)
+            }
+            .disabled(!hasAcceptedEULA)
+            .opacity(hasAcceptedEULA ? 1.0 : 0.5)
+            .padding(.horizontal, 30)
+            .padding(.bottom, 40)
+        }
+        .task {
+            await loadEULA()
+        }
+    }
+    
+    private func loadEULA() async {
+        guard let url = Bundle.main.url(forResource: "eula", withExtension: "txt", subdirectory: "Legal") else {
+            // Fallback: try without subdirectory
+            guard let fallbackURL = Bundle.main.url(forResource: "eula", withExtension: "txt") else {
+                eulaText = "Error: Could not load EULA file. Please contact support."
+                isLoadingEULA = false
+                return
+            }
+            
+            do {
+                eulaText = try String(contentsOf: fallbackURL, encoding: .utf8)
+            } catch {
+                eulaText = "Error loading EULA: \(error.localizedDescription)"
+            }
+            isLoadingEULA = false
+            return
+        }
+        
+        do {
+            eulaText = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            eulaText = "Error loading EULA: \(error.localizedDescription)"
+        }
+        
+        isLoadingEULA = false
     }
 }
 

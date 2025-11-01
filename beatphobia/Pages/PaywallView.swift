@@ -30,29 +30,6 @@ struct PaywallView: View {
             ScrollView {
                 VStack(spacing: 32) {
                         VStack(spacing: 16) {
-                            // Icon with animated gradient
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [Color.blue.opacity(0.3), Color.purple.opacity(0.2)],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 100, height: 100)
-                                
-                                Image(systemName: "crown.fill")
-                                    .font(.system(size: 48))
-                                    .foregroundStyle(
-                                        LinearGradient(
-                                            colors: [.yellow, .orange],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                            }
-                            
                             // First-run specific messaging
                             if isFirstRun {
                                 VStack(spacing: 16) {
@@ -131,15 +108,15 @@ struct PaywallView: View {
                             
                             HStack(spacing: 16) {
                                 CompactFeatureCard(
-                                    icon: "chart.xyaxis.line",
-                                    title: "Detailed\nMetrics",
-                                    gradient: [.orange, .red]
+                                    icon: "map.fill",
+                                    title: "Journey\nSync",
+                                    gradient: [.green, .mint]
                                 )
                                 
                                 CompactFeatureCard(
-                                    icon: "arrow.triangle.2.circlepath",
-                                    title: "Multi-Device\nSync",
-                                    gradient: [.green, .mint]
+                                    icon: "chart.xyaxis.line",
+                                    title: "Detailed\nMetrics",
+                                    gradient: [.orange, .red]
                                 )
                             }
                         }
@@ -180,22 +157,10 @@ struct PaywallView: View {
                         )
                         .padding(.horizontal, 20)
                         
-                        // Pricing Cards
+                        // Pricing Cards - Choose Monthly or Yearly
                         VStack(spacing: 16) {
-                            Text("Choose Your Plan")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .padding(.top, 8)
-                            
                             if let yearlyProduct = subscriptionManager.getProduct(for: .proYearly),
                                let monthlyProduct = subscriptionManager.getProduct(for: .proMonthly) {
-                                
-                                let _ = {
-                                    print("💰 StoreKit Prices:")
-                                    print("   - Yearly: \(yearlyProduct.displayPrice) (ID: \(yearlyProduct.id))")
-                                    print("   - Monthly: \(monthlyProduct.displayPrice) (ID: \(monthlyProduct.id))")
-                                    print("   - Price per month: \(subscriptionManager.getPricePerMonth(for: .proYearly) ?? "N/A")")
-                                    print("   - Savings: \(subscriptionManager.getSavingsPercentage() ?? 0)%")
-                                }()
                                 
                                 // Yearly Plan (Recommended)
                                 PricingCard(
@@ -222,7 +187,7 @@ struct PaywallView: View {
                                 VStack(spacing: 16) {
                                     ProgressView()
                                     Text("Loading products...")
-                                        .font(.system(size: 14, design: .serif))
+                                        .font(.system(size: 14, design: .rounded))
                                         .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
                                     
                                     Button(action: {
@@ -231,13 +196,13 @@ struct PaywallView: View {
                                         }
                                     }) {
                                         Label("Retry", systemImage: "arrow.clockwise")
-                                            .font(.system(size: 14, weight: .medium, design: .serif))
+                                            .font(.system(size: 14, weight: .medium, design: .rounded))
                                             .foregroundColor(.blue)
                                     }
                                     
                                     if let error = subscriptionManager.lastError {
                                         Text(error.errorDescription ?? "Unknown error")
-                                            .font(.system(size: 12, design: .serif))
+                                            .font(.system(size: 12, design: .rounded))
                                             .foregroundColor(.red)
                                             .multilineTextAlignment(.center)
                                             .padding(.horizontal)
@@ -249,39 +214,7 @@ struct PaywallView: View {
                         .padding(.horizontal, 20)
                         
                         // Subscribe Button
-                        Button(action: handlePurchase) {
-                            VStack(spacing: 4) {
-                                if isPurchasing {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                } else {
-                                    HStack(spacing: 8) {
-                                        Text("Start 7-Day Free Trial")
-                                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                                        
-                                        Image(systemName: "arrow.right")
-                                            .font(.system(size: 16, weight: .bold))
-                                    }
-                                    
-                                    Text("Then \(selectedTier.displayName)")
-                                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                                        .foregroundColor(.white.opacity(0.9))
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 58)
-                            .background(
-                                LinearGradient(
-                                    colors: [.blue, .purple],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .foregroundColor(.white)
-                            .cornerRadius(16)
-                            .shadow(color: Color.blue.opacity(0.3), radius: 12, x: 0, y: 6)
-                        }
-                        .disabled(isPurchasing || subscriptionManager.isLoading)
+                        purchaseButton
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
                         
@@ -389,6 +322,42 @@ struct PaywallView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Purchase Button (Reusable Fallback)
+extension PaywallView {
+    @ViewBuilder
+    var purchaseButton: some View {
+        Button(action: handlePurchase) {
+            VStack(spacing: 4) {
+                if isPurchasing {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else {
+                    HStack(spacing: 8) {
+                        Text("Start 7-Day Free Trial")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                        
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
+            .background(
+                LinearGradient(
+                    colors: [.blue, .purple],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .foregroundColor(.white)
+            .cornerRadius(16)
+            .shadow(color: Color.blue.opacity(0.3), radius: 12, x: 0, y: 6)
+        }
+        .disabled(isPurchasing || subscriptionManager.isLoading)
     }
 }
 

@@ -960,6 +960,92 @@ class CommunityService: ObservableObject {
         
         return replies.sorted { $0.timestamp < $1.timestamp }
     }
+    
+    // MARK: - Report Content
+    
+    func reportContent(postId: UUID?, commentId: UUID?, reason: String, details: String?) async throws {
+        let userId = try await supabase.auth.session.user.id
+        
+        let report = CreateReportRequest(
+            reporterId: userId,
+            postId: postId,
+            commentId: commentId,
+            reason: reason,
+            details: details
+        )
+        
+        try await supabase
+            .from("content_reports")
+            .insert(report)
+            .execute()
+        
+        print("✅ Successfully reported content")
+    }
+    
+    // MARK: - Block User
+    
+    func blockUser(blockedUserId: UUID, reason: String?) async throws {
+        let userId = try await supabase.auth.session.user.id
+        
+        let block = CreateBlockRequest(
+            blockerId: userId,
+            blockedId: blockedUserId,
+            reason: reason
+        )
+        
+        try await supabase
+            .from("user_blocks")
+            .insert(block)
+            .execute()
+        
+        print("✅ Successfully blocked user")
+    }
+    
+    // MARK: - Unblock User
+    
+    func unblockUser(blockedUserId: UUID) async throws {
+        let userId = try await supabase.auth.session.user.id
+        
+        try await supabase
+            .from("user_blocks")
+            .delete()
+            .eq("blocker_id", value: userId.uuidString)
+            .eq("blocked_id", value: blockedUserId.uuidString)
+            .execute()
+        
+        print("✅ Successfully unblocked user")
+    }
+    
+    // MARK: - Check if User is Blocked
+    
+    func isUserBlocked(userId: UUID) async throws -> Bool {
+        let currentUserId = try await supabase.auth.session.user.id
+        
+        let blocks: [UserBlock] = try await supabase
+            .from("user_blocks")
+            .select()
+            .eq("blocker_id", value: currentUserId.uuidString)
+            .eq("blocked_id", value: userId.uuidString)
+            .execute()
+            .value
+        
+        return !blocks.isEmpty
+    }
+    
+    // MARK: - Get Blocked Users
+    
+    func getBlockedUsers() async throws -> [UUID] {
+        let userId = try await supabase.auth.session.user.id
+        
+        let blocks: [UserBlock] = try await supabase
+            .from("user_blocks")
+            .select()
+            .eq("blocker_id", value: userId.uuidString)
+            .execute()
+            .value
+        
+        return blocks.map { $0.blockedId }
+    }
 }
 
 // MARK: - Response Models for Supabase Joins

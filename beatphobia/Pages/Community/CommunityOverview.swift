@@ -1,5 +1,7 @@
 import SwiftUI
 import Supabase
+import UserNotifications
+import UIKit
 
 // NOTE: PostCategory and Post models are now in CommunityModels.swift
 
@@ -1340,6 +1342,15 @@ struct NotificationsView: View {
                     .foregroundColor(AppConstants.primaryColor)
                 }
             }
+            .onAppear {
+                Task {
+                    let status = await NotificationManager.authorizationStatus()
+                    if status == .notDetermined {
+                        await NotificationManager.shared.requestAuthorizationIfNeeded()
+                        UIApplication.shared.registerForRemoteNotifications()
+                    }
+                }
+            }
         }
     }
 }
@@ -1428,6 +1439,8 @@ struct PostCard: View {
     @State private var displayLikesCount: Int
     @State private var displayCommentsCount: Int
     @State private var showUserProfile = false
+    @State private var showReportContent = false
+    @State private var currentUserId: UUID?
 
     init(post: PostDisplayModel, communityService: CommunityService) {
         self.post = post
@@ -1518,6 +1531,20 @@ struct PostCard: View {
                     .background(post.category.color.opacity(0.15))
                     .foregroundColor(post.category.color)
                     .clipShape(Capsule())
+                    
+                    // Report Menu (only show if not post author)
+                    if let currentUserId = currentUserId, post.userId != currentUserId {
+                        Menu {
+                            Button(role: .destructive, action: { showReportContent = true }) {
+                                Label("Report", systemImage: "exclamationmark.triangle")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 14))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
+                                .padding(8)
+                        }
+                    }
                 }
                 .padding(16)
                 
@@ -1689,8 +1716,31 @@ struct PostCard: View {
                 .padding(16)
             }
         }
+        .task {
+            await loadCurrentUser()
+        }
         .fullScreenCover(isPresented: $showUserProfile) {
             UserProfileView(userId: post.userId, username: post.author)
+        }
+        .sheet(isPresented: $showReportContent) {
+            ReportContentView(
+                postId: post.id,
+                commentId: nil,
+                userName: post.author,
+                userId: post.userId,
+                communityService: communityService
+            )
+        }
+    }
+    
+    private func loadCurrentUser() async {
+        do {
+            let user = try await supabase.auth.session.user
+            await MainActor.run {
+                currentUserId = user.id
+            }
+        } catch {
+            print("❌ Error loading current user: \(error)")
         }
     }
 }
@@ -1852,6 +1902,7 @@ struct CommentView: View {
     @State private var showEditComment = false
     @State private var showDeleteAlert = false
     @State private var showUserProfile = false
+    @State private var showReportContent = false
     private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
     
     var isCommentAuthor: Bool {
@@ -1995,7 +2046,7 @@ struct CommentView: View {
 
                 Spacer()
 
-                // Edit/Delete Menu (only for comment author)
+                // Edit/Delete Menu (only for comment author) or Report Menu (for others)
                 if isCommentAuthor {
                     Menu {
                         Button(action: { showEditComment = true }) {
@@ -2004,6 +2055,17 @@ struct CommentView: View {
 
                         Button(role: .destructive, action: { showDeleteAlert = true }) {
                             Label("Delete", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.6))
+                            .padding(8)
+                    }
+                } else {
+                    Menu {
+                        Button(role: .destructive, action: { showReportContent = true }) {
+                            Label("Report", systemImage: "exclamationmark.triangle")
                         }
                     } label: {
                         Image(systemName: "ellipsis")
@@ -2061,6 +2123,15 @@ struct CommentView: View {
         }
         .fullScreenCover(isPresented: $showUserProfile) {
             UserProfileView(userId: comment.userId, username: comment.author)
+        }
+        .sheet(isPresented: $showReportContent) {
+            ReportContentView(
+                postId: nil,
+                commentId: comment.id,
+                userName: comment.author,
+                userId: comment.userId,
+                communityService: communityService
+            )
         }
     }
     
@@ -2166,6 +2237,7 @@ struct PostDetailView: View {
     @State private var showDeletePostAlert = false
     @State private var showUserProfile = false
     @State private var displayCommentsCount: Int
+    @State private var showReportContent = false
     @Environment(\.dismiss) var dismiss
     
     private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
@@ -2305,9 +2377,9 @@ struct PostDetailView: View {
         .navigationTitle("Post")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if isPostAuthor {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    if isPostAuthor {
                         Button(action: { showEditPost = true }) {
                             Label("Edit Post", systemImage: "pencil")
                         }
@@ -2315,10 +2387,14 @@ struct PostDetailView: View {
                         Button(role: .destructive, action: { showDeletePostAlert = true }) {
                             Label("Delete Post", systemImage: "trash")
                         }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .foregroundColor(AppConstants.primaryColor)
+                    } else {
+                        Button(role: .destructive, action: { showReportContent = true }) {
+                            Label("Report", systemImage: "exclamationmark.triangle")
+                        }
                     }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .foregroundColor(AppConstants.primaryColor)
                 }
             }
         }
@@ -2349,6 +2425,15 @@ struct PostDetailView: View {
         }
         .fullScreenCover(isPresented: $showUserProfile) {
             UserProfileView(userId: post.userId, username: post.author)
+        }
+        .sheet(isPresented: $showReportContent) {
+            ReportContentView(
+                postId: post.id,
+                commentId: nil,
+                userName: post.author,
+                userId: post.userId,
+                communityService: communityService
+            )
         }
     }
     
@@ -3657,6 +3742,204 @@ struct PostEntryView: View {
             .padding(12)
             .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .cornerRadius(12)
+        }
+    }
+}
+
+// MARK: - Report Content View
+
+struct ReportContentView: View {
+    let postId: UUID?
+    let commentId: UUID?
+    let userName: String
+    let userId: UUID
+    @ObservedObject var communityService: CommunityService
+    @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    
+    @State private var selectedReason: ReportReason?
+    @State private var additionalDetails: String = ""
+    @State private var isSubmitting = false
+    @State private var showSuccess = false
+    
+    private let mediumHaptic = UIImpactFeedbackGenerator(style: .medium)
+    
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Report Content")
+                            .font(.system(size: 28, weight: .bold, design: .serif))
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                        
+                        Text("Help us keep the community safe. What's wrong with this content?")
+                            .font(.system(size: 16))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    
+                    // Report Reasons
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Select a reason")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                            .padding(.horizontal, 20)
+                        
+                        ForEach(ReportReason.allCases) { reason in
+                            Button(action: {
+                                mediumHaptic.impactOccurred(intensity: 0.5)
+                                withAnimation(.spring(response: 0.3)) {
+                                    selectedReason = reason
+                                }
+                            }) {
+                                HStack(spacing: 16) {
+                                    Image(systemName: reason.icon)
+                                        .font(.system(size: 20))
+                                        .foregroundColor(selectedReason == reason ? .white : AppConstants.adaptivePrimaryColor(for: colorScheme))
+                                        .frame(width: 40, height: 40)
+                                        .background(
+                                            Circle()
+                                                .fill(selectedReason == reason ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.1))
+                                        )
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(reason.displayName)
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .foregroundColor(selectedReason == reason ? .white : AppConstants.primaryTextColor(for: colorScheme))
+                                        
+                                        Text(reason.description)
+                                            .font(.system(size: 13))
+                                            .foregroundColor(selectedReason == reason ? .white.opacity(0.9) : AppConstants.secondaryTextColor(for: colorScheme))
+                                            .lineLimit(2)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    if selectedReason == reason {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                .padding(16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(selectedReason == reason ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.cardBackgroundColor(for: colorScheme))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(selectedReason == reason ? AppConstants.adaptivePrimaryColor(for: colorScheme) : AppConstants.borderColor(for: colorScheme).opacity(0.3), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .padding(.horizontal, 20)
+                        }
+                    }
+                    .padding(.vertical, 12)
+                    
+                    // Additional Details (if "Other" is selected)
+                    if selectedReason == .other {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Additional Details")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                            
+                            TextEditor(text: $additionalDetails)
+                                .font(.system(size: 15))
+                                .frame(minHeight: 100)
+                                .padding(12)
+                                .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(AppConstants.borderColor(for: colorScheme), lineWidth: 1)
+                                )
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                    
+                    // Submit Button
+                    Button(action: submitReport) {
+                        HStack {
+                            if isSubmitting {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 16))
+                                Text("Submit Report")
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            selectedReason != nil
+                                ? AppConstants.adaptivePrimaryColor(for: colorScheme)
+                                : AppConstants.secondaryTextColor(for: colorScheme).opacity(0.3)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .disabled(selectedReason == nil || isSubmitting)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
+                }
+            }
+            .background(AppConstants.backgroundColor(for: colorScheme))
+            .navigationTitle("Report Content")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(AppConstants.primaryColor)
+                }
+            }
+            .alert("Report Submitted", isPresented: $showSuccess) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                Text("Thank you for your report. This content will be reviewed within 24 hours and appropriate action will be taken.")
+            }
+        }
+    }
+    
+    private func submitReport() {
+        guard let reason = selectedReason else { return }
+        
+        mediumHaptic.impactOccurred(intensity: 0.7)
+        
+        isSubmitting = true
+        
+        Task {
+            do {
+                let details = reason == .other ? (additionalDetails.isEmpty ? nil : additionalDetails) : nil
+                
+                try await communityService.reportContent(
+                    postId: postId,
+                    commentId: commentId,
+                    reason: reason.rawValue,
+                    details: details
+                )
+                
+                await MainActor.run {
+                    isSubmitting = false
+                    showSuccess = true
+                }
+            } catch {
+                await MainActor.run {
+                    isSubmitting = false
+                    print("❌ Error submitting report: \(error)")
+                    // You could show an error alert here
+                }
+            }
         }
     }
 }

@@ -485,3 +485,139 @@ struct CreateCommentRequest: Codable {
     }
 }
 
+// MARK: - Report Reason
+
+enum ReportReason: String, Codable, CaseIterable, Identifiable {
+    case spam = "spam"
+    case harassment = "harassment"
+    case hateSpeech = "hate_speech"
+    case inappropriateContent = "inappropriate_content"
+    case misinformation = "misinformation"
+    case selfHarm = "self_harm"
+    case violence = "violence"
+    case other = "other"
+    
+    var id: String { rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .spam: return "Spam"
+        case .harassment: return "Harassment"
+        case .hateSpeech: return "Hate Speech"
+        case .inappropriateContent: return "Inappropriate Content"
+        case .misinformation: return "Misinformation"
+        case .selfHarm: return "Self-Harm"
+        case .violence: return "Violence"
+        case .other: return "Other"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .spam: return "Repetitive, unwanted, or promotional content"
+        case .harassment: return "Bullying, threats, or personal attacks"
+        case .hateSpeech: return "Content that promotes hatred or discrimination"
+        case .inappropriateContent: return "Sexually explicit or offensive material"
+        case .misinformation: return "False or misleading information"
+        case .selfHarm: return "Content promoting self-harm or suicide"
+        case .violence: return "Violent or threatening content"
+        case .other: return "Other issue not listed"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .spam: return "exclamationmark.bubble.fill"
+        case .harassment: return "person.fill.xmark"
+        case .hateSpeech: return "exclamationmark.triangle.fill"
+        case .inappropriateContent: return "eye.slash.fill"
+        case .misinformation: return "xmark.circle.fill"
+        case .selfHarm: return "heart.slash.fill"
+        case .violence: return "hand.raised.fill"
+        case .other: return "ellipsis.circle.fill"
+        }
+    }
+}
+
+// MARK: - Content Report
+
+struct ContentReport: Codable, Identifiable {
+    let id: UUID
+    let reporterId: UUID
+    let postId: UUID?
+    let commentId: UUID?
+    let reason: String
+    let details: String?
+    let status: String
+    let reviewedBy: UUID?
+    let reviewedAt: Date?
+    let adminNotes: String?
+    let createdAt: Date
+    let updatedAt: Date
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case reporterId = "reporter_id"
+        case postId = "post_id"
+        case commentId = "comment_id"
+        case reason
+        case details
+        case status
+        case reviewedBy = "reviewed_by"
+        case reviewedAt = "reviewed_at"
+        case adminNotes = "admin_notes"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+// MARK: - Create Report Request
+
+struct CreateReportRequest: Codable {
+    let reporterId: UUID
+    let postId: UUID?
+    let commentId: UUID?
+    let reason: String
+    let details: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case reporterId = "reporter_id"
+        case postId = "post_id"
+        case commentId = "comment_id"
+        case reason
+        case details
+    }
+}
+
+// MARK: - User Block
+
+struct UserBlock: Codable, Identifiable {
+    let id: UUID
+    let blockerId: UUID
+    let blockedId: UUID
+    let reason: String?
+    let createdAt: Date
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case blockerId = "blocker_id"
+        case blockedId = "blocked_id"
+        case reason
+        case createdAt = "created_at"
+    }
+}
+
+// MARK: - Create Block Request
+
+struct CreateBlockRequest: Codable {
+    let blockerId: UUID
+    let blockedId: UUID
+    let reason: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case blockerId = "blocker_id"
+        case blockedId = "blocked_id"
+        case reason
+    }
+}
+

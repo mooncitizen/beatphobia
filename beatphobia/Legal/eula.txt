@@ -1,0 +1,87 @@
+End User License Agreement (EULA) for Still Step
+
+Last Updated: November 1, 2025
+
+This End User License Agreement ("Agreement") is a binding legal contract between you and Still Step Team ("Developer," "we," "us," or "our") governing your use of the "Still Step" mobile application (the "App").
+
+By downloading, installing, or using the App, you (a) acknowledge that you have read and understood this Agreement; (b) represent that you are of legal age to enter into a binding agreement; and (c) accept this Agreement and agree that you are legally bound by its terms. If you do not agree to these terms, do not download, install, or use the App.
+
+IMPORTANT: This Agreement requires users to agree that there is no tolerance for objectionable content or abusive users.
+
+1. License Grant
+
+Subject to the terms of this Agreement, Developer grants you a limited, non-exclusive, and non-transferable license to:
+
+Download, install, and use the App for your personal, non-commercial use on a single mobile device owned or otherwise controlled by you ("Mobile Device") strictly in accordance with this Agreement.
+
+2. User Accounts
+
+To use certain features of the App, you may be required to create an account. You are responsible for maintaining the confidentiality of your account credentials and for all activities that occur under your account. You agree to notify us immediately of any unauthorized use of your account.
+
+3. User-Generated Content (UGC) Policy
+
+You are solely responsible for all content, including but not limited to text, photos, videos, comments, or other materials ("User Content"), that you post, upload, or otherwise make available through the App.
+
+We have a zero-tolerance policy for objectionable content and abusive users. You agree not to post any User Content that:
+
+Is sexually explicit, pornographic, or contains nudity.
+
+Is hateful, threatening, discriminatory, defamatory, libelous, or fraudulent.
+
+Incites violence or hatred against individuals or groups based on race, ethnic origin, religion, disability, gender, age, veteran status, or sexual orientation/gender identity.
+
+Constitutes harassment, bullying, or stalking.
+
+Contains private or confidential information of any third party without their consent.
+
+Is spam, an unauthorized commercial solicitation, or promotes illegal activities.
+
+Infringes upon any third party's copyright, trademark, or other intellectual property rights.
+
+We reserve the right, but are not obligated, to review, monitor, and remove any User Content that, in our sole discretion, violates these terms, without notice.
+
+4. Abusive Users
+
+Any user found to be posting objectionable content or engaging in abusive behavior, including but not limited to harassment, bullying, hate speech, or threatening other users, will have their account terminated and be ejected from the service. We reserve the right to report any illegal activities to law enforcement.
+
+5. Content Reporting and User Blocking
+
+The App provides mechanisms for users to:
+
+Flag or Report Objectionable Content: All users can report any User Content or profile that they believe violates this Agreement.
+
+Block Abusive Users: All users can block any other user from whom they do not wish to receive communications or see content.
+
+We are committed to acting on all objectionable content reports within 24 hours by removing the offending content and ejecting the user who provided it.
+
+6. Prohibited Conduct
+
+In addition to the UGC policy, you agree not to:
+
+Use the App for any illegal purpose or in violation of any local, state, national, or international law.
+
+Reverse engineer, decompile, or disassemble the App.
+
+Use any automated system, including "bots" or "spiders," to access the App.
+
+Attempt to interfere with or compromise the App's system integrity or security.
+
+7. Termination
+
+We may terminate or suspend your account and access to the App, in our sole discretion, at any time and without notice or liability, including if you breach this Agreement. Upon termination, your right to use the App will immediately cease.
+
+8. Disclaimer of Warranties
+
+THE APP IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. DEVELOPER DISCLAIMS ALL WARRANTIES, INCLUDING, BUT NOT LIMITED TO, IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+9. Limitation of Liability
+
+TO THE FULLEST EXTENT PERMITTED BY LAW, IN NO EVENT SHALL DEVELOPER BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING OUT OF OR RELATING TO YOUR USE OF THE APP.
+
+10. Governing Law
+
+This Agreement is governed by and construed in accordance with the laws of the United Kingdom, without regard to its conflict of law principles.
+
+11. Contact Information
+
+If you have any questions about this Agreement, please contact us at: support@stillstep.com.

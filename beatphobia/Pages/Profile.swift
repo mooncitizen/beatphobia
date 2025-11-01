@@ -8,6 +8,7 @@
 import SwiftUI
 import Supabase
 import CoreLocation
+import UserNotifications
 
 struct ProfileView: View {
     @EnvironmentObject var authManager: AuthManager
@@ -28,6 +29,7 @@ struct ProfileView: View {
     @StateObject private var imageManager = ImageManager()
     
     @State private var locationStatus: CLAuthorizationStatus = .notDetermined
+    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     
     @AppStorage("setting.notifications") private var enableNotifications = false
     @AppStorage("setting.vibrations") private var enableVibrations = false
@@ -493,6 +495,19 @@ struct ProfileView: View {
                                 action: openSettings,
                                 colorScheme: colorScheme
                             )
+                            Divider()
+                                .padding(.leading, 16)
+                            // Notifications Permission
+                            PermissionRow(
+                                icon: "bell.fill",
+                                iconColor: .orange,
+                                title: "Notifications",
+                                description: "Allow reminders and important updates",
+                                status: notificationAuthorizationStatusText,
+                                statusColor: notificationAuthorizationStatusColor,
+                                action: NotificationManager.openSystemSettings,
+                                colorScheme: colorScheme
+                            )
                         }
                         .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .cornerRadius(16)
@@ -723,6 +738,12 @@ struct ProfileView: View {
     private func checkPermissions() {
         // Check location permission
         locationStatus = CLLocationManager().authorizationStatus
+        // Check notifications permission
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                self.notificationStatus = settings.authorizationStatus
+            }
+        }
     }
     
     private var locationAuthorizationStatusText: String {
@@ -743,6 +764,32 @@ struct ProfileView: View {
         case .authorizedAlways, .authorizedWhenInUse:
             return .green
         case .denied, .restricted:
+            return .red
+        case .notDetermined:
+            return .orange
+        @unknown default:
+            return .gray
+        }
+    }
+    
+    private var notificationAuthorizationStatusText: String {
+        switch notificationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return "Allowed"
+        case .denied:
+            return "Denied"
+        case .notDetermined:
+            return "Not Set"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+    
+    private var notificationAuthorizationStatusColor: Color {
+        switch notificationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return .green
+        case .denied:
             return .red
         case .notDetermined:
             return .orange

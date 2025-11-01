@@ -18,6 +18,7 @@ struct LocationTrackerView: View {
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var subscriptionManager: SubscriptionManager
+    @EnvironmentObject var journeySyncService: JourneySyncService
     @ObservedResults(JourneyRealm.self) var allJourneys
     @Binding var isTabBarVisible: Bool
     
@@ -93,6 +94,7 @@ struct LocationTrackerView: View {
             LocationTrackingView(isTabBarVisible: $isTabBarVisible, onJourneyCompleted: { journeyId in
                 selectedJourneyId = journeyId
             })
+            .environmentObject(journeySyncService)
         }
         .sheet(isPresented: $showPaywall) {
             NavigationStack {
@@ -133,7 +135,7 @@ struct LocationTrackerView: View {
                     LocationTrackerStatCard(
                         title: "Avg Pace",
                         value: calculateAveragePace(),
-                        subtitle: "per km",
+                        subtitle: enableMiles ? "per mi" : "per km",
                         icon: "gauge.high",
                         color: .orange
                     )
@@ -439,6 +441,7 @@ struct LocationTrackerStatCard: View {
 struct LocationTrackingView: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var journeySyncService: JourneySyncService
     @StateObject private var locationManager = LocationTrackingManager()
     @State private var showMap = false // Hide map by default
     @Binding var isTabBarVisible: Bool
@@ -451,7 +454,7 @@ struct LocationTrackingView: View {
     @State private var countdown = 3
     @State private var isPaused = false
     @State private var countdownTimer: Timer?
-    @State private var audioPlayer: AVAudioPlayer?
+    @State private var recenterToken = UUID()
     
     private let countdownHaptic = UIImpactFeedbackGenerator(style: .medium)
     
@@ -463,7 +466,7 @@ struct LocationTrackingView: View {
             
             // Map view (only when enabled)
             if showMap {
-                MapView(locationManager: locationManager)
+                MapView(locationManager: locationManager, recenterToken: recenterToken)
                     .ignoresSafeArea()
             }
             
@@ -513,18 +516,37 @@ struct LocationTrackingView: View {
         .alert("End Journey?", isPresented: $showEndJourneyAlert) {
             Button("Cancel", role: .cancel) { }
             Button("End Journey", role: .destructive) {
-                completedJourneyId = locationManager.currentJourneyId?.uuidString
+                // Save first, THEN set completedJourneyId to trigger dismissal
                 locationManager.stopTracking()
+                // stopTracking() will set completedJourneyId internally
+                if let journeyId = locationManager.currentJourneyId {
+                    completedJourneyId = journeyId.uuidString
+                }
             }
         } message: {
             Text("Are you sure you want to end this tracking session?")
         }
         .onChange(of: completedJourneyId) { oldValue, newValue in
             if let journeyId = newValue {
-                // Call the completion handler if provided
-                onJourneyCompleted?(journeyId)
-                // Dismiss and return to the list
-                dismiss()
+                // Verify the journey exists in Realm before dismissing
+                if let realm = try? Realm() {
+                    let savedJourney = realm.object(ofType: JourneyRealm.self, forPrimaryKey: journeyId)
+                    if savedJourney != nil {
+                        // Call the completion handler if provided
+                        onJourneyCompleted?(journeyId)
+                        
+                        // Small delay to ensure Realm notification propagates
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            self.dismiss()
+                        }
+                        
+                        // Sync from local version in background
+                        Task {
+                            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                            await journeySyncService.syncAll()
+                        }
+                    }
+                }
             }
         }
         .onAppear {
@@ -650,19 +672,7 @@ struct LocationTrackingView: View {
         // Prepare haptic for immediate response
         countdownHaptic.prepare()
         
-        // Play audio beep
-        guard let url = Bundle.main.url(forResource: "soft_1_second_beep", withExtension: "wav") else {
-            return
-        }
-        
-        do {
-            audioPlayer = try AVAudioPlayer(contentsOf: url)
-            audioPlayer?.play()
-        } catch {
-            print("Error playing countdown beep: \(error)")
-        }
-        
-        // Trigger haptic feedback
+        // Trigger haptic feedback (sound removed)
         countdownHaptic.impactOccurred(intensity: 0.9)
     }
     
@@ -814,25 +824,49 @@ struct LocationTrackingView: View {
             
             Spacer()
             
-            // View toggle button - only show when tracking
+            // Right-side controls - only show when tracking
             if locationManager.isTracking {
-                Button(action: {
-                    if locationManager.hapticsEnabled {
-                        locationManager.lightHaptic.impactOccurred(intensity: 0.5)
+                HStack(spacing: 10) {
+                    // Recenter button (only visible in map mode)
+                    if showMap {
+                        Button(action: {
+                            if locationManager.hapticsEnabled {
+                                locationManager.lightHaptic.impactOccurred(intensity: 0.5)
+                            }
+                            recenterToken = UUID()
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white)
+                                    .frame(width: 44, height: 44)
+                                    .shadow(color: Color.black.opacity(0.2), radius: 10, y: 3)
+                                
+                                Image(systemName: "location.viewfinder")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(AppConstants.primaryColor)
+                            }
+                        }
                     }
-                    withAnimation(.spring(response: 0.3)) {
-                        showMap.toggle()
-                    }
-                }) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.white)
-                            .frame(width: 44, height: 44)
-                            .shadow(color: Color.black.opacity(0.2), radius: 10, y: 3)
-                        
-                        Image(systemName: showMap ? "chart.bar.fill" : "map.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(AppConstants.primaryColor)
+                    
+                    // View toggle button
+                    Button(action: {
+                        if locationManager.hapticsEnabled {
+                            locationManager.lightHaptic.impactOccurred(intensity: 0.5)
+                        }
+                        withAnimation(.spring(response: 0.3)) {
+                            showMap.toggle()
+                        }
+                    }) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 44, height: 44)
+                                .shadow(color: Color.black.opacity(0.2), radius: 10, y: 3)
+                            
+                            Image(systemName: showMap ? "chart.bar.fill" : "map.fill")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(AppConstants.primaryColor)
+                        }
                     }
                 }
             }
@@ -1086,6 +1120,7 @@ struct LocationTrackingView: View {
 // MARK: - Map View
 struct MapView: UIViewRepresentable {
     @ObservedObject var locationManager: LocationTrackingManager
+    var recenterToken: UUID
     
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
@@ -1129,6 +1164,12 @@ struct MapView: UIViewRepresentable {
                 }
             }
         }
+
+        // Recenter ONLY when token changes
+        if context.coordinator.lastRecenterToken != recenterToken, let _ = locationManager.trackingPoints.last {
+            context.coordinator.lastRecenterToken = recenterToken
+            mapView.setUserTrackingMode(.follow, animated: true)
+        }
     }
     
     func makeCoordinator() -> Coordinator {
@@ -1136,6 +1177,7 @@ struct MapView: UIViewRepresentable {
     }
     
     class Coordinator: NSObject, MKMapViewDelegate {
+        var lastRecenterToken: UUID?
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let polyline = overlay as? MKPolyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
@@ -1246,9 +1288,28 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         totalDistance = useMiles ? "0.0 mi" : "0.0 km"
         averagePace = "0:00"
         startTime = Date()
-        currentJourneyId = UUID()
         
-        // Create initial journey in Realm
+        // Find or create the current Journey object
+        let realm = try? Realm()
+        let currentJourney = realm?.objects(Journey.self).filter("current == true").first
+        
+        if let existingJourney = currentJourney {
+            // Use existing journey's ID
+            currentJourneyId = existingJourney.id
+        } else {
+            // Create new Journey if none exists
+            let newJourney = Journey()
+            newJourney.type = .None // Will be set from onboarding or can be updated
+            newJourney.startDate = Date()
+            newJourney.current = true
+            newJourney.isCompleted = false
+            
+            // saveJourney already handles the write transaction internally
+            realm?.saveJourney(newJourney, needsSync: true)
+            currentJourneyId = newJourney.id
+        }
+        
+        // Create initial journey in Realm (JourneyRealm for tracking data)
         saveJourneyToRealm()
         
         locationManager.startUpdatingLocation()
@@ -1286,8 +1347,23 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
             endLiveActivity()
         }
         
-        // Save final state to Realm
+        // Save JourneyRealm (tracking data) FIRST - this must complete synchronously
         saveJourneyToRealm()
+        
+        // Also update the Journey object to mark it as completed and needing sync
+        if let journeyId = currentJourneyId {
+            if let realm = try? Realm() {
+                if let journey = realm.object(ofType: Journey.self, forPrimaryKey: journeyId) {
+                    try! realm.write {
+                        journey.isCompleted = true
+                        journey.current = false
+                        journey.needsSync = true
+                        journey.isSynced = false
+                        journey.updatedAt = Date()
+                    }
+                }
+            }
+        }
     }
     
     func recordFeeling(_ feeling: FeelingLevel) {
@@ -1333,15 +1409,8 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
     // MARK: - Live Activity Methods
     @available(iOS 16.1, *)
     private func startLiveActivity() {
-        print("🔵 Attempting to start Live Activity...")
-        
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            print("❌ Live Activities are disabled in system settings")
             return
-        }
-        
-        if !ActivityAuthorizationInfo().frequentPushesEnabled {
-            print("⏸️ Frequent pushes are disabled (not critical)")
         }
         
         let attributes = LocationTrackingAttributes(startTime: startTime!)
@@ -1356,18 +1425,13 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
             locationName: currentLocationName
         )
         
-        print("📍 Content State: \(contentState.duration), \(contentState.distance), \(contentState.pace)")
-        
         do {
             liveActivity = try Activity<LocationTrackingAttributes>.request(
                 attributes: attributes,
                 contentState: contentState,
                 pushType: nil
             )
-            print("✅ Live Activity started successfully: \(liveActivity?.id ?? "unknown")")
         } catch {
-            print("❌ Failed to start Live Activity: \(error.localizedDescription)")
-            print("   Error details: \(error)")
         }
     }
     
@@ -1400,7 +1464,6 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         }
         
         liveActivity = nil
-        print("✅ Live Activity ended")
     }
     
     private func calculateDistance() {
@@ -1420,6 +1483,18 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         } else {
             let kilometers = distanceMeters / 1000.0
             totalDistance = String(format: "%.2f km", kilometers)
+        }
+        
+        // Also update pace
+        if let startTime = startTime {
+            let elapsed = Int(Date().timeIntervalSince(startTime))
+            if distanceMeters > 0 && elapsed > 0 {
+                let distance = useMiles ? (distanceMeters / 1609.34) : (distanceMeters / 1000.0)
+                let paceMinPerUnit = Double(elapsed) / 60.0 / distance
+                let paceMin = Int(paceMinPerUnit)
+                let paceSec = Int((paceMinPerUnit - Double(paceMin)) * 60)
+                averagePace = String(format: "%d:%02d", paceMin, paceSec)
+            }
         }
     }
     
@@ -1446,70 +1521,87 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         }
     }
     
-    private func saveJourneyToRealm() {
-        guard let journeyId = currentJourneyId else { return }
+    func saveJourneyToRealm() {
+        guard let journeyId = currentJourneyId else {
+            return
+        }
         
-        let realm = try? Realm()
-        try? realm?.write {
-            // Check if journey exists
-            if let existingJourney = realm?.object(ofType: JourneyRealm.self, forPrimaryKey: journeyId.uuidString) {
-                // Update existing journey
-                existingJourney.endTime = Date()
-                existingJourney.distance = distanceMeters
-                existingJourney.duration = Int(Date().timeIntervalSince(startTime ?? Date()))
+        guard let realm = try? Realm() else {
+            return
+        }
+        
+        do {
+            try realm.write {
+                let journeyIdString = journeyId.uuidString
                 
-                // Clear and re-add path points
-                existingJourney.pathPoints.removeAll()
-                for location in trackingPoints {
-                    let pathPoint = PathPointRealm()
-                    pathPoint.latitude = location.coordinate.latitude
-                    pathPoint.longitude = location.coordinate.longitude
-                    pathPoint.timestamp = location.timestamp
-                    existingJourney.pathPoints.append(pathPoint)
+                // Check if journey exists
+                if let existingJourney = realm.object(ofType: JourneyRealm.self, forPrimaryKey: journeyIdString) {
+                    // Update existing journey
+                    existingJourney.endTime = Date()
+                    existingJourney.distance = distanceMeters
+                    existingJourney.duration = Int(Date().timeIntervalSince(startTime ?? Date()))
+                    existingJourney.updatedAt = Date()
+                    existingJourney.needsSync = true
+                    existingJourney.isSynced = false
+                    
+                    // Clear and re-add path points
+                    existingJourney.pathPoints.removeAll()
+                    for location in trackingPoints {
+                        let pathPoint = PathPointRealm()
+                        pathPoint.latitude = location.coordinate.latitude
+                        pathPoint.longitude = location.coordinate.longitude
+                        pathPoint.timestamp = location.timestamp
+                        existingJourney.pathPoints.append(pathPoint)
+                    }
+                    
+                    // Clear and re-add checkpoints
+                    existingJourney.checkpoints.removeAll()
+                    for checkpoint in feelingCheckpoints {
+                        let realmCheckpoint = FeelingCheckpointRealm()
+                        realmCheckpoint.id = checkpoint.id.uuidString
+                        realmCheckpoint.latitude = checkpoint.location.coordinate.latitude
+                        realmCheckpoint.longitude = checkpoint.location.coordinate.longitude
+                        realmCheckpoint.feeling = checkpoint.feeling.rawValue
+                        realmCheckpoint.timestamp = checkpoint.timestamp
+                        existingJourney.checkpoints.append(realmCheckpoint)
+                    }
+                } else {
+                    // Create new journey
+                    let journey = JourneyRealm()
+                    journey.id = journeyIdString
+                    journey.startTime = startTime ?? Date()
+                    journey.endTime = Date()
+                    journey.distance = distanceMeters
+                    journey.duration = Int(Date().timeIntervalSince(startTime ?? Date()))
+                    journey.updatedAt = Date()
+                    journey.needsSync = true
+                    journey.isSynced = false
+                    
+                    // Add path points
+                    for location in trackingPoints {
+                        let pathPoint = PathPointRealm()
+                        pathPoint.latitude = location.coordinate.latitude
+                        pathPoint.longitude = location.coordinate.longitude
+                        pathPoint.timestamp = location.timestamp
+                        journey.pathPoints.append(pathPoint)
+                    }
+                    
+                    // Add checkpoints
+                    for checkpoint in feelingCheckpoints {
+                        let realmCheckpoint = FeelingCheckpointRealm()
+                        realmCheckpoint.id = checkpoint.id.uuidString
+                        realmCheckpoint.latitude = checkpoint.location.coordinate.latitude
+                        realmCheckpoint.longitude = checkpoint.location.coordinate.longitude
+                        realmCheckpoint.feeling = checkpoint.feeling.rawValue
+                        realmCheckpoint.timestamp = checkpoint.timestamp
+                        journey.checkpoints.append(realmCheckpoint)
+                    }
+                    
+                    realm.add(journey)
                 }
-                
-                // Clear and re-add checkpoints
-                existingJourney.checkpoints.removeAll()
-                for checkpoint in feelingCheckpoints {
-                    let realmCheckpoint = FeelingCheckpointRealm()
-                    realmCheckpoint.id = checkpoint.id.uuidString
-                    realmCheckpoint.latitude = checkpoint.location.coordinate.latitude
-                    realmCheckpoint.longitude = checkpoint.location.coordinate.longitude
-                    realmCheckpoint.feeling = checkpoint.feeling.rawValue
-                    realmCheckpoint.timestamp = checkpoint.timestamp
-                    existingJourney.checkpoints.append(realmCheckpoint)
-                }
-            } else {
-                // Create new journey
-                let journey = JourneyRealm()
-                journey.id = journeyId.uuidString
-                journey.startTime = startTime ?? Date()
-                journey.endTime = Date()
-                journey.distance = distanceMeters
-                journey.duration = Int(Date().timeIntervalSince(startTime ?? Date()))
-                
-                // Add path points
-                for location in trackingPoints {
-                    let pathPoint = PathPointRealm()
-                    pathPoint.latitude = location.coordinate.latitude
-                    pathPoint.longitude = location.coordinate.longitude
-                    pathPoint.timestamp = location.timestamp
-                    journey.pathPoints.append(pathPoint)
-                }
-                
-                // Add checkpoints
-                for checkpoint in feelingCheckpoints {
-                    let realmCheckpoint = FeelingCheckpointRealm()
-                    realmCheckpoint.id = checkpoint.id.uuidString
-                    realmCheckpoint.latitude = checkpoint.location.coordinate.latitude
-                    realmCheckpoint.longitude = checkpoint.location.coordinate.longitude
-                    realmCheckpoint.feeling = checkpoint.feeling.rawValue
-                    realmCheckpoint.timestamp = checkpoint.timestamp
-                    journey.checkpoints.append(realmCheckpoint)
-                }
-                
-                realm?.add(journey)
             }
+        } catch {
+            print("❌ Error saving journey to Realm: \(error)")
         }
     }
     
@@ -1534,10 +1626,7 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
             guard let self = self else { return }
             
-            if let error = error {
-                print("Geocoding error: \(error.localizedDescription)")
-                return
-            }
+            if let _ = error { return }
             
             if let placemark = placemarks?.first {
                 // Get street name or fallback to locality
@@ -1553,9 +1642,7 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         permissionStatus = manager.authorizationStatus
     }
     
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("Location error: \(error.localizedDescription)")
-    }
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) { }
 }
 
 // MARK: - Models
@@ -1641,6 +1728,13 @@ class JourneyRealm: Object, Identifiable {
     @Persisted var duration: Int = 0 // in seconds
     @Persisted var pathPoints = RealmSwift.List<PathPointRealm>()
     @Persisted var checkpoints = RealmSwift.List<FeelingCheckpointRealm>()
+    
+    // Sync metadata
+    @Persisted var isSynced: Bool = false // Has been synced to cloud
+    @Persisted var needsSync: Bool = false // Needs to be synced (create/update)
+    @Persisted var isDeleted: Bool = false // Soft delete flag
+    @Persisted var lastSyncedAt: Date? = nil // Last successful sync timestamp
+    @Persisted var updatedAt: Date = Date() // Last local update
 }
 
 class PathPointRealm: Object {

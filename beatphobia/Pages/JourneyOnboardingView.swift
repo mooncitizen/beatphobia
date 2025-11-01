@@ -53,6 +53,7 @@ final class OnboardingViewModel: ObservableObject {
 struct OnboardingContainerView: View {
     @StateObject private var viewModel = OnboardingViewModel()
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var journeySyncService: JourneySyncService
     
     var body: some View {
         VStack {
@@ -63,6 +64,7 @@ struct OnboardingContainerView: View {
                     OnboardingPathingView(viewModel: viewModel)
                 case .dataPrivacy:
                     OnboardingDataPrivacyView(viewModel: viewModel)
+                        .environmentObject(journeySyncService)
                 case .finish:
                     OnboardingFinishView(viewModel: viewModel)
             }
@@ -165,6 +167,7 @@ struct OnboardingPathingView: View {
 struct OnboardingDataPrivacyView: View {
     @ObservedObject var viewModel: OnboardingViewModel
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var journeySyncService: JourneySyncService
     
     private var anxietyTitle: String {
         if viewModel.chosenJourneyType == .Agoraphobia {
@@ -201,11 +204,16 @@ struct OnboardingDataPrivacyView: View {
                     newJourney.current = true
                     newJourney.isCompleted = false
                     let realm = try! Realm()
-                    try! realm.write {
-                        realm.add(newJourney)
-                        dismiss()
-                        print("Done Creating Journey")
+                    // Use sync-aware save method
+                    realm.saveJourney(newJourney, needsSync: true)
+                    print("🗺️ Done Creating Journey - triggering sync...")
+                    
+                    // Trigger sync in background
+                    Task {
+                        await journeySyncService.syncAll()
                     }
+                    
+                    dismiss()
                     
                 }.buttonStyle(PillButtonStyle(style: .success)).padding(.trailing, 10)
             }

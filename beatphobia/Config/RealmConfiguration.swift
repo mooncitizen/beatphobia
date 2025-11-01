@@ -12,11 +12,11 @@ class RealmConfigurationManager {
     static func configure() {
         let config = Realm.Configuration(
             // Increment schema version when making model changes
-            schemaVersion: 3, // Was 2 for sync properties, now 3 for location tracking models
+            schemaVersion: 5, // Version 5: JourneyRealm sync properties
             
             // Migration block to handle schema changes
             migrationBlock: { migration, oldSchemaVersion in
-                print("🔄 Migrating Realm from version \(oldSchemaVersion) to version 3")
+                print("🔄 Migrating Realm from version \(oldSchemaVersion) to version 5")
                 
                 // Migration to version 2: Journal sync properties
                 if oldSchemaVersion < 2 {
@@ -86,6 +86,34 @@ class RealmConfigurationManager {
                     }
                     
                     print("✅ Location tracking models migration complete")
+                }
+                
+                // Migration to version 4: Journey sync properties
+                if oldSchemaVersion < 4 {
+                    print("🗺️ Migrating Journey: Adding sync properties")
+                    migration.enumerateObjects(ofType: "Journey") { oldObject, newObject in
+                        // Set default values for new sync properties
+                        newObject?["isSynced"] = false
+                        newObject?["needsSync"] = true // Mark existing journeys for sync
+                        newObject?["isDeleted"] = false
+                        newObject?["lastSyncedAt"] = nil
+                        newObject?["updatedAt"] = oldObject?["startDate"] ?? Date() // Use start date as initial updated date
+                    }
+                    print("✅ Journey sync properties migration complete")
+                }
+                
+                // Migration to version 5: JourneyRealm sync properties
+                if oldSchemaVersion < 5 {
+                    print("🗺️ Migrating JourneyRealm: Adding sync properties")
+                    migration.enumerateObjects(ofType: "JourneyRealm") { oldObject, newObject in
+                        // Set default values for new sync properties
+                        newObject?["isSynced"] = false
+                        newObject?["needsSync"] = true // Mark existing journey data for sync
+                        newObject?["isDeleted"] = false
+                        newObject?["lastSyncedAt"] = nil
+                        newObject?["updatedAt"] = oldObject?["startTime"] ?? Date() // Use start time as initial updated date
+                    }
+                    print("✅ JourneyRealm sync properties migration complete")
                 }
             }
         )

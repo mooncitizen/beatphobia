@@ -47,6 +47,7 @@ enum SubscriptionTier: String, CaseIterable {
                 "✨ Everything in Free",
                 "📍 Unlimited location tracking history",
                 "☁️ Cloud journal backup & sync",
+                "🗺️ Cloud journey backup & sync",
                 "📊 Detailed metrics & analytics",
                 "📈 Journal entry insights over time",
                 "📉 Panic scale trend analysis",
@@ -383,7 +384,16 @@ final class SubscriptionManager: ObservableObject {
             activeStatus = buildSubscriptionStatus(from: transaction)
         }
         
+        // Only notify if status actually changed
+        let previousTier = self.subscriptionStatus.tier
+        let previousIsActive = self.subscriptionStatus.isActive
+        
         self.subscriptionStatus = activeStatus
+        
+        // Post notification if subscription status changed (e.g., loaded from StoreKit)
+        if previousTier != activeStatus.tier || previousIsActive != activeStatus.isActive {
+            NotificationCenter.default.post(name: .subscriptionStatusChanged, object: nil)
+        }
     }
     
     private func buildSubscriptionStatus(from transaction: StoreKit.Transaction) -> SubscriptionStatus {
@@ -502,6 +512,11 @@ final class SubscriptionManager: ObservableObject {
         return hasAccess(to: .cloudJournalSync)
     }
     
+    // Cloud journey sync
+    func canSyncJourneyToCloud() -> Bool {
+        return hasAccess(to: .cloudJourneySync)
+    }
+    
     // Metrics access
     func canViewMetrics() -> Bool {
         return hasAccess(to: .metrics)
@@ -584,6 +599,7 @@ final class SubscriptionManager: ObservableObject {
 enum ProFeature {
     case unlimitedLocationTracking
     case cloudJournalSync
+    case cloudJourneySync
     case metrics
     
     var availableInFree: Bool {
@@ -596,6 +612,8 @@ enum ProFeature {
             return "Unlimited Location Tracking"
         case .cloudJournalSync:
             return "Cloud Journal Backup & Sync"
+        case .cloudJourneySync:
+            return "Cloud Journey Backup & Sync"
         case .metrics:
             return "Detailed Metrics & Analytics"
         }
@@ -607,6 +625,8 @@ enum ProFeature {
             return "Access unlimited location tracking history for all your journeys. Free users are limited to the last 3 journeys."
         case .cloudJournalSync:
             return "Securely save and sync your journal entries to the cloud. Access your journals from any device."
+        case .cloudJourneySync:
+            return "Securely save and sync your journeys to the cloud. Access your journey data from any device."
         case .metrics:
             return "Get detailed insights and analytics for your journal entries, panic scale tracking, and location patterns over time."
         }
@@ -618,6 +638,8 @@ enum ProFeature {
             return "location.fill"
         case .cloudJournalSync:
             return "icloud.fill"
+        case .cloudJourneySync:
+            return "map.fill"
         case .metrics:
             return "chart.xyaxis.line"
         }

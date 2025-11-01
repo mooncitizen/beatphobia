@@ -42,4 +42,11 @@ final class Journey: Object, ObjectKeyIdentifiable {
     @Persisted var startDate: Date = Date()
     @Persisted var isCompleted: Bool = false
     @Persisted var current: Bool = true
+    
+    // Sync metadata
+    @Persisted var isSynced: Bool = false // Has been synced to cloud
+    @Persisted var needsSync: Bool = false // Needs to be synced (create/update)
+    @Persisted var isDeleted: Bool = false // Soft delete flag
+    @Persisted var lastSyncedAt: Date? = nil // Last successful sync timestamp
+    @Persisted var updatedAt: Date = Date() // Last local update
 }
