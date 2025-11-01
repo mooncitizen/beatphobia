@@ -19,10 +19,11 @@ struct CommunitySection: Identifiable {
 
 enum CommunityDestination {
     case forum
+    case trending
     case yourPosts
+    case bookmarkedPosts
     case friends
     case chats
-    case trending
     case guidelines
 }
 
@@ -49,6 +50,14 @@ struct CommunityOverview: View {
                 destination: .forum
             ),
             CommunitySection(
+                title: "Trending Topics",
+                subtitle: "Popular discussions now",
+                icon: "flame.fill",
+                color: .orange,
+                badge: nil,
+                destination: .trending
+            ),
+            CommunitySection(
                 title: "Your Posts",
                 subtitle: "View your contributions",
                 icon: "doc.text.fill",
@@ -56,6 +65,15 @@ struct CommunityOverview: View {
                 badge: nil,
                 destination: .yourPosts
             ),
+            CommunitySection(
+                title: "Bookmarked Posts",
+                subtitle: "Saved posts for later",
+                icon: "bookmark.fill",
+                color: .yellow,
+                badge: nil,
+                destination: .bookmarkedPosts
+            ),
+            // TODO: commented this out until we implement the service layer for this.. it needs
             // CommunitySection(
             //     title: "Your Friends",
             //     subtitle: "Connect with supporters",
@@ -72,14 +90,6 @@ struct CommunityOverview: View {
             //     badge: unreadMessages > 0 ? unreadMessages : nil,
             //     destination: .chats
             // ),
-            CommunitySection(
-                title: "Trending Topics",
-                subtitle: "Popular discussions now",
-                icon: "flame.fill",
-                color: .orange,
-                badge: nil,
-                destination: .trending
-            ),
             CommunitySection(
                 title: "Guidelines & Help",
                 subtitle: "Community rules & support",
@@ -246,14 +256,16 @@ struct CommunityOverview: View {
         switch destination {
         case .forum:
             CommunityForumView()
+        case .trending:
+            TrendingTopicsView()
         case .yourPosts:
             YourPostsView()
+        case .bookmarkedPosts:
+            BookmarkedPostsView()
         case .friends:
             FriendsListView()
         case .chats:
             ChatsListView()
-        case .trending:
-            TrendingTopicsView()
         case .guidelines:
             GuidelinesView()
         }
@@ -522,6 +534,141 @@ struct CommunityForumView: View {
     }
 }
 
+// MARK: - Bookmarked Posts View
+struct BookmarkedPostsView: View {
+    @Environment(\.colorScheme) var colorScheme
+    @StateObject private var communityService = CommunityService()
+    @State private var posts: [PostDisplayModel] = []
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Header
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.yellow.opacity(0.1))
+                            .frame(width: 80, height: 80)
+
+                        Image(systemName: "bookmark.fill")
+                            .font(.system(size: 32, weight: .semibold))
+                            .foregroundColor(.yellow)
+                    }
+
+                    Text("Bookmarked Posts")
+                        .font(.system(size: 28, weight: .bold, design: .serif))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
+                    Text("Posts you've saved for later")
+                        .font(.system(size: 15))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+                }
+                .padding(.vertical, 16)
+                
+                // Posts List
+                if communityService.isLoading && posts.isEmpty {
+                    MinimalLoadingView(text: "Loading Bookmarked Posts")
+                } else if let error = communityService.error {
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 48))
+                            .foregroundColor(.orange)
+
+                        Text("Error Loading Posts")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
+                        Text(error)
+                            .font(.system(size: 14))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+
+                        Button("Try Again") {
+                            Task {
+                                await loadBookmarkedPosts()
+                            }
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(AppConstants.adaptivePrimaryColor(for: colorScheme))
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                    .padding(.top, 40)
+                } else if posts.isEmpty {
+                    VStack(spacing: 16) {
+                        Image(systemName: "bookmark")
+                            .font(.system(size: 48))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.5))
+
+                        Text("No bookmarked posts")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+
+                        Text("Start bookmarking posts to save them here!")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.8))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 60)
+                } else {
+                    LazyVStack(spacing: 16) {
+                        ForEach(posts) { post in
+                            NavigationLink(destination: PostDetailView(post: post)) {
+                                PostCard(post: post, communityService: communityService)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .padding(.bottom, 24)
+        }
+        .refreshable {
+            await loadBookmarkedPosts()
+        }
+        .background(AppConstants.backgroundColor(for: colorScheme))
+        .navigationTitle("Bookmarked Posts")
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await loadBookmarkedPosts()
+        }
+        .onChange(of: communityService.refreshTrigger) { _ in
+            Task {
+                await loadBookmarkedPosts()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserBlocked"))) { _ in
+            Task {
+                await loadBookmarkedPosts()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserUnblocked"))) { _ in
+            Task {
+                await loadBookmarkedPosts()
+            }
+        }
+    }
+    
+    private func loadBookmarkedPosts() async {
+        do {
+            posts = try await communityService.fetchBookmarkedPosts()
+            communityService.error = nil
+        } catch {
+            print("❌ Error loading bookmarked posts: \(error)")
+            communityService.error = error.localizedDescription
+        }
+    }
+}
+
 struct YourPostsView: View {
     @Environment(\.colorScheme) var colorScheme
     @StateObject private var communityService = CommunityService()
@@ -627,6 +774,21 @@ struct YourPostsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await loadUserPosts()
+        }
+        .onChange(of: communityService.refreshTrigger) { _ in
+            Task {
+                await loadUserPosts()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserBlocked"))) { _ in
+            Task {
+                await loadUserPosts()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserUnblocked"))) { _ in
+            Task {
+                await loadUserPosts()
+            }
         }
     }
     
@@ -845,6 +1007,21 @@ struct TopicDetailView: View {
             }
             
             await loadPosts()
+        }
+        .onChange(of: communityService.refreshTrigger) { _ in
+            Task {
+                await loadPosts(forceRefresh: true)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserBlocked"))) { _ in
+            Task {
+                await loadPosts(forceRefresh: true)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserUnblocked"))) { _ in
+            Task {
+                await loadPosts(forceRefresh: true)
+            }
         }
         .refreshable {
             await loadPosts(forceRefresh: true)
@@ -2404,6 +2581,44 @@ struct PostDetailView: View {
         }
         .refreshable {
             await loadComments()
+        }
+        .onChange(of: communityService.refreshTrigger) { _ in
+            Task {
+                // Refresh comments
+                await loadComments()
+                
+                // Check if the post author was just blocked, and if so, dismiss
+                do {
+                    let isBlocked = try await communityService.isUserBlocked(userId: post.userId)
+                    if isBlocked {
+                        await MainActor.run {
+                            dismiss()
+                        }
+                    }
+                } catch {
+                    print("⚠️ Error checking if post author is blocked: \(error)")
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserBlocked"))) { notification in
+            Task {
+                // Refresh comments
+                await loadComments()
+                
+                // Check if the blocked user is the post author
+                if let blockedUserId = notification.userInfo?["blockedUserId"] as? UUID,
+                   blockedUserId == post.userId {
+                    await MainActor.run {
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("UserUnblocked"))) { _ in
+            Task {
+                // Refresh comments when user is unblocked
+                await loadComments()
+            }
         }
         .sheet(isPresented: $showEditPost) {
             EditPostView(post: post, communityService: communityService) {

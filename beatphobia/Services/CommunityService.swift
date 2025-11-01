@@ -13,6 +13,7 @@ import Combine
 class CommunityService: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
+    @Published var refreshTrigger: UUID = UUID() // Trigger for views to refresh
     
     // MARK: - Caching
     private var cachedPosts: [String: [PostDisplayModel]] = [:] // In-memory cache
@@ -170,13 +171,29 @@ class CommunityService: ObservableObject {
         let cacheKey = getCacheKey(topicId: topicId, category: category)
         
         // Check in-memory cache first (skip if searching or force refresh)
-        if !forceRefresh && searchText.isEmpty && isCacheValid(for: cacheKey), let cached = cachedPosts[cacheKey] {
+        if !forceRefresh && searchText.isEmpty && isCacheValid(for: cacheKey), var cached = cachedPosts[cacheKey] {
+            // Filter blocked users from cached data
+            do {
+                let blockedUserIds = try await getBlockedUserIds()
+                cached = cached.filter { !blockedUserIds.contains($0.userId) }
+                cachedPosts[cacheKey] = cached // Update cache with filtered data
+            } catch {
+                print("⚠️ Error filtering blocked users from cache: \(error)")
+            }
             print("⚡️ Using in-memory cache for: \(cacheKey)")
             return cached
         }
         
         // Check persistent cache and return immediately if available
-        if !forceRefresh && searchText.isEmpty, let persistentCached = loadFromPersistentCache(key: cacheKey) {
+        if !forceRefresh && searchText.isEmpty, var persistentCached = loadFromPersistentCache(key: cacheKey) {
+            // Filter blocked users from cached data
+            do {
+                let blockedUserIds = try await getBlockedUserIds()
+                persistentCached = persistentCached.filter { !blockedUserIds.contains($0.userId) }
+            } catch {
+                print("⚠️ Error filtering blocked users from cache: \(error)")
+            }
+            
             // Return cached data immediately (don't set isLoading)
             // Store in memory cache too
             cachedPosts[cacheKey] = persistentCached
@@ -246,14 +263,20 @@ class CommunityService: ObservableObject {
                 .value
         }()
         
-        // Get current user's likes and bookmarks
+        // Get current user's likes, bookmarks, and blocked users
         let userId = try await supabase.auth.session.user.id
         let likedPostIds = try await fetchUserLikedPosts(userId: userId)
         let bookmarkedPostIds = try await fetchUserBookmarks(userId: userId)
+        let blockedUserIds = try await getBlockedUserIds()
         
         // Fetch attachments for each post
         var posts: [PostDisplayModel] = []
         for postResponse in response {
+            // Filter out posts from blocked users
+            if blockedUserIds.contains(postResponse.post.userId) {
+                continue
+            }
+            
             var post = postResponse.post
             post.authorUsername = postResponse.profile?.username
             
@@ -282,13 +305,29 @@ class CommunityService: ObservableObject {
         let cacheKey = getCacheKey(type: "trending")
         
         // Check in-memory cache first
-        if !forceRefresh && isCacheValid(for: cacheKey), let cached = cachedPosts[cacheKey] {
+        if !forceRefresh && isCacheValid(for: cacheKey), var cached = cachedPosts[cacheKey] {
+            // Filter blocked users from cached data
+            do {
+                let blockedUserIds = try await getBlockedUserIds()
+                cached = cached.filter { !blockedUserIds.contains($0.userId) }
+                cachedPosts[cacheKey] = cached // Update cache with filtered data
+            } catch {
+                print("⚠️ Error filtering blocked users from cache: \(error)")
+            }
             print("⚡️ Using in-memory cache for trending")
             return cached
         }
         
         // Check persistent cache and return immediately if available
-        if !forceRefresh, let persistentCached = loadFromPersistentCache(key: cacheKey) {
+        if !forceRefresh, var persistentCached = loadFromPersistentCache(key: cacheKey) {
+            // Filter blocked users from cached data
+            do {
+                let blockedUserIds = try await getBlockedUserIds()
+                persistentCached = persistentCached.filter { !blockedUserIds.contains($0.userId) }
+            } catch {
+                print("⚠️ Error filtering blocked users from cache: \(error)")
+            }
+            
             cachedPosts[cacheKey] = persistentCached
             cacheTimestamps[cacheKey] = Date()
             
@@ -336,14 +375,20 @@ class CommunityService: ObservableObject {
             .execute()
             .value
         
-        // Get current user's likes and bookmarks
+        // Get current user's likes, bookmarks, and blocked users
         let userId = try await supabase.auth.session.user.id
         let likedPostIds = try await fetchUserLikedPosts(userId: userId)
         let bookmarkedPostIds = try await fetchUserBookmarks(userId: userId)
+        let blockedUserIds = try await getBlockedUserIds()
         
         // Fetch attachments for each post
         var posts: [PostDisplayModel] = []
         for postResponse in response {
+            // Filter out posts from blocked users
+            if blockedUserIds.contains(postResponse.post.userId) {
+                continue
+            }
+            
             var post = postResponse.post
             post.authorUsername = postResponse.profile?.username
             
@@ -365,13 +410,29 @@ class CommunityService: ObservableObject {
         let cacheKey = getCacheKey(type: "user")
         
         // Check in-memory cache first
-        if !forceRefresh && isCacheValid(for: cacheKey), let cached = cachedPosts[cacheKey] {
+        if !forceRefresh && isCacheValid(for: cacheKey), var cached = cachedPosts[cacheKey] {
+            // Filter blocked users from cached data
+            do {
+                let blockedUserIds = try await getBlockedUserIds()
+                cached = cached.filter { !blockedUserIds.contains($0.userId) }
+                cachedPosts[cacheKey] = cached // Update cache with filtered data
+            } catch {
+                print("⚠️ Error filtering blocked users from cache: \(error)")
+            }
             print("⚡️ Using in-memory cache for user posts")
             return cached
         }
         
         // Check persistent cache and return immediately if available
-        if !forceRefresh, let persistentCached = loadFromPersistentCache(key: cacheKey) {
+        if !forceRefresh, var persistentCached = loadFromPersistentCache(key: cacheKey) {
+            // Filter blocked users from cached data
+            do {
+                let blockedUserIds = try await getBlockedUserIds()
+                persistentCached = persistentCached.filter { !blockedUserIds.contains($0.userId) }
+            } catch {
+                print("⚠️ Error filtering blocked users from cache: \(error)")
+            }
+            
             cachedPosts[cacheKey] = persistentCached
             cacheTimestamps[cacheKey] = Date()
             
@@ -406,6 +467,73 @@ class CommunityService: ObservableObject {
         return posts
     }
     
+    // MARK: - Fetch Bookmarked Posts
+    
+    func fetchBookmarkedPosts() async throws -> [PostDisplayModel] {
+        let userId = try await supabase.auth.session.user.id
+        
+        // Get user's bookmarked post IDs
+        let bookmarks: [PostBookmark] = try await supabase
+            .from("community_post_bookmarks")
+            .select()
+            .eq("user_id", value: userId.uuidString)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        
+        guard !bookmarks.isEmpty else {
+            return []
+        }
+        
+        let bookmarkedPostIds = bookmarks.map { $0.postId }
+        
+        // Fetch the actual posts
+        let response: [CommunityPostDBResponse] = try await supabase
+            .from("community_posts")
+            .select("*, profile(username, profile_image_url, role)")
+            .eq("is_deleted", value: false)
+            .eq("is_flagged", value: false)
+            .in("id", values: bookmarkedPostIds.map { $0.uuidString })
+            .order("created_at", ascending: false, nullsFirst: false)
+            .execute()
+            .value
+        
+        // Get current user's likes, bookmarks, and blocked users
+        let likedPostIds = try await fetchUserLikedPosts(userId: userId)
+        let userBookmarkedPostIds = try await fetchUserBookmarks(userId: userId)
+        let blockedUserIds = try await getBlockedUserIds()
+        
+        // Fetch attachments for each post
+        var posts: [PostDisplayModel] = []
+        for postResponse in response {
+            // Filter out posts from blocked users
+            if blockedUserIds.contains(postResponse.post.userId) {
+                continue
+            }
+            
+            var post = postResponse.post
+            post.authorUsername = postResponse.profile?.username
+            
+            let isLiked = likedPostIds.contains(post.id)
+            // All posts here are bookmarked, so isBookmarked is always true
+            let isBookmarked = true
+            
+            // Fetch attachments (don't fail if attachments fail)
+            let attachments = (try? await fetchAttachments(postId: post.id)) ?? []
+            
+            posts.append(PostDisplayModel(
+                from: post,
+                isLiked: isLiked,
+                isBookmarked: isBookmarked,
+                attachments: attachments,
+                authorProfileImageUrl: postResponse.profile?.profileImageUrl,
+                authorRole: postResponse.profile?.role
+            ))
+        }
+        
+        return posts
+    }
+    
     // MARK: - Fetch User Posts from Database (Internal)
     
     private func fetchUserPostsFromDatabase() async throws -> [PostDisplayModel] {
@@ -423,7 +551,7 @@ class CommunityService: ObservableObject {
         
         // Get current user's likes and bookmarks
         let likedPostIds = try await fetchUserLikedPosts(userId: userId)
-        let bookmarkedPostIds = try await fetchUserBookmarks(userId: userId)
+        let userBookmarkedPostIds = try await fetchUserBookmarks(userId: userId)
         
         // Fetch attachments for each post
         var posts: [PostDisplayModel] = []
@@ -432,7 +560,7 @@ class CommunityService: ObservableObject {
             post.authorUsername = postResponse.profile?.username
             
             let isLiked = likedPostIds.contains(post.id)
-            let isBookmarked = bookmarkedPostIds.contains(post.id)
+            let isBookmarked = userBookmarkedPostIds.contains(post.id)
             
             // Fetch attachments (don't fail if attachments fail)
             let attachments = (try? await fetchAttachments(postId: post.id)) ?? []
@@ -456,7 +584,14 @@ class CommunityService: ObservableObject {
             .execute()
             .value
         
+        // Check if post author is blocked
         let userId = try await supabase.auth.session.user.id
+        let blockedUserIds = try await getBlockedUserIds()
+        
+        if blockedUserIds.contains(response.post.userId) {
+            throw NSError(domain: "CommunityService", code: 403, userInfo: [NSLocalizedDescriptionKey: "This post is from a blocked user"])
+        }
+        
         let likedPostIds = try await fetchUserLikedPosts(userId: userId)
         let bookmarkedPostIds = try await fetchUserBookmarks(userId: userId)
         
@@ -655,15 +790,19 @@ class CommunityService: ObservableObject {
         
         let userId = try await supabase.auth.session.user.id
         let likedCommentIds = try await fetchUserLikedComments(userId: userId)
+        let blockedUserIds = try await getBlockedUserIds()
         
-        let comments: [CommentDisplayModel] = response.map { commentResponse in
-            var comment = commentResponse.comment
-            comment.authorUsername = commentResponse.profile?.username
-            let isLiked = likedCommentIds.contains(comment.id)
-            return CommentDisplayModel(from: comment, isLiked: isLiked, replies: [], attachments: [], authorProfileImageUrl: commentResponse.profile?.profileImageUrl, authorRole: commentResponse.profile?.role)
-        }
+        // Filter out comments from blocked users before organizing
+        let comments: [CommentDisplayModel] = response
+            .filter { !blockedUserIds.contains($0.comment.userId) }
+            .map { commentResponse in
+                var comment = commentResponse.comment
+                comment.authorUsername = commentResponse.profile?.username
+                let isLiked = likedCommentIds.contains(comment.id)
+                return CommentDisplayModel(from: comment, isLiked: isLiked, replies: [], attachments: [], authorProfileImageUrl: commentResponse.profile?.profileImageUrl, authorRole: commentResponse.profile?.role)
+            }
         
-        // Organize into threaded structure
+        // Organize into threaded structure (blocked users already filtered)
         return organizeComments(comments)
     }
     
@@ -913,6 +1052,9 @@ class CommunityService: ObservableObject {
     }
     
     private func organizeComments(_ comments: [CommentDisplayModel]) -> [CommentDisplayModel] {
+        // Note: Blocked user filtering is already done in fetchComments
+        // This method just organizes the comments into a threaded structure
+        
         var commentDict: [UUID: CommentDisplayModel] = [:]
         
         // First pass: create dictionary of all comments
@@ -998,6 +1140,15 @@ class CommunityService: ObservableObject {
             .insert(block)
             .execute()
         
+        // Invalidate cache so blocked posts disappear immediately
+        invalidateCache()
+        
+        // Notify views to refresh
+        refreshTrigger = UUID()
+        
+        // Broadcast notification for views with different service instances
+        NotificationCenter.default.post(name: NSNotification.Name("UserBlocked"), object: nil, userInfo: ["blockedUserId": blockedUserId])
+        
         print("✅ Successfully blocked user")
     }
     
@@ -1012,6 +1163,15 @@ class CommunityService: ObservableObject {
             .eq("blocker_id", value: userId.uuidString)
             .eq("blocked_id", value: blockedUserId.uuidString)
             .execute()
+        
+        // Invalidate cache so unblocked posts appear immediately
+        invalidateCache()
+        
+        // Notify views to refresh
+        refreshTrigger = UUID()
+        
+        // Broadcast notification for views with different service instances
+        NotificationCenter.default.post(name: NSNotification.Name("UserUnblocked"), object: nil, userInfo: ["unblockedUserId": blockedUserId])
         
         print("✅ Successfully unblocked user")
     }
@@ -1045,6 +1205,89 @@ class CommunityService: ObservableObject {
             .value
         
         return blocks.map { $0.blockedId }
+    }
+    
+    // MARK: - Get Blocked Users (IDs only, for filtering)
+    
+    private func getBlockedUserIds() async throws -> Set<UUID> {
+        let userId = try await supabase.auth.session.user.id
+        
+        let blocks: [UserBlock] = try await supabase
+            .from("user_blocks")
+            .select()
+            .eq("blocker_id", value: userId.uuidString)
+            .execute()
+            .value
+        
+        return Set(blocks.map { $0.blockedId })
+    }
+    
+    // MARK: - Get Blocked Users with Profiles
+    
+    func getBlockedUsersWithProfiles() async throws -> [BlockedUserInfo] {
+        let userId = try await supabase.auth.session.user.id
+        
+        // Get blocked user IDs with block info
+        let blocks: [UserBlock] = try await supabase
+            .from("user_blocks")
+            .select()
+            .eq("blocker_id", value: userId.uuidString)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+        
+        guard !blocks.isEmpty else {
+            return []
+        }
+        
+        let blockedUserIds = blocks.map { $0.blockedId }
+        
+        // Fetch profiles for blocked users
+        let profiles: [Profile] = try await supabase
+            .from("profile")
+            .select()
+            .in("id", values: blockedUserIds.map { $0.uuidString })
+            .execute()
+            .value
+        
+        // Create map for quick lookup
+        var profileMap: [UUID: Profile] = [:]
+        for profile in profiles {
+            profileMap[profile.id] = profile
+        }
+        
+        // Combine block info with profile data
+        var blockedUsers: [BlockedUserInfo] = []
+        for block in blocks {
+            if let profile = profileMap[block.blockedId] {
+                blockedUsers.append(BlockedUserInfo(
+                    userId: block.blockedId,
+                    username: profile.username ?? "unknown",
+                    blockedAt: block.createdAt,
+                    reason: block.reason
+                ))
+            }
+        }
+        
+        return blockedUsers
+    }
+}
+
+// MARK: - Blocked User Info
+
+struct BlockedUserInfo: Identifiable {
+    let id: UUID
+    let userId: UUID
+    let username: String
+    let blockedAt: Date
+    let reason: String?
+    
+    init(userId: UUID, username: String, blockedAt: Date, reason: String?) {
+        self.id = userId
+        self.userId = userId
+        self.username = username
+        self.blockedAt = blockedAt
+        self.reason = reason
     }
 }
 

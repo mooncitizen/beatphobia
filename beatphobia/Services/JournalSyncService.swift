@@ -214,7 +214,6 @@ class JournalSyncService: ObservableObject {
     // MARK: - Pull Cloud Changes
     
     private func pullCloudChanges() async throws {
-        print("📥 Pulling changes from cloud...")
         
         let userId = try await getCurrentUserId()
         guard let realm = try? await Realm() else {
@@ -232,8 +231,6 @@ class JournalSyncService: ObservableObject {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let cloudEntries = try decoder.decode([JournalEntryDB].self, from: response.data)
-        
-        print("📥 Found \(cloudEntries.count) entries in cloud")
         
         // Process each cloud entry
         for cloudEntry in cloudEntries {

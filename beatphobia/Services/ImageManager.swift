@@ -30,7 +30,7 @@ class ImageManager: ObservableObject {
         // Create directory if it doesn't exist
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         
-        print("📁 Image cache directory: \(cacheDirectory.path)")
+        // print("📁 Image cache directory: \(cacheDirectory.path)")
     }
     
     // MARK: - Upload Image
@@ -50,7 +50,7 @@ class ImageManager: ObservableObject {
         // Generate unique filename
         let filename = "\(folder)/\(UUID().uuidString).jpg"
         
-        print("📤 Uploading image: \(filename) (\(imageData.count / 1024) KB)")
+        // print("📤 Uploading image: \(filename) (\(imageData.count / 1024) KB)")
         
         // Upload to Supabase Storage
         do {
@@ -70,7 +70,7 @@ class ImageManager: ObservableObject {
                 .getPublicURL(path: filename)
             
             uploadProgress = 1.0
-            print("✅ Image uploaded successfully: \(publicURL)")
+            // print("✅ Image uploaded successfully: \(publicURL)")
             
             return publicURL.absoluteString
         } catch {
@@ -85,13 +85,12 @@ class ImageManager: ObservableObject {
     func loadImage(from urlString: String) async -> UIImage? {
         // Check cache first
         if let cachedImage = loadFromCache(urlString: urlString) {
-            print("📂 Loaded image from cache: \(urlString)")
             return cachedImage
         }
         
         // Download from URL
         guard let url = URL(string: urlString) else {
-            print("❌ Invalid image URL: \(urlString)")
+            // print("❌ Invalid image URL: \(urlString)")
             return nil
         }
         
@@ -99,17 +98,17 @@ class ImageManager: ObservableObject {
             let (data, _) = try await URLSession.shared.data(from: url)
             
             guard let image = UIImage(data: data) else {
-                print("❌ Failed to decode image from: \(urlString)")
+                // print("❌ Failed to decode image from: \(urlString)")
                 return nil
             }
             
             // Save to cache
             saveToCache(image: image, urlString: urlString)
             
-            print("✅ Downloaded and cached image: \(urlString)")
+            // print("✅ Downloaded and cached image: \(urlString)")
             return image
         } catch {
-            print("❌ Error downloading image: \(error.localizedDescription)")
+            // print("❌ Error downloading image: \(error.localizedDescription)")
             return nil
         }
     }
@@ -143,7 +142,7 @@ class ImageManager: ObservableObject {
                 await self.cleanCacheIfNeeded()
             }
         } catch {
-            print("❌ Failed to save to cache: \(error)")
+            // print("❌ Failed to save to cache: \(error)")
         }
     }
     
@@ -164,9 +163,9 @@ class ImageManager: ObservableObject {
             for file in files {
                 try? FileManager.default.removeItem(at: file)
             }
-            print("🗑️ Cleared image cache (\(files.count) files)")
+            // print("🗑️ Cleared image cache (\(files.count) files)")
         } catch {
-            print("❌ Error clearing cache: \(error)")
+            // print("❌ Error clearing cache: \(error)")
         }
     }
     
@@ -178,10 +177,10 @@ class ImageManager: ObservableObject {
         do {
             if FileManager.default.fileExists(atPath: filePath.path) {
                 try FileManager.default.removeItem(at: filePath)
-                print("🗑️ Removed image from cache: \(urlString)")
+                // print("🗑️ Removed image from cache: \(urlString)")
             }
         } catch {
-            print("❌ Error removing image from cache: \(error)")
+            // print("❌ Error removing image from cache: \(error)")
         }
     }
     
@@ -205,7 +204,7 @@ class ImageManager: ObservableObject {
         
         guard currentSize > maxCacheSize else { return }
         
-        print("🧹 Cache size (\(currentSize / 1024 / 1024) MB) exceeds limit, cleaning...")
+        // print("🧹 Cache size (\(currentSize / 1024 / 1024) MB) exceeds limit, cleaning...")
         
         do {
             let files = try FileManager.default.contentsOfDirectory(
@@ -235,9 +234,9 @@ class ImageManager: ObservableObject {
                 }
             }
             
-            print("✅ Cleaned cache: deleted \(deletedCount) files (\(deletedSize / 1024 / 1024) MB)")
+            // print("✅ Cleaned cache: deleted \(deletedCount) files (\(deletedSize / 1024 / 1024) MB)")
         } catch {
-            print("❌ Error cleaning cache: \(error)")
+            // print("❌ Error cleaning cache: \(error)")
         }
     }
     
@@ -274,7 +273,7 @@ class ImageManager: ObservableObject {
         }
         
         if let finalData = imageData {
-            print("📦 Compressed image: \(finalData.count / 1024) KB (quality: \(Int(compression * 100))%)")
+            // print("📦 Compressed image: \(finalData.count / 1024) KB (quality: \(Int(compression * 100))%)")
         }
         
         return imageData
@@ -300,9 +299,9 @@ class ImageManager: ObservableObject {
             let filePath = cacheDirectory.appendingPathComponent(cacheKey)
             try? FileManager.default.removeItem(at: filePath)
             
-            print("✅ Deleted image: \(pathComponents)")
+            // print("✅ Deleted image: \(pathComponents)")
         } catch {
-            print("❌ Error deleting image: \(error)")
+            // print("❌ Error deleting image: \(error)")
             throw ImageError.deleteFailed(error.localizedDescription)
         }
     }

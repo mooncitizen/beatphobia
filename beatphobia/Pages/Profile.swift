@@ -26,6 +26,7 @@ struct ProfileView: View {
     @State private var isUploadingProfileImage = false
     @State private var showDeleteAccountAlert = false
     @State private var isDeletingAccount = false
+    @State private var showBlockedUsers = false
     @StateObject private var imageManager = ImageManager()
     
     @State private var locationStatus: CLAuthorizationStatus = .notDetermined
@@ -464,9 +465,42 @@ struct ProfileView: View {
                                 isOn: $enableMiles,
                                 title: enableMiles ? "Miles" : "Kilometers",
                                 description: enableMiles ? "Will display in miles/meters when displaying distances." : "Will display in kilometers/meters when displaying distances.",
-                                showDivider: false,
+                                showDivider: true,
                                 colorScheme: colorScheme
                             )
+                            
+                            // Blocked Users
+                            Button(action: {
+                                showBlockedUsers = true
+                            }) {
+                                HStack(alignment: .center, spacing: 12) {
+                                    Image(systemName: "hand.raised.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(.red)
+                                        .frame(width: 30)
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Blocked Users")
+                                            .font(.system(size: 17))
+                                            .fontDesign(.serif)
+                                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                                        Text("Manage users you've blocked")
+                                            .font(.system(size: 13))
+                                            .fontDesign(.serif)
+                                            .foregroundStyle(AppConstants.secondaryTextColor(for: colorScheme))
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 16)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
                         .background(AppConstants.cardBackgroundColor(for: colorScheme))
                         .cornerRadius(16)
@@ -593,6 +627,11 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showCrisisHotlines) {
                 CrisisHotlinesView()
+            }
+            .sheet(isPresented: $showBlockedUsers) {
+                NavigationStack {
+                    BlockedUsersView()
+                }
             }
             .sheet(isPresented: $showProfileImagePicker) {
                 SquareImagePicker { image in

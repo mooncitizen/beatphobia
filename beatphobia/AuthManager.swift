@@ -11,6 +11,7 @@ import Supabase
 import Combine
 import AuthenticationServices
 import CryptoKit
+import RealmSwift
 
 typealias User = Supabase.User
 
@@ -107,6 +108,9 @@ final class AuthManager: ObservableObject {
             self.authError = error
         }
         
+        // Always clear local storage even if remote signOut throws
+        await clearLocalStorage()
+        
         self.isLoading = false
     }
     
@@ -180,4 +184,27 @@ final class AuthManager: ObservableObject {
         }
     }
 
+}
+
+// MARK: - Local Storage Clearing
+extension AuthManager {
+    private func clearLocalStorage() async {
+        // Clear Realm data
+        do {
+            let realm = try await Realm()
+            try realm.write {
+                realm.deleteAll()
+            }
+            realm.invalidate()
+        } catch {
+            print("⚠️ Failed to clear Realm: \(error)")
+        }
+        
+        // Optional: clear cached profile in memory
+        await MainActor.run {
+            self.currentUser = nil
+            self.currentUserProfile = nil
+            self.authState = .signedOut
+        }
+    }
 }

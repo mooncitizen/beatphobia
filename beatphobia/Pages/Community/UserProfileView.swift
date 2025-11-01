@@ -15,12 +15,20 @@ struct UserProfileView: View {
     
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var authManager: AuthManager
     @StateObject private var communityService = CommunityService()
     
     @State private var profile: Profile?
     @State private var userPosts: [PostDisplayModel] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var isBlocked = false
+    @State private var isCheckingBlock = true
+    @State private var showBlockAlert = false
+    
+    private var isCurrentUser: Bool {
+        authManager.currentUser?.id == userId
+    }
     
     var body: some View {
         NavigationView {
@@ -93,6 +101,40 @@ struct UserProfileView: View {
                                     .multilineTextAlignment(.center)
                                     .padding(.horizontal, 32)
                                     .lineSpacing(4)
+                            }
+                            
+                            // Block Button (only if not current user)
+                            if !isCheckingBlock && !isCurrentUser {
+                                Button(action: {
+                                    showBlockAlert = true
+                                }) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "hand.raised.fill")
+                                            .font(.system(size: 16, weight: .semibold))
+                                        
+                                        Text(isBlocked ? "Unblock User" : "Block User")
+                                            .font(.system(size: 16, weight: .semibold))
+                                            .fontDesign(.rounded)
+                                    }
+                                    .foregroundColor(isBlocked ? AppConstants.adaptivePrimaryColor(for: colorScheme) : .red)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(
+                                        isBlocked ?
+                                        AppConstants.adaptivePrimaryColor(for: colorScheme).opacity(0.1) :
+                                        Color.red.opacity(0.1)
+                                    )
+                                    .cornerRadius(12)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(
+                                                isBlocked ? AppConstants.adaptivePrimaryColor(for: colorScheme) : Color.red,
+                                                lineWidth: 1.5
+                                            )
+                                    )
+                                }
+                                .padding(.horizontal, 32)
+                                .padding(.top, 16)
                             }
                         }
                         .padding(.top, 40)
@@ -184,6 +226,58 @@ struct UserProfileView: View {
         }
         .task {
             await loadUserProfile()
+            await checkBlockStatus()
+        }
+        .alert(isBlocked ? "Unblock User" : "Block User", isPresented: $showBlockAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button(isBlocked ? "Unblock" : "Block", role: isBlocked ? .none : .destructive) {
+                Task {
+                    if isBlocked {
+                        await unblockUser()
+                    } else {
+                        await blockUser()
+                    }
+                }
+            }
+        } message: {
+            Text(isBlocked ?
+                 "Are you sure you want to unblock @\(username)? You will see their posts again." :
+                 "Are you sure you want to block @\(username)? You won't see their posts and they won't be able to interact with you.")
+        }
+    }
+    
+    private func checkBlockStatus() async {
+        do {
+            isCheckingBlock = true
+            isBlocked = try await communityService.isUserBlocked(userId: userId)
+            isCheckingBlock = false
+        } catch {
+            print("❌ Error checking block status: \(error)")
+            isCheckingBlock = false
+        }
+    }
+    
+    private func blockUser() async {
+        do {
+            try await communityService.blockUser(blockedUserId: userId, reason: nil)
+            await MainActor.run {
+                isBlocked = true
+            }
+            print("✅ Successfully blocked user")
+        } catch {
+            print("❌ Error blocking user: \(error)")
+        }
+    }
+    
+    private func unblockUser() async {
+        do {
+            try await communityService.unblockUser(blockedUserId: userId)
+            await MainActor.run {
+                isBlocked = false
+            }
+            print("✅ Successfully unblocked user")
+        } catch {
+            print("❌ Error unblocking user: \(error)")
         }
     }
     

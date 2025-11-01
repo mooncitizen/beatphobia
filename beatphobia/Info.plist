@@ -13,8 +13,6 @@
 		<string>location</string>
 		<string>remote-notification</string>
 	</array>
-	<key>NSSupportsLiveActivities</key>
-	<true/>
 	<key>UILaunchImageFile</key>
 	<string></string>
 </dict>
