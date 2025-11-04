@@ -127,6 +127,19 @@ struct JourneyDetailView: View {
                     color: .pink
                 )
             }
+            
+            if !journey.hesitationPoints.isEmpty {
+                HStack(spacing: 12) {
+                    detailStatCard(
+                        icon: "pause.circle.fill",
+                        title: "Hesitations",
+                        value: "\(journey.hesitationPoints.count)",
+                        color: .red
+                    )
+                    
+                    Spacer()
+                }
+            }
         }
     }
     
@@ -322,9 +335,10 @@ struct SavedJourneyMapView: UIViewRepresentable {
             coordinates.append(CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude))
         }
         
-        // Calculate starting point and maximum distance from start
+        // Calculate starting point and maximum distance from start (and find furthest point)
         let startCoordinate = coordinates[0]
         var maxDistanceFromStart: CLLocationDistance = 0
+        var furthestPointCoordinate: CLLocationCoordinate2D = startCoordinate
         
         for coordinate in coordinates {
             let startLocation = CLLocation(latitude: startCoordinate.latitude, longitude: startCoordinate.longitude)
@@ -332,19 +346,25 @@ struct SavedJourneyMapView: UIViewRepresentable {
             let distance = startLocation.distance(from: currentLocation)
             if distance > maxDistanceFromStart {
                 maxDistanceFromStart = distance
+                furthestPointCoordinate = coordinate
             }
-        }
-        
-        // Add achievement circle overlay (green - furthest point)
-        if maxDistanceFromStart > 0 {
-            let circle = MaxDistanceCircle(center: startCoordinate, radius: maxDistanceFromStart)
-            mapView.addOverlay(circle)
         }
         
         // Add total distance circle overlay (blue - straight line potential)
         if journey.distance > 0 {
             let totalDistanceCircle = TotalDistanceCircle(center: startCoordinate, radius: journey.distance)
             mapView.addOverlay(totalDistanceCircle)
+        }
+        
+        // Add furthest distance circle overlay (green dashed circle from start)
+        if maxDistanceFromStart > 0 {
+            let maxDistanceCircle = MaxDistanceCircle(center: startCoordinate, radius: maxDistanceFromStart)
+            mapView.addOverlay(maxDistanceCircle)
+        }
+        
+        // Add safe area overlay (from all journeys)
+        if let safeAreaPolygon = calculateSafeAreaPolygon() {
+            mapView.addOverlay(safeAreaPolygon)
         }
         
         // Add smoothed polyline for the route
@@ -363,6 +383,18 @@ struct SavedJourneyMapView: UIViewRepresentable {
             mapView.addAnnotation(annotation)
         }
         
+        // Add hesitation annotations
+        for hesitation in journey.hesitationPoints {
+            let coordinate = CLLocationCoordinate2D(latitude: hesitation.latitude, longitude: hesitation.longitude)
+            let annotation = SavedHesitationAnnotation(
+                coordinate: coordinate,
+                startTime: hesitation.startTime,
+                endTime: hesitation.endTime,
+                duration: hesitation.duration
+            )
+            mapView.addAnnotation(annotation)
+        }
+        
         // Add start point annotation
         mapView.addAnnotation(StartPointAnnotation(coordinate: startCoordinate))
         
@@ -371,17 +403,27 @@ struct SavedJourneyMapView: UIViewRepresentable {
             mapView.addAnnotation(FinishPointAnnotation(coordinate: lastPoint))
         }
         
-        // Fit map to show entire route including both circles
+        // Add halfway point annotation
+        if coordinates.count > 2 {
+            let halfwayIndex = coordinates.count / 2
+            let halfwayCoordinate = coordinates[halfwayIndex]
+            mapView.addAnnotation(HalfwayPointAnnotation(coordinate: halfwayCoordinate))
+        }
+        
+        // Fit map to show entire route including circles
         if coordinates.count > 0 {
             var coordsCopy = coordinates
             let polyline = MKPolyline(coordinates: &coordsCopy, count: coordsCopy.count)
             
-            // Calculate the map rect to include the route and both circles
-            let maxCircleRect = MKCircle(center: startCoordinate, radius: maxDistanceFromStart).boundingMapRect
+            // Calculate the map rect to include the route and circles
             let totalDistanceRect = MKCircle(center: startCoordinate, radius: journey.distance).boundingMapRect
+            var combinedRect = polyline.boundingMapRect.union(totalDistanceRect)
             
-            var combinedRect = polyline.boundingMapRect.union(maxCircleRect)
-            combinedRect = combinedRect.union(totalDistanceRect)
+            // Also include the max distance circle
+            if maxDistanceFromStart > 0 {
+                let maxCircleRect = MKCircle(center: startCoordinate, radius: maxDistanceFromStart).boundingMapRect
+                combinedRect = combinedRect.union(maxCircleRect)
+            }
             
             mapView.setVisibleMapRect(combinedRect, edgePadding: UIEdgeInsets(top: 60, left: 60, bottom: 60, right: 60), animated: false)
         }
@@ -389,6 +431,123 @@ struct SavedJourneyMapView: UIViewRepresentable {
     
     func makeCoordinator() -> Coordinator {
         Coordinator()
+    }
+    
+    // Calculate safe area polygon from all journeys
+    private func calculateSafeAreaPolygon() -> MKPolygon? {
+        guard let realm = try? Realm() else { return nil }
+        
+        // Get all safe area points from all journeys
+        let safeAreaPoints = realm.objects(SafeAreaPointRealm.self)
+        
+        guard safeAreaPoints.count >= 3 else { return nil } // Need at least 3 points for a polygon
+        
+        // Step 1: Create a grid and count point density to identify "intense repeat travels"
+        let gridSize: Double = 50.0 // 50 meter grid cells
+        
+        // Find bounding box of all safe area points
+        var minLat = Double.greatestFiniteMagnitude
+        var maxLat = -Double.greatestFiniteMagnitude
+        var minLon = Double.greatestFiniteMagnitude
+        var maxLon = -Double.greatestFiniteMagnitude
+        
+        for point in safeAreaPoints {
+            minLat = min(minLat, point.latitude)
+            maxLat = max(maxLat, point.latitude)
+            minLon = min(minLon, point.longitude)
+            maxLon = max(maxLon, point.longitude)
+        }
+        
+        // Calculate grid dimensions
+        let centerLat = (minLat + maxLat) / 2.0
+        let metersPerDegreeLat = 111320.0
+        let metersPerDegreeLon = 111320.0 * cos(centerLat * .pi / 180.0)
+        
+        let degreesLat = gridSize / metersPerDegreeLat
+        let degreesLon = gridSize / metersPerDegreeLon
+        
+        // Count points in each grid cell
+        var cellCounts: [String: Int] = [:]
+        var cellPoints: [String: [CLLocationCoordinate2D]] = [:]
+        
+        for point in safeAreaPoints {
+            let latIndex = Int((point.latitude - minLat) / degreesLat)
+            let lonIndex = Int((point.longitude - minLon) / degreesLon)
+            let key = "\(latIndex),\(lonIndex)"
+            
+            cellCounts[key, default: 0] += 1
+            if cellPoints[key] == nil {
+                cellPoints[key] = []
+            }
+            cellPoints[key]?.append(CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude))
+        }
+        
+        // Step 2: Filter to only include high-density cells (intense repeat travels)
+        // Use cells with count >= 3 (areas visited multiple times) or above average
+        let avgCount = Double(cellCounts.values.reduce(0, +)) / Double(cellCounts.count)
+        let threshold = max(3.0, avgCount * 1.5) // At least 3 points or 1.5x average
+        
+        var intenseTravelPoints: [CLLocationCoordinate2D] = []
+        for (key, count) in cellCounts {
+            if Double(count) >= threshold, let points = cellPoints[key] {
+                // Use the average coordinate of points in this cell
+                let avgLat = points.map { $0.latitude }.reduce(0, +) / Double(points.count)
+                let avgLon = points.map { $0.longitude }.reduce(0, +) / Double(points.count)
+                intenseTravelPoints.append(CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon))
+            }
+        }
+        
+        guard intenseTravelPoints.count >= 3 else { return nil }
+        
+        // Step 3: Compute convex hull of the intense travel areas
+        let hull = convexHull(points: intenseTravelPoints)
+        
+        guard hull.count >= 3 else { return nil }
+        
+        var coordsArray = hull
+        return MKPolygon(coordinates: &coordsArray, count: coordsArray.count)
+    }
+    
+    // Convex hull algorithm (Graham scan)
+    private func convexHull(points: [CLLocationCoordinate2D]) -> [CLLocationCoordinate2D] {
+        guard points.count >= 3 else { return points }
+        
+        // Sort points lexicographically
+        let sorted = points.sorted { (p1, p2) -> Bool in
+            if p1.longitude != p2.longitude {
+                return p1.longitude < p2.longitude
+            }
+            return p1.latitude < p2.latitude
+        }
+        
+        // Build lower hull
+        var lower: [CLLocationCoordinate2D] = []
+        for point in sorted {
+            while lower.count >= 2 && crossProduct(lower[lower.count - 2], lower[lower.count - 1], point) <= 0 {
+                lower.removeLast()
+            }
+            lower.append(point)
+        }
+        
+        // Build upper hull
+        var upper: [CLLocationCoordinate2D] = []
+        for point in sorted.reversed() {
+            while upper.count >= 2 && crossProduct(upper[upper.count - 2], upper[upper.count - 1], point) <= 0 {
+                upper.removeLast()
+            }
+            upper.append(point)
+        }
+        
+        // Remove duplicates at the ends
+        lower.removeLast()
+        upper.removeLast()
+        
+        // Combine
+        return lower + upper
+    }
+    
+    private func crossProduct(_ o: CLLocationCoordinate2D, _ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double {
+        return (a.latitude - o.latitude) * (b.longitude - o.longitude) - (a.longitude - o.longitude) * (b.latitude - o.latitude)
     }
     
     // Smooth path using Catmull-Rom spline interpolation
@@ -439,22 +598,22 @@ struct SavedJourneyMapView: UIViewRepresentable {
     
     class Coordinator: NSObject, MKMapViewDelegate {
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-            // Handle max distance circle (green - furthest point)
-            if overlay is MaxDistanceCircle {
-                let renderer = MKCircleRenderer(overlay: overlay)
-                renderer.fillColor = UIColor.systemGreen.withAlphaComponent(0.12)
-                renderer.strokeColor = UIColor.systemGreen.withAlphaComponent(0.4)
-                renderer.lineWidth = 2
-                renderer.lineDashPattern = [6, 4]
-                return renderer
-            }
             // Handle total distance circle (blue - straight line potential)
-            else if overlay is TotalDistanceCircle {
+            if overlay is TotalDistanceCircle {
                 let renderer = MKCircleRenderer(overlay: overlay)
                 renderer.fillColor = UIColor.systemBlue.withAlphaComponent(0.08)
                 renderer.strokeColor = UIColor.systemBlue.withAlphaComponent(0.35)
                 renderer.lineWidth = 2
                 renderer.lineDashPattern = [8, 6]
+                return renderer
+            }
+            // Handle max distance circle (green dashed - furthest point from start)
+            else if overlay is MaxDistanceCircle {
+                let renderer = MKCircleRenderer(overlay: overlay)
+                renderer.fillColor = UIColor.systemGreen.withAlphaComponent(0.1)
+                renderer.strokeColor = UIColor.systemGreen.withAlphaComponent(0.5)
+                renderer.lineWidth = 2
+                renderer.lineDashPattern = [8, 4]
                 return renderer
             }
             else if let polyline = overlay as? MKPolyline {
@@ -463,6 +622,15 @@ struct SavedJourneyMapView: UIViewRepresentable {
                 renderer.lineWidth = 5
                 renderer.lineCap = .round
                 renderer.lineJoin = .round
+                return renderer
+            }
+            else if let polygon = overlay as? MKPolygon {
+                // Check if this is a safe area polygon (we'll identify by checking if it's a rectangle with green styling)
+                let renderer = MKPolygonRenderer(polygon: polygon)
+                renderer.fillColor = UIColor.systemGreen.withAlphaComponent(0.15)
+                renderer.strokeColor = UIColor.systemGreen.withAlphaComponent(0.4)
+                renderer.lineWidth = 2
+                renderer.lineDashPattern = [8, 4]
                 return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
@@ -511,6 +679,63 @@ struct SavedJourneyMapView: UIViewRepresentable {
                 return annotationView
             }
             
+            // Handle halfway point annotation
+            if annotation is HalfwayPointAnnotation {
+                let identifier = "HalfwayPointAnnotation"
+                var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+                
+                if annotationView == nil {
+                    annotationView = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                    annotationView?.canShowCallout = true
+                } else {
+                    annotationView?.annotation = annotation
+                }
+                
+                // Configure as an orange/yellow marker for halfway point
+                annotationView?.markerTintColor = .systemOrange
+                annotationView?.glyphImage = UIImage(systemName: "location.circle.fill")
+                annotationView?.glyphTintColor = .white
+                annotationView?.displayPriority = .required
+                
+                return annotationView
+            }
+            
+            // Handle hesitation annotations
+            if let hesitationAnnotation = annotation as? SavedHesitationAnnotation {
+                let identifier = "SavedHesitationAnnotation"
+                var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                
+                if annotationView == nil {
+                    annotationView = MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                    annotationView?.canShowCallout = true
+                } else {
+                    annotationView?.annotation = annotation
+                }
+                
+                // Create red box image (30x30 point square)
+                let boxSize: CGFloat = 30
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: boxSize, height: boxSize))
+                let boxImage = renderer.image { context in
+                    let rect = CGRect(x: 0, y: 0, width: boxSize, height: boxSize)
+                    
+                    // Red fill
+                    UIColor.systemRed.withAlphaComponent(0.3).setFill()
+                    UIBezierPath(rect: rect).fill()
+                    
+                    // Red dashed border
+                    UIColor.systemRed.setStroke()
+                    let border = UIBezierPath(rect: rect)
+                    border.lineWidth = 2
+                    border.setLineDash([4, 4], count: 2, phase: 0)
+                    border.stroke()
+                }
+                
+                annotationView?.image = boxImage
+                annotationView?.centerOffset = CGPoint(x: 0, y: 0)
+                return annotationView
+            }
+            
+
             // Handle feeling checkpoint annotations
             if let feelingAnnotation = annotation as? SavedFeelingAnnotation {
                 let identifier = "SavedFeelingAnnotation"
@@ -578,6 +803,22 @@ class FinishPointAnnotation: NSObject, MKAnnotation {
     
     var subtitle: String? {
         "Your journey ended here"
+    }
+    
+    init(coordinate: CLLocationCoordinate2D) {
+        self.coordinate = coordinate
+    }
+}
+
+class HalfwayPointAnnotation: NSObject, MKAnnotation {
+    let coordinate: CLLocationCoordinate2D
+    
+    var title: String? {
+        "Halfway Point"
+    }
+    
+    var subtitle: String? {
+        "Midpoint of your journey"
     }
     
     init(coordinate: CLLocationCoordinate2D) {
@@ -692,14 +933,6 @@ struct MapLegendSheet: View {
             // Scrollable content
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    // Green Circle
-                    LegendItem(
-                        icon: "circle.dashed",
-                        iconColor: .green,
-                        title: "Green Circle (Dashed)",
-                        description: "Shows the furthest point you reached from your starting location. This represents your maximum distance away from where you began."
-                    )
-                    
                     // Blue Circle
                     LegendItem(
                         icon: "circle.dashed",
@@ -716,6 +949,30 @@ struct MapLegendSheet: View {
                         description: "Your actual walking path. This is the route you took during your journey."
                     )
                     
+                    // Safe Area
+                    LegendItem(
+                        icon: "square.fill",
+                        iconColor: .green,
+                        title: "Safe Area (Green)",
+                        description: "Shows areas where you've traveled without experiencing anxious or panic feelings. This safe zone accumulates across all your journeys over time."
+                    )
+                    
+                    // Furthest Distance Circle
+                    LegendItem(
+                        icon: "circle.dashed",
+                        iconColor: .green,
+                        title: "Green Circle (Dashed)",
+                        description: "Shows the furthest distance you reached from your starting point. This circle marks the maximum range of your journey."
+                    )
+                    
+                    // Red Hesitation Boxes
+                    LegendItem(
+                        icon: "square.dashed",
+                        iconColor: .red,
+                        title: "Red Boxes",
+                        description: "Shows locations where you hesitated or paused for 15 seconds or more within a 10-meter area."
+                    )
+                    
                     // Feeling Checkpoints
                     LegendItem(
                         icon: "circle.fill",
@@ -729,7 +986,7 @@ struct MapLegendSheet: View {
                         icon: "flag.fill",
                         iconColor: .red,
                         title: "Red Flag Pin",
-                        description: "Marks where your journey started. This is the center point of both radius circles."
+                        description: "Marks where your journey started. This is the center point of the distance circle."
                     )
                     
                     // Finish Point
@@ -789,10 +1046,33 @@ struct LegendItem: View {
     }
 }
 
-// MARK: - Custom Circle Overlays
+// MARK: - Saved Hesitation Annotation
+class SavedHesitationAnnotation: NSObject, MKAnnotation {
+    let coordinate: CLLocationCoordinate2D
+    let startTime: Date
+    let endTime: Date
+    let duration: Double
+    
+    var title: String? {
+        "Hesitation"
+    }
+    
+    var subtitle: String? {
+        "\(Int(duration))s"
+    }
+    
+    init(coordinate: CLLocationCoordinate2D, startTime: Date, endTime: Date, duration: Double) {
+        self.coordinate = coordinate
+        self.startTime = startTime
+        self.endTime = endTime
+        self.duration = duration
+    }
+}
 
-// Circle representing the furthest point from start (green)
-class MaxDistanceCircle: MKCircle {}
+// MARK: - Custom Circle Overlays
 
 // Circle representing the total distance traveled (blue)
 class TotalDistanceCircle: MKCircle {}
+
+// Circle representing the maximum distance from start point (green)
+class MaxDistanceCircle: MKCircle {}

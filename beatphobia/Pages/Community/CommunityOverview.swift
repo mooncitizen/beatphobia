@@ -1629,12 +1629,6 @@ struct PostCard: View {
         self._displayCommentsCount = State(initialValue: post.commentsCount)
         self._isBookmarked = State(initialValue: post.isBookmarked)
         
-        // Debug logging for profile images
-        if let profileImageUrl = post.authorProfileImageUrl {
-            print("🖼️ PostCard for '\(post.title)' by @\(post.author) has profile image: \(profileImageUrl)")
-        } else {
-            print("📝 PostCard for '\(post.title)' by @\(post.author) - No profile image (showing initials: \(post.authorInitials))")
-        }
     }
 
     var body: some View {

@@ -151,6 +151,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
         // No-op; user can enable later
     }
+    
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        // Clear app badge when app becomes active
+        UNUserNotificationCenter.current().setBadgeCount(0)
+    }
 }
 
 // MARK: - Auth event handling

@@ -12,11 +12,11 @@ class RealmConfigurationManager {
     static func configure() {
         let config = Realm.Configuration(
             // Increment schema version when making model changes
-            schemaVersion: 5, // Version 5: JourneyRealm sync properties
+            schemaVersion: 6, // Version 6: HesitationPointRealm and SafeAreaPointRealm models
             
             // Migration block to handle schema changes
             migrationBlock: { migration, oldSchemaVersion in
-                print("🔄 Migrating Realm from version \(oldSchemaVersion) to version 5")
+                print("🔄 Migrating Realm from version \(oldSchemaVersion) to version 6")
                 
                 // Migration to version 2: Journal sync properties
                 if oldSchemaVersion < 2 {
@@ -114,6 +114,22 @@ class RealmConfigurationManager {
                         newObject?["updatedAt"] = oldObject?["startTime"] ?? Date() // Use start time as initial updated date
                     }
                     print("✅ JourneyRealm sync properties migration complete")
+                }
+                
+                // Migration to version 6: HesitationPointRealm and SafeAreaPointRealm models
+                if oldSchemaVersion < 6 {
+                    print("📍 Migrating Location Tracking: Adding HesitationPointRealm and SafeAreaPointRealm models")
+                    
+                    // JourneyRealm: Add hesitationPoints list
+                    migration.enumerateObjects(ofType: "JourneyRealm") { oldObject, newObject in
+                        // hesitationPoints list will be empty for existing journeys
+                        // This is fine as hesitation detection starts after migration
+                    }
+                    
+                    // HesitationPointRealm and SafeAreaPointRealm are new models
+                    // Realm will create them automatically, no migration needed for empty tables
+                    
+                    print("✅ HesitationPointRealm and SafeAreaPointRealm models migration complete")
                 }
             }
         )

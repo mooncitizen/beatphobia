@@ -51,6 +51,16 @@ struct CheckpointJSON: Codable {
     let timestamp: Date
 }
 
+// MARK: - Hesitation Point JSON Model (for JSON storage)
+struct HesitationPointJSON: Codable {
+    let id: String
+    let latitude: Double
+    let longitude: Double
+    let startTime: Date
+    let endTime: Date
+    let duration: Double // in seconds
+}
+
 // MARK: - Supabase Journey Data Model
 struct JourneyDataDB: Codable {
     let id: UUID
@@ -62,6 +72,7 @@ struct JourneyDataDB: Codable {
     let duration: Int
     let pathPointsJson: [PathPointJSON]?
     let checkpointsJson: [CheckpointJSON]?
+    let hesitationPointsJson: [HesitationPointJSON]?
     let createdAt: Date?
     let updatedAt: Date?
     let isDeleted: Bool
@@ -76,6 +87,7 @@ struct JourneyDataDB: Codable {
         case duration
         case pathPointsJson = "path_points_json"
         case checkpointsJson = "checkpoints_json"
+        case hesitationPointsJson = "hesitation_points_json"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case isDeleted = "is_deleted"
@@ -487,7 +499,7 @@ class JourneySyncService: ObservableObject {
         // Fetch journey data for this journey (explicitly include JSON columns)
         let journeyDataResponse = try await supabase
             .from("journey_data")
-            .select("id, journey_id, user_id, start_time, end_time, distance, duration, path_points_json, checkpoints_json, created_at, updated_at, is_deleted")
+            .select("id, journey_id, user_id, start_time, end_time, distance, duration, path_points_json, checkpoints_json, hesitation_points_json, created_at, updated_at, is_deleted")
             .eq("journey_id", value: journeyId.uuidString)
             .eq("user_id", value: userId.uuidString)
             .eq("is_deleted", value: false)
@@ -553,6 +565,12 @@ class JourneySyncService: ObservableObject {
             }
         }
         
+        // Extract hesitation points from JSON
+        var cloudHesitationPoints: [HesitationPointJSON] = []
+        if let hesitationPointsJson = cloudJourneyData.hesitationPointsJson {
+            cloudHesitationPoints = hesitationPointsJson
+        }
+        
         // Update or create JourneyRealm
         let localJourneyData = realm.object(ofType: JourneyRealm.self, forPrimaryKey: journeyRealmId)
         let cloudUpdatedAt = cloudJourneyData.updatedAt ?? cloudJourneyData.createdAt ?? Date.distantPast
@@ -592,6 +610,19 @@ class JourneySyncService: ObservableObject {
                         checkpoint.timestamp = cloudCheckpoint.timestamp
                         localJourneyData.checkpoints.append(checkpoint)
                     }
+                    
+                    // Update hesitation points from JSON
+                    localJourneyData.hesitationPoints.removeAll()
+                    for cloudHesitation in cloudHesitationPoints {
+                        let hesitation = HesitationPointRealm()
+                        hesitation.id = cloudHesitation.id
+                        hesitation.latitude = cloudHesitation.latitude
+                        hesitation.longitude = cloudHesitation.longitude
+                        hesitation.startTime = cloudHesitation.startTime
+                        hesitation.endTime = cloudHesitation.endTime
+                        hesitation.duration = cloudHesitation.duration
+                        localJourneyData.hesitationPoints.append(hesitation)
+                    }
                 }
                 print("🔄 Updated local journey data from cloud: \(journeyRealmId)")
             }
@@ -628,6 +659,18 @@ class JourneySyncService: ObservableObject {
                         checkpoint.feeling = cloudCheckpoint.feeling
                         checkpoint.timestamp = cloudCheckpoint.timestamp
                         newJourneyData.checkpoints.append(checkpoint)
+                    }
+                    
+                    // Add hesitation points from JSON
+                    for cloudHesitation in cloudHesitationPoints {
+                        let hesitation = HesitationPointRealm()
+                        hesitation.id = cloudHesitation.id
+                        hesitation.latitude = cloudHesitation.latitude
+                        hesitation.longitude = cloudHesitation.longitude
+                        hesitation.startTime = cloudHesitation.startTime
+                        hesitation.endTime = cloudHesitation.endTime
+                        hesitation.duration = cloudHesitation.duration
+                        newJourneyData.hesitationPoints.append(hesitation)
                     }
                 
                 realm.add(newJourneyData)
@@ -677,7 +720,19 @@ class JourneySyncService: ObservableObject {
             )
         })
         
-        // Sync journey_data with path points and checkpoints as JSON
+        // Convert hesitation points to JSON format
+        let hesitationPointsJson: [HesitationPointJSON] = Array(journeyRealm.hesitationPoints.map { hesitation in
+            HesitationPointJSON(
+                id: hesitation.id,
+                latitude: hesitation.latitude,
+                longitude: hesitation.longitude,
+                startTime: hesitation.startTime,
+                endTime: hesitation.endTime,
+                duration: hesitation.duration
+            )
+        })
+        
+        // Sync journey_data with path points, checkpoints, and hesitation points as JSON
         let dbJourneyData = JourneyDataDB(
             id: journeyDataUUID,
             journeyId: journeyId,
@@ -688,6 +743,7 @@ class JourneySyncService: ObservableObject {
             duration: journeyRealm.duration,
             pathPointsJson: pathPointsJson.isEmpty ? nil : pathPointsJson,
             checkpointsJson: checkpointsJson.isEmpty ? nil : checkpointsJson,
+            hesitationPointsJson: hesitationPointsJson.isEmpty ? nil : hesitationPointsJson,
             createdAt: nil,
             updatedAt: journeyRealm.updatedAt,
             isDeleted: journeyRealm.isDeleted
@@ -708,7 +764,7 @@ class JourneySyncService: ObservableObject {
             }
         }
         
-        print("✅ Synced journey data with \(journeyRealm.pathPoints.count) path points and \(journeyRealm.checkpoints.count) checkpoints (stored as JSON)")
+        print("✅ Synced journey data with \(journeyRealm.pathPoints.count) path points, \(journeyRealm.checkpoints.count) checkpoints, and \(journeyRealm.hesitationPoints.count) hesitation points (stored as JSON)")
     }
     
     // MARK: - Helpers

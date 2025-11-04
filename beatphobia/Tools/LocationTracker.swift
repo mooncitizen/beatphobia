@@ -96,6 +96,21 @@ struct LocationTrackerView: View {
             })
             .environmentObject(journeySyncService)
         }
+        .onAppear {
+            // Refresh when view appears to ensure new journeys are shown
+            // @ObservedResults should auto-update, but this helps ensure it happens
+            let _ = allJourneys.count
+        }
+        .onChange(of: showTracking) { oldValue, newValue in
+            // When tracking view is dismissed, ensure we refresh
+            if oldValue == true && newValue == false {
+                // Small delay to allow Realm notifications to propagate
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    // Access allJourneys to trigger @ObservedResults update
+                    let _ = allJourneys.count
+                }
+            }
+        }
         .sheet(isPresented: $showPaywall) {
             NavigationStack {
                 PaywallView()
@@ -116,20 +131,15 @@ struct LocationTrackerView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
+                    // Cumulative Map Card (first card)
+                    CumulativeMapCard(journeys: Array(userJourneys))
+                    
                     LocationTrackerStatCard(
                         title: "Journeys",
                         value: "\(userJourneys.count)",
                         subtitle: "Total tracked",
                         icon: "map.fill",
                         color: .blue
-                    )
-                    
-                    LocationTrackerStatCard(
-                        title: "Distance",
-                        value: formatTotalDistance(),
-                        subtitle: "Total traveled",
-                        icon: "figure.walk",
-                        color: .green
                     )
                     
                     LocationTrackerStatCard(
@@ -237,7 +247,16 @@ struct LocationTrackerView: View {
         let calendar = Calendar.current
         let limit = subscriptionManager.isPro ? userJourneys.count : min(3, userJourneys.count)
         let grouped = Dictionary(grouping: userJourneys.prefix(limit)) { journey in
-            calendar.startOfDay(for: journey.startTime)
+            // Extract year, month, day components from the date in local timezone
+            let components = calendar.dateComponents([.year, .month, .day], from: journey.startTime)
+            // Create a date at midnight of that day in the local timezone
+            // This ensures consistent grouping regardless of how the date was stored
+            if let startOfDay = calendar.date(from: components) {
+                return startOfDay
+            } else {
+                // Fallback to startOfDay method
+                return calendar.startOfDay(for: journey.startTime)
+            }
         }
         return grouped
     }
@@ -245,6 +264,9 @@ struct LocationTrackerView: View {
     // Date formatter for section headers
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
+        formatter.calendar = Calendar.current
+        formatter.timeZone = TimeZone.current
+        formatter.locale = Locale.current
         formatter.dateFormat = "EEEE, MMMM d"
         return formatter
     }
@@ -535,8 +557,9 @@ struct LocationTrackingView: View {
                         // Call the completion handler if provided
                         onJourneyCompleted?(journeyId)
                         
-                        // Small delay to ensure Realm notification propagates
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        // Delay to ensure Realm notification propagates and view updates
+                        // Increased delay to allow updateSafeAreaPoints to complete
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                             self.dismiss()
                         }
                         
@@ -1163,6 +1186,19 @@ struct MapView: UIViewRepresentable {
                     mapView.addAnnotation(annotation)
                 }
             }
+            
+            // Update hesitation annotations (only if count changed)
+            let existingHesitationAnnotations = mapView.annotations.compactMap { $0 as? HesitationAnnotation }
+            if existingHesitationAnnotations.count != locationManager.hesitationPoints.count {
+                // Remove old hesitation annotations
+                mapView.removeAnnotations(existingHesitationAnnotations)
+                
+                // Add new hesitation annotations
+                for hesitation in locationManager.hesitationPoints {
+                    let annotation = HesitationAnnotation(hesitationPoint: hesitation)
+                    mapView.addAnnotation(annotation)
+                }
+            }
         }
 
         // Recenter ONLY when token changes
@@ -1191,6 +1227,41 @@ struct MapView: UIViewRepresentable {
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
             if annotation is MKUserLocation {
                 return nil
+            }
+            
+            // Handle hesitation annotations
+            if let hesitationAnnotation = annotation as? HesitationAnnotation {
+                let identifier = "HesitationAnnotation"
+                var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                
+                if annotationView == nil {
+                    annotationView = MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                    annotationView?.canShowCallout = true
+                } else {
+                    annotationView?.annotation = annotation
+                }
+                
+                // Create red box image (30x30 point square)
+                let boxSize: CGFloat = 30
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: boxSize, height: boxSize))
+                let boxImage = renderer.image { context in
+                    let rect = CGRect(x: 0, y: 0, width: boxSize, height: boxSize)
+                    
+                    // Red fill
+                    UIColor.systemRed.withAlphaComponent(0.3).setFill()
+                    UIBezierPath(rect: rect).fill()
+                    
+                    // Red dashed border
+                    UIColor.systemRed.setStroke()
+                    let border = UIBezierPath(rect: rect)
+                    border.lineWidth = 2
+                    border.setLineDash([4, 4], count: 2, phase: 0)
+                    border.stroke()
+                }
+                
+                annotationView?.image = boxImage
+                annotationView?.centerOffset = CGPoint(x: 0, y: 0)
+                return annotationView
             }
             
             // Handle feeling checkpoint annotations
@@ -1232,6 +1303,7 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
     @Published var isTracking = false
     @Published var trackingPoints: [CLLocation] = []
     @Published var feelingCheckpoints: [FeelingCheckpoint] = []
+    @Published var hesitationPoints: [HesitationPoint] = []
     @Published var currentFeeling: FeelingLevel?
     @Published var showStats = false
     @Published var hapticsEnabled = true
@@ -1250,6 +1322,16 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
     var currentJourneyId: UUID? // Made public to access after journey ends
     private let geocoder = CLGeocoder()
     private var currentLocationName: String = "Finding location..."
+    
+    // Smoothing buffer for GPS coordinates
+    private var smoothingBuffer: [CLLocation] = []
+    private let smoothingWindowSize = 5
+    
+    // Hesitation detection state
+    private var hesitationStartLocation: CLLocation?
+    private var hesitationStartTime: Date?
+    private let hesitationRadius: CLLocationDistance = 10.0 // 10 meters
+    private let hesitationMinDuration: TimeInterval = 15.0 // 15 seconds
     
     // Live Activity
     @available(iOS 16.1, *)
@@ -1284,6 +1366,10 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         isTracking = true
         trackingPoints = []
         feelingCheckpoints = []
+        hesitationPoints = []
+        smoothingBuffer = []
+        hesitationStartLocation = nil
+        hesitationStartTime = nil
         distanceMeters = 0
         totalDistance = useMiles ? "0.0 mi" : "0.0 km"
         averagePace = "0:00"
@@ -1565,6 +1651,19 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
                         realmCheckpoint.timestamp = checkpoint.timestamp
                         existingJourney.checkpoints.append(realmCheckpoint)
                     }
+                    
+                    // Clear and re-add hesitation points
+                    existingJourney.hesitationPoints.removeAll()
+                    for hesitation in hesitationPoints {
+                        let realmHesitation = HesitationPointRealm()
+                        realmHesitation.id = hesitation.id.uuidString
+                        realmHesitation.latitude = hesitation.location.coordinate.latitude
+                        realmHesitation.longitude = hesitation.location.coordinate.longitude
+                        realmHesitation.startTime = hesitation.startTime
+                        realmHesitation.endTime = hesitation.endTime
+                        realmHesitation.duration = hesitation.duration
+                        existingJourney.hesitationPoints.append(realmHesitation)
+                    }
                 } else {
                     // Create new journey
                     let journey = JourneyRealm()
@@ -1597,11 +1696,170 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
                         journey.checkpoints.append(realmCheckpoint)
                     }
                     
+                    // Add hesitation points
+                    for hesitation in hesitationPoints {
+                        let realmHesitation = HesitationPointRealm()
+                        realmHesitation.id = hesitation.id.uuidString
+                        realmHesitation.latitude = hesitation.location.coordinate.latitude
+                        realmHesitation.longitude = hesitation.location.coordinate.longitude
+                        realmHesitation.startTime = hesitation.startTime
+                        realmHesitation.endTime = hesitation.endTime
+                        realmHesitation.duration = hesitation.duration
+                        journey.hesitationPoints.append(realmHesitation)
+                    }
+                    
                     realm.add(journey)
                 }
             }
+            
+            // Update safe area points AFTER write transaction completes
+            let journeyIdString = journeyId.uuidString
+            updateSafeAreaPoints(journeyId: journeyIdString)
         } catch {
             print("❌ Error saving journey to Realm: \(error)")
+        }
+    }
+    
+    // MARK: - Coordinate Smoothing
+    /// Apply moving average smoothing to GPS coordinates
+    private func smoothCoordinate(_ location: CLLocation) -> CLLocation {
+        smoothingBuffer.append(location)
+        
+        // Keep buffer size limited
+        if smoothingBuffer.count > smoothingWindowSize {
+            smoothingBuffer.removeFirst()
+        }
+        
+        // If we have enough points, calculate average
+        guard smoothingBuffer.count >= 2 else {
+            return location
+        }
+        
+        // Calculate weighted average (more weight to recent points)
+        var totalWeight: Double = 0
+        var weightedLat: Double = 0
+        var weightedLon: Double = 0
+        var weightedAlt: Double = 0
+        var totalAccuracy: Double = 0
+        
+        for (index, loc) in smoothingBuffer.enumerated() {
+            let weight = Double(index + 1) // More recent = higher weight
+            totalWeight += weight
+            weightedLat += loc.coordinate.latitude * weight
+            weightedLon += loc.coordinate.longitude * weight
+            weightedAlt += loc.altitude * weight
+            totalAccuracy += loc.horizontalAccuracy
+        }
+        
+        let avgLat = weightedLat / totalWeight
+        let avgLon = weightedLon / totalWeight
+        let avgAlt = weightedAlt / totalWeight
+        let avgAccuracy = totalAccuracy / Double(smoothingBuffer.count)
+        
+        return CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon),
+            altitude: avgAlt,
+            horizontalAccuracy: avgAccuracy,
+            verticalAccuracy: location.verticalAccuracy,
+            timestamp: location.timestamp
+        )
+    }
+    
+    // MARK: - Hesitation Detection
+    private func detectHesitation(for location: CLLocation) {
+        if let startLoc = hesitationStartLocation, let startTime = hesitationStartTime {
+            // Check if still within hesitation radius
+            let distance = location.distance(from: startLoc)
+            
+            if distance <= hesitationRadius {
+                // Still hesitating
+                let duration = Date().timeIntervalSince(startTime)
+                
+                if duration >= hesitationMinDuration {
+                    // Check if we already have a hesitation point for this location
+                    let existingIndex = hesitationPoints.firstIndex { hp in
+                        hp.location.distance(from: startLoc) <= hesitationRadius
+                    }
+                    
+                    if let index = existingIndex {
+                        // Update existing hesitation point duration
+                        let existing = hesitationPoints[index]
+                        hesitationPoints[index] = HesitationPoint(
+                            id: existing.id,
+                            location: existing.location,
+                            startTime: existing.startTime,
+                            endTime: Date(),
+                            duration: duration
+                        )
+                    } else {
+                        // Create new hesitation point
+                        let hesitationPoint = HesitationPoint(
+                            id: UUID(),
+                            location: startLoc,
+                            startTime: startTime,
+                            endTime: Date(),
+                            duration: duration
+                        )
+                        hesitationPoints.append(hesitationPoint)
+                    }
+                }
+            } else {
+                // Moved outside radius, reset hesitation tracking
+                hesitationStartLocation = nil
+                hesitationStartTime = nil
+            }
+        } else {
+            // Check if we're at the same location as recent points
+            if trackingPoints.count >= 2 {
+                let recentPoints = trackingPoints.suffix(3)
+                let avgDistance = recentPoints.reduce(0.0) { total, point in
+                    total + location.distance(from: point)
+                } / Double(recentPoints.count)
+                
+                if avgDistance <= hesitationRadius {
+                    // Start tracking potential hesitation
+                    hesitationStartLocation = location
+                    hesitationStartTime = Date()
+                }
+            }
+        }
+    }
+    
+    // MARK: - Safe Area Tracking
+    private func updateSafeAreaPoints(journeyId: String) {
+        guard let realm = try? Realm() else { return }
+        
+        guard let journey = realm.object(ofType: JourneyRealm.self, forPrimaryKey: journeyId) else {
+            return
+        }
+        
+        // Find first anxious/panic checkpoint timestamp (if any)
+        let unsafeCheckpoints = journey.checkpoints.filter { checkpoint in
+            let feeling = FeelingLevel(rawValue: checkpoint.feeling) ?? .okay
+            return feeling == .anxious || feeling == .panic
+        }
+        
+        let firstUnsafeTime = unsafeCheckpoints.sorted(by: { $0.timestamp < $1.timestamp }).first?.timestamp
+        
+        // Remove existing safe area points for this journey
+        try? realm.write {
+            let existingPoints = realm.objects(SafeAreaPointRealm.self).filter("journeyId == %@", journeyId)
+            realm.delete(existingPoints)
+        }
+        
+        // Add safe path points
+        try? realm.write {
+            for pathPoint in journey.pathPoints {
+                // If no unsafe checkpoints, or this point is before first unsafe checkpoint
+                if firstUnsafeTime == nil || pathPoint.timestamp < firstUnsafeTime! {
+                    let safePoint = SafeAreaPointRealm()
+                    safePoint.latitude = pathPoint.latitude
+                    safePoint.longitude = pathPoint.longitude
+                    safePoint.timestamp = pathPoint.timestamp
+                    safePoint.journeyId = journeyId
+                    realm.add(safePoint)
+                }
+            }
         }
     }
     
@@ -1611,12 +1869,18 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         
         for location in locations {
             if location.horizontalAccuracy < 50 { // Only add accurate locations
-                trackingPoints.append(location)
+                // Apply smoothing
+                let smoothedLocation = smoothCoordinate(location)
+                trackingPoints.append(smoothedLocation)
+                
+                // Detect hesitations
+                detectHesitation(for: smoothedLocation)
+                
                 calculateDistance()
                 
                 // Reverse geocode to get street name (every 5th update to avoid overuse)
                 if trackingPoints.count % 5 == 0 {
-                    geocodeLocation(location)
+                    geocodeLocation(smoothedLocation)
                 }
             }
         }
@@ -1699,6 +1963,19 @@ struct FeelingCheckpoint: Identifiable {
     }
 }
 
+// MARK: - Hesitation Point Model
+struct HesitationPoint: Identifiable {
+    let id: UUID
+    let location: CLLocation
+    let startTime: Date
+    let endTime: Date
+    let duration: TimeInterval
+    
+    var coordinate: CLLocationCoordinate2D {
+        location.coordinate
+    }
+}
+
 class FeelingAnnotation: NSObject, MKAnnotation {
     let checkpoint: FeelingCheckpoint
     
@@ -1719,6 +1996,27 @@ class FeelingAnnotation: NSObject, MKAnnotation {
     }
 }
 
+// MARK: - Hesitation Annotation
+class HesitationAnnotation: NSObject, MKAnnotation {
+    let hesitationPoint: HesitationPoint
+    
+    var coordinate: CLLocationCoordinate2D {
+        hesitationPoint.coordinate
+    }
+    
+    var title: String? {
+        "Hesitation"
+    }
+    
+    var subtitle: String? {
+        "\(Int(hesitationPoint.duration))s"
+    }
+    
+    init(hesitationPoint: HesitationPoint) {
+        self.hesitationPoint = hesitationPoint
+    }
+}
+
 // MARK: - Realm Models
 class JourneyRealm: Object, Identifiable {
     @Persisted(primaryKey: true) var id: String = ""
@@ -1728,6 +2026,7 @@ class JourneyRealm: Object, Identifiable {
     @Persisted var duration: Int = 0 // in seconds
     @Persisted var pathPoints = RealmSwift.List<PathPointRealm>()
     @Persisted var checkpoints = RealmSwift.List<FeelingCheckpointRealm>()
+    @Persisted var hesitationPoints = RealmSwift.List<HesitationPointRealm>()
     
     // Sync metadata
     @Persisted var isSynced: Bool = false // Has been synced to cloud
@@ -1749,6 +2048,22 @@ class FeelingCheckpointRealm: Object {
     @Persisted var longitude: Double = 0.0
     @Persisted var feeling: String = ""
     @Persisted var timestamp: Date = Date()
+}
+
+class HesitationPointRealm: Object {
+    @Persisted var id: String = ""
+    @Persisted var latitude: Double = 0.0
+    @Persisted var longitude: Double = 0.0
+    @Persisted var startTime: Date = Date()
+    @Persisted var endTime: Date = Date()
+    @Persisted var duration: Double = 0.0 // in seconds
+}
+
+class SafeAreaPointRealm: Object {
+    @Persisted var latitude: Double = 0.0
+    @Persisted var longitude: Double = 0.0
+    @Persisted var timestamp: Date = Date()
+    @Persisted var journeyId: String = "" // Track which journey this point came from
 }
 
 // MARK: - Preview
