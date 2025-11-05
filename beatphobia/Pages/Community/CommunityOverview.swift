@@ -2,6 +2,7 @@ import SwiftUI
 import Supabase
 import UserNotifications
 import UIKit
+import FirebaseAnalytics
 
 // NOTE: PostCategory and Post models are now in CommunityModels.swift
 
@@ -2801,6 +2802,9 @@ struct PostDetailView: View {
                     replyingTo = nil
                     // Increment comment count optimistically
                     displayCommentsCount += 1
+                    
+                    // Track community reply sent
+                    Analytics.logEvent("community_reply_sent", parameters: nil)
                 }
                 
                 // Load fresh comments with animation
@@ -3678,6 +3682,10 @@ struct CreatePostView: View {
                 
                 await MainActor.run {
                     print("✅ Post created successfully with \(uploadedImageUrls.count) images")
+                    
+                    // Track community post created
+                    Analytics.logEvent("community_post_created", parameters: nil)
+                    
                     // Clear the uploaded URLs so onDisappear doesn't delete them
                     uploadedImageUrls.removeAll()
                     dismiss()

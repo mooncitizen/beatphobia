@@ -6,6 +6,7 @@
 //
 import SwiftUI
 import RealmSwift
+import FirebaseAnalytics
 
 
 struct JournalEntryView: View {
@@ -233,6 +234,9 @@ struct JournalEntryView: View {
         try! realm.write {
             realm.add(newEntry)
         }
+        
+        // Track journal entry created
+        Analytics.logEvent("journal_entry_created", parameters: nil)
         
         // Success haptic
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {

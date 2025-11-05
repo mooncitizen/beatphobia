@@ -7,6 +7,7 @@
 
 import SwiftUI
 import StoreKit
+import FirebaseAnalytics
 
 struct PaywallView: View {
     @EnvironmentObject var subscriptionManager: SubscriptionManager
@@ -268,6 +269,13 @@ struct PaywallView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(errorMessage)
+        }
+        .onAppear {
+            // Track paywall viewed
+            Analytics.logEvent("paywall_viewed", parameters: [
+                "is_first_run": isFirstRun as NSObject,
+                "selected_tier": selectedTier.rawValue as NSObject
+            ])
         }
     }
     

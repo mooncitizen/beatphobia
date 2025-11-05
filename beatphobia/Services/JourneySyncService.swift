@@ -10,6 +10,17 @@ import RealmSwift
 import Supabase
 import Combine
 
+// MARK: - Update Payload Models
+struct JourneyDeleteUpdate: Codable {
+    let isDeleted: Bool
+    let updatedAt: String
+    
+    enum CodingKeys: String, CodingKey {
+        case isDeleted = "is_deleted"
+        case updatedAt = "updated_at"
+    }
+}
+
 // MARK: - Supabase Journey Model
 struct JourneyDB: Codable {
     let id: UUID
@@ -350,16 +361,65 @@ class JourneySyncService: ObservableObject {
                     isDeleted: journey.isDeleted
                 )
                 
-                // Upsert to Supabase (insert or update)
-                try await supabase
-                    .from("journeys")
-                    .upsert(dbJourney)
-                    .execute()
-                
-                print("🗺️ Pushing journey \(journeyID) to cloud...")
-                
-                // Sync journey data (JourneyRealm) if it exists
-                try await syncJourneyData(journeyId: journeyID)
+                // For deletions, use UPDATE directly (not UPSERT) because SELECT policy blocks deleted rows
+                if journey.isDeleted {
+                    // Format date as ISO8601 string for update
+                    let dateFormatter = ISO8601DateFormatter()
+                    let updatedAtString = dateFormatter.string(from: dbJourney.updatedAt ?? Date())
+                    let deleteUpdate = JourneyDeleteUpdate(isDeleted: true, updatedAt: updatedAtString)
+                    
+                    // Update to set is_deleted = true
+                    // Note: Even if this fails (e.g., row doesn't exist or RLS blocks it),
+                    // that's okay - the journey is already marked as deleted locally
+                    do {
+                        let updateResponse = try await supabase
+                            .from("journeys")
+                            .update(deleteUpdate)
+                            .eq("id", value: journey.id)
+                            .execute()
+                        
+                        // Verify the update worked by checking response
+                        if !updateResponse.data.isEmpty, let responseString = String(data: updateResponse.data, encoding: .utf8) {
+                            print("🗑️ Delete response: \(responseString)")
+                        }
+                        print("🗑️ Deleted journey \(journeyID) from cloud...")
+                    } catch {
+                        // If UPDATE fails (e.g., row doesn't exist or RLS blocks it),
+                        // that's okay - the journey is already deleted locally
+                        // The pull will handle syncing the deletion state
+                        print("⚠️ Could not update journey deletion in cloud (this is okay): \(error.localizedDescription)")
+                        // Don't rethrow - mark as synced anyway since deletion is local
+                    }
+                    
+                    // Also delete journey_data (if it exists)
+                    // Note: We skip if it fails - journey_data deletion is not critical
+                    do {
+                        let dataUpdateResponse = try await supabase
+                            .from("journey_data")
+                            .update(deleteUpdate)
+                            .eq("journey_id", value: journey.id)
+                            .execute()
+                        
+                        if !dataUpdateResponse.data.isEmpty, let responseString = String(data: dataUpdateResponse.data, encoding: .utf8) {
+                            print("🗑️ Delete journey_data response: \(responseString)")
+                        }
+                        print("🗑️ Deleted journey data for \(journeyID) from cloud...")
+                    } catch {
+                        // Journey data might not exist or RLS might block it - that's okay
+                        // The journey deletion is what matters
+                        print("⚠️ Could not delete journey_data for \(journeyID) (this is okay): \(error.localizedDescription)")
+                    }
+                } else {
+                    // Upsert to Supabase (insert or update)
+                    try await supabase
+                        .from("journeys")
+                        .upsert(dbJourney)
+                        .execute()
+                    print("🗺️ Pushing journey \(journeyID) to cloud...")
+                    
+                    // Sync journey data (JourneyRealm) if it exists
+                    try await syncJourneyData(journeyId: journeyID)
+                }
                 
                 // Mark as synced in Realm (re-fetch to ensure thread safety)
                 if let updateRealm = try? await Realm(),
@@ -385,8 +445,9 @@ class JourneySyncService: ObservableObject {
         }
         
         // Also sync JourneyRealm objects that need syncing independently
+        // Skip deleted journeys - they're handled in the journey sync above
         let journeyDataToSync = realm.objects(JourneyRealm.self)
-            .filter("needsSync == true")
+            .filter("needsSync == true AND isDeleted == false")
         
         guard !journeyDataToSync.isEmpty else {
             print("📤 No local journey data changes to push")
@@ -432,11 +493,13 @@ class JourneySyncService: ObservableObject {
             return
         }
         
-        // Fetch all cloud journeys for this user
+        // Fetch all cloud journeys for this user (excluding deleted ones)
+        // Note: We filter deleted in the query, even though SELECT policy now allows seeing them
         let response = try await supabase
             .from("journeys")
             .select()
             .eq("user_id", value: userId)
+            .eq("is_deleted", value: false)
             .execute()
         
         let decoder = JSONDecoder()
@@ -496,13 +559,13 @@ class JourneySyncService: ObservableObject {
         let userId = try await getCurrentUserId()
         guard let realm = try? await Realm() else { return }
         
-        // Fetch journey data for this journey (explicitly include JSON columns)
+        // Fetch journey data for this journey (explicitly include JSON columns, excluding deleted)
         let journeyDataResponse = try await supabase
             .from("journey_data")
             .select("id, journey_id, user_id, start_time, end_time, distance, duration, path_points_json, checkpoints_json, hesitation_points_json, created_at, updated_at, is_deleted")
             .eq("journey_id", value: journeyId.uuidString)
             .eq("user_id", value: userId.uuidString)
-            .eq("is_deleted", value: false)
+            .eq("is_deleted", value: false)  // Filter deleted in query
             .execute()
         
         let decoder = JSONDecoder()
@@ -687,8 +750,9 @@ class JourneySyncService: ObservableObject {
         // Find JourneyRealm by matching ID (JourneyRealm.id is String, Journey.id is UUID)
         let journeyRealmId = journeyId.uuidString
         guard let journeyRealm = realm.object(ofType: JourneyRealm.self, forPrimaryKey: journeyRealmId),
-              journeyRealm.needsSync else {
-            // No journey data or already synced
+              journeyRealm.needsSync,
+              !journeyRealm.isDeleted else {
+            // No journey data, already synced, or deleted (deleted journeys are handled separately)
             return
         }
         
@@ -749,10 +813,26 @@ class JourneySyncService: ObservableObject {
             isDeleted: journeyRealm.isDeleted
         )
         
-        try await supabase
-            .from("journey_data")
-            .upsert(dbJourneyData)
-            .execute()
+        // For deletions, use UPDATE directly (not UPSERT) because SELECT policy blocks deleted rows
+        if journeyRealm.isDeleted {
+            // Format date as ISO8601 string for update
+            let dateFormatter = ISO8601DateFormatter()
+            let updatedAtString = dateFormatter.string(from: dbJourneyData.updatedAt ?? Date())
+            
+            // Update to set is_deleted = true
+            let deleteUpdate = JourneyDeleteUpdate(isDeleted: true, updatedAt: updatedAtString)
+            try await supabase
+                .from("journey_data")
+                .update(deleteUpdate)
+                .eq("id", value: journeyDataUUID.uuidString)
+                .execute()
+            print("🗑️ Deleted journey data \(journeyRealmId) from cloud...")
+        } else {
+            try await supabase
+                .from("journey_data")
+                .upsert(dbJourneyData)
+                .execute()
+        }
         
         // Mark JourneyRealm as synced
         if let updateRealm = try? await Realm(),

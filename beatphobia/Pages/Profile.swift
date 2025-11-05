@@ -9,6 +9,7 @@ import SwiftUI
 import Supabase
 import CoreLocation
 import UserNotifications
+import FirebaseAnalytics
 
 struct ProfileView: View {
     @EnvironmentObject var authManager: AuthManager
@@ -649,6 +650,13 @@ struct ProfileView: View {
                 }
             } message: {
                 Text("Your account will be scheduled for deletion in 7 days. You can cancel this at any time during the 7-day period. After 7 days, all your data including journeys, journal entries, and community posts will be permanently deleted.")
+            }
+            .onChange(of: enableMiles) { oldValue, newValue in
+                // Track unit preference change
+                Analytics.setUserProperty(
+                    newValue ? "miles" : "kilometers",
+                    forName: "unit_preference"
+                )
             }
         }
     }

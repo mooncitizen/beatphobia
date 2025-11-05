@@ -8,6 +8,8 @@
 import SwiftUI
 import SwiftData
 import UserNotifications
+import FirebaseCore
+
 
 @main
 struct beatphobiaApp: App {
@@ -22,7 +24,7 @@ struct beatphobiaApp: App {
     init() {
         // Configure Realm before any Realm operations
         RealmConfigurationManager.configure()
-        
+        FirebaseApp.configure()
         checkSupabaseConfiguration()
         
         // Register defaults

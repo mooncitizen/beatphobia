@@ -11,6 +11,7 @@ import Auth
 import Charts
 import PDFKit
 import UniformTypeIdentifiers
+import FirebaseAnalytics
 
 // MARK: - Realm Models
 class PanicEpisode: Object, Identifiable {
@@ -763,6 +764,9 @@ struct PanicTrackerFlow: View {
         try? realm.write {
             realm.add(episode)
         }
+        
+        // Track panic attack logged
+        Analytics.logEvent("panic_attack_logged", parameters: nil)
         
         let generator = UINotificationFeedbackGenerator()
         generator.notificationOccurred(.success)

@@ -558,11 +558,18 @@ struct CumulativeMapCard: View {
     }
     
     private func calculateSafeAreaOverlay() -> MKPolygon? {
-        guard let realm = try? Realm() else { return nil }
+        guard let realm = try? Realm() else {
+            print("🟢 Safe Area: Failed to get Realm")
+            return nil
+        }
         
         let safeAreaPoints = realm.objects(SafeAreaPointRealm.self)
+        print("🟢 Safe Area: Found \(safeAreaPoints.count) safe area points in Realm")
         
-        guard safeAreaPoints.count >= 3 else { return nil }
+        guard safeAreaPoints.count >= 3 else {
+            print("🟢 Safe Area: Not enough points (need at least 3)")
+            return nil
+        }
         
         // Step 1: Create a grid and count point density to identify "intense repeat travels"
         let gridSize: Double = 50.0 // 50 meter grid cells
@@ -605,9 +612,11 @@ struct CumulativeMapCard: View {
         }
         
         // Step 2: Filter to only include high-density cells (intense repeat travels)
-        // Use cells with count >= 3 (areas visited multiple times) or above average
+        // Use cells with count >= 2 (areas visited multiple times) or above average
         let avgCount = Double(cellCounts.values.reduce(0, +)) / Double(cellCounts.count)
-        let threshold = max(3.0, avgCount * 1.5) // At least 3 points or 1.5x average
+        let threshold = max(2.0, avgCount * 1.2) // At least 2 points or 1.2x average (lowered for visibility)
+        
+        print("🟢 Safe Area: Grid cells = \(cellCounts.count), avg points per cell = \(avgCount), threshold = \(threshold)")
         
         var intenseTravelPoints: [CLLocationCoordinate2D] = []
         for (key, count) in cellCounts {
@@ -619,15 +628,27 @@ struct CumulativeMapCard: View {
             }
         }
         
-        guard intenseTravelPoints.count >= 3 else { return nil }
+        print("🟢 Safe Area: Intense travel points after filtering = \(intenseTravelPoints.count)")
+        
+        guard intenseTravelPoints.count >= 3 else {
+            print("🟢 Safe Area: Not enough intense travel points after filtering (need at least 3)")
+            return nil
+        }
         
         // Step 3: Compute convex hull of the intense travel areas
         let hull = convexHull(points: intenseTravelPoints)
         
-        guard hull.count >= 3 else { return nil }
+        print("🟢 Safe Area: Convex hull has \(hull.count) points")
+        
+        guard hull.count >= 3 else {
+            print("🟢 Safe Area: Convex hull doesn't have enough points")
+            return nil
+        }
         
         var coordsArray = hull
-        return MKPolygon(coordinates: &coordsArray, count: coordsArray.count)
+        let polygon = MKPolygon(coordinates: &coordsArray, count: coordsArray.count)
+        print("🟢 Safe Area: Successfully created polygon with \(hull.count) points")
+        return polygon
     }
     
     private func clusterHesitations(extractedData: ExtractedJourneyData) -> [HesitationCluster] {
@@ -836,18 +857,6 @@ struct CumulativeMapView: UIViewRepresentable {
                     let circle = MKCircle(center: homeLocation, radius: totalDistance)
                     let circleOverlay = TotalDistanceCircleOverlay(circle: circle)
                     mapView.addOverlay(circleOverlay)
-                    
-                    // Calculate easterly point on the circle (same latitude, longitude increased)
-                    // Convert distance (meters) to degrees longitude at this latitude
-                    let metersPerDegreeLon = 111320.0 * cos(avgLat * .pi / 180.0)
-                    let lonDelta = totalDistance / metersPerDegreeLon
-                    let easterlyPoint = CLLocationCoordinate2D(latitude: avgLat, longitude: avgLon + lonDelta)
-                    
-                    // Create line from center to easterly point
-                    let lineCoordinates = [homeLocation, easterlyPoint]
-                    var coords = lineCoordinates
-                    let easterlyLine = MKPolyline(coordinates: &coords, count: coords.count)
-                    mapView.addOverlay(easterlyLine)
                 }
             }
         }
@@ -942,21 +951,13 @@ struct CumulativeMapView: UIViewRepresentable {
                 return renderer
             }
             
-            // Total distance circle with easterly line
+            // Total distance circle (mustard yellow dashed)
             if let totalDistanceOverlay = overlay as? TotalDistanceCircleOverlay {
                 let renderer = MKCircleRenderer(circle: totalDistanceOverlay.circle)
-                renderer.fillColor = UIColor.systemBlue.withAlphaComponent(0.15)
-                renderer.strokeColor = UIColor.systemBlue.withAlphaComponent(0.8)
-                renderer.lineWidth = 2.5
-                return renderer
-            }
-            
-            // Easterly line from center to edge
-            if let easterlyLine = overlay as? MKPolyline, easterlyLine.pointCount == 2 {
-                let renderer = MKPolylineRenderer(polyline: easterlyLine)
-                renderer.strokeColor = UIColor.systemBlue.withAlphaComponent(0.9)
-                renderer.lineWidth = 2.5
-                renderer.lineDashPattern = [5, 3]
+                renderer.fillColor = .clear // No fill
+                renderer.strokeColor = UIColor(red: 0.85, green: 0.65, blue: 0.13, alpha: 0.9) // Mustard yellow
+                renderer.lineWidth = 3.0
+                renderer.lineDashPattern = [8, 4] // Dashed pattern
                 return renderer
             }
             
@@ -1175,7 +1176,7 @@ struct FullScreenCumulativeMapView: View {
                     }
                 }
             }
-            .navigationTitle("Overall Journeys")
+            .navigationTitle("Journey Stats")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -1288,71 +1289,62 @@ struct MapLayersSheet: View {
                 } header: {
                     Text("Visualization Layers")
                 } footer: {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Group {
-                            Text("📊 Heat Map (Most Traveled Areas)")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-                            Text("Color-coded regions showing where you've traveled most frequently. Warmer colors indicate higher activity.")
-                                .font(.system(size: 12))
-                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
-                            
-                            Text("🔷 Range Boundary")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-                                .padding(.top, 4)
-                            Text("Purple dashed polygon showing the outer boundary of all your journeys (current range).")
-                                .font(.system(size: 12))
-                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
-                            
-                            Text("🔷 Last Week Range Boundary")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-                                .padding(.top, 4)
-                            Text("Fainter purple polygon showing your range from 7-14 days ago. Compare your progress over time!")
-                                .font(.system(size: 12))
-                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
-                            
-                            Text("✅ Safe Areas")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-                                .padding(.top, 4)
-                            Text("Green polygon highlighting areas where you've traveled multiple times without anxiety or panic feelings.")
-                                .font(.system(size: 12))
-                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
-                            
-                            Text("🛤️ Journey Paths")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-                                .padding(.top, 4)
-                            Text("Blue lines showing the actual routes you've taken during your journeys.")
-                                .font(.system(size: 12))
-                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
-                            
-                            Text("⏸️ Hesitation Points")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-                                .padding(.top, 4)
-                            Text("Red boxes marking places where you paused or hesitated for a period of time.")
-                                .font(.system(size: 12))
-                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
-                            
-                            Text("❤️ Feeling Checkpoints")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-                                .padding(.top, 4)
-                            Text("Markers showing where you recorded your feelings during journeys (anxiety levels, panic, etc.).")
-                                .font(.system(size: 12))
-                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
-                            
-                            Text("🔵 Total Distance Circle")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-                                .padding(.top, 4)
-                            Text("Blue circle centered at your average starting point, with radius equal to your total cumulative distance. The dashed line points east to show the scale.")
-                                .font(.system(size: 12))
-                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
-                        }
+                    VStack(spacing: 12) {
+                        CumulativeMapLegendItem(
+                            icon: "chart.bar.fill",
+                            iconColor: .red,
+                            title: "Heat Map",
+                            description: "Color-coded regions showing where you've traveled most frequently. Warmer colors indicate higher activity."
+                        )
+                        
+                        CumulativeMapLegendItem(
+                            icon: "square.dashed",
+                            iconColor: .purple,
+                            title: "Range Boundary",
+                            description: "Purple dashed polygon showing the outer boundary of all your journeys (current range)."
+                        )
+                        
+                        CumulativeMapLegendItem(
+                            icon: "square.dashed",
+                            iconColor: .purple.opacity(0.5),
+                            title: "Last Week Boundary",
+                            description: "Fainter purple polygon showing your range from 7-14 days ago. Compare your progress over time!"
+                        )
+                        
+                        CumulativeMapLegendItem(
+                            icon: "square.fill",
+                            iconColor: .green,
+                            title: "Safe Areas",
+                            description: "Green polygon highlighting areas where you've traveled multiple times without anxiety or panic feelings."
+                        )
+                        
+                        CumulativeMapLegendItem(
+                            icon: "line.diagonal",
+                            iconColor: .blue,
+                            title: "Journey Paths",
+                            description: "Blue lines showing the actual routes you've taken during your journeys."
+                        )
+                        
+                        CumulativeMapLegendItem(
+                            icon: "square.dashed",
+                            iconColor: .red,
+                            title: "Hesitation Points",
+                            description: "Red boxes marking places where you paused or hesitated for a period of time."
+                        )
+                        
+                        CumulativeMapLegendItem(
+                            icon: "circle.fill",
+                            iconColor: .orange,
+                            title: "Feeling Checkpoints",
+                            description: "Markers showing where you recorded your feelings during journeys (anxiety levels, panic, etc.)."
+                        )
+                        
+                        CumulativeMapLegendItem(
+                            icon: "circle.dashed",
+                            iconColor: Color(red: 0.85, green: 0.65, blue: 0.13),
+                            title: "Total Distance Circle",
+                            description: "Mustard yellow dashed circle centered at your average starting point, with radius equal to your total cumulative distance traveled."
+                        )
                     }
                     .padding(.vertical, 8)
                 }
@@ -1367,5 +1359,46 @@ struct MapLayersSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Cumulative Map Legend Item
+
+struct CumulativeMapLegendItem: View {
+    @Environment(\.colorScheme) var colorScheme
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let description: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            // Icon
+            ZStack {
+                Circle()
+                    .fill(iconColor.opacity(0.15))
+                    .frame(width: 50, height: 50)
+
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(iconColor)
+            }
+
+            // Content
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+
+                Text(description)
+                    .font(.system(size: 15))
+                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 2)
     }
 }

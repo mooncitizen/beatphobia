@@ -1,6 +1,7 @@
 import SwiftUI
 import StoreKit
 import Combine
+import FirebaseAnalytics
 
 // MARK: - Subscription Tiers
 enum SubscriptionTier: String, CaseIterable {
@@ -286,6 +287,25 @@ final class SubscriptionManager: ObservableObject {
             case .success(let verification):
                 await handleSuccessfulPurchase(verification)
                 lastError = nil
+                
+                // Track purchase completed with Firebase Analytics
+                Analytics.logEvent("purchase_completed", parameters: [
+                    "product_id": product.id as NSObject,
+                    "product_name": product.displayName as NSObject,
+                    "price": NSDecimalNumber(decimal: product.price).doubleValue as NSObject,
+                    "currency": (product.priceFormatStyle.locale.currencyCode ?? "USD") as NSObject
+                ])
+                
+                // Set subscription tier as user property
+                let tier: SubscriptionTier
+                if product.id == SubscriptionTier.proYearly.productID {
+                    tier = .proYearly
+                } else if product.id == SubscriptionTier.proMonthly.productID {
+                    tier = .proMonthly
+                } else {
+                    tier = .free
+                }
+                Analytics.setUserProperty(tier.rawValue, forName: "subscription_tier")
                 
                 // Post notification for analytics/tracking
                 NotificationCenter.default.post(

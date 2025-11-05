@@ -8,6 +8,7 @@ import Foundation
 import SwiftUI
 import RealmSwift
 import MapKit
+import FirebaseAnalytics
 
 // MARK: - Models
 
@@ -598,6 +599,13 @@ struct JourneyAgorahobiaView: View {
             .fullScreenCover(isPresented: $showToolSheet) {
                 if let tool = selectedToolForSheet {
                     destinationForTool(tool)
+                        .onAppear {
+                            // Track tool opened from main tools tab
+                            Analytics.logEvent("tool_opened", parameters: [
+                                "tool_name": tool.name as NSObject,
+                                "source_screen": "tools_tab" as NSObject
+                            ])
+                        }
                         .onDisappear {
                             selectedToolForSheet = nil
                         }
@@ -1155,6 +1163,13 @@ struct EmergencyToolsSheet: View {
             .fullScreenCover(isPresented: $showTool) {
                 if let tool = selectedTool, let viewBuilder = tool.destinationView {
                     viewBuilder()
+                        .onAppear {
+                            // Track tool opened from emergency tools
+                            Analytics.logEvent("tool_opened", parameters: [
+                                "tool_name": tool.name as NSObject,
+                                "source_screen": "emergency_tools" as NSObject
+                            ])
+                        }
                         .onDisappear {
                             selectedTool = nil
                         }

@@ -12,6 +12,7 @@ import Combine
 import RealmSwift
 import AVFoundation
 import ActivityKit
+import FirebaseAnalytics
 
 // MARK: - Location Tracker Landing Page
 struct LocationTrackerView: View {
@@ -25,10 +26,13 @@ struct LocationTrackerView: View {
     @State private var showTracking = false
     @State private var selectedJourneyId: String?
     @State private var showPaywall = false
+    @State private var journeyToDelete: JourneyRealm?
+    @State private var showDeleteConfirmation = false
+    @State private var isEditMode = false
     @AppStorage("setting.miles") private var enableMiles = false
     
     var userJourneys: [JourneyRealm] {
-        allJourneys.sorted(by: { $0.startTime > $1.startTime })
+        allJourneys.filter { !$0.isDeleted }.sorted(by: { $0.startTime > $1.startTime })
     }
     
     var body: some View {
@@ -37,8 +41,8 @@ struct LocationTrackerView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                // Quick stats (fixed at top) - Pro only
-                if !userJourneys.isEmpty && subscriptionManager.isPro {
+                // Quick stats (fixed at top)
+                if !userJourneys.isEmpty {
                     statsSection
                         .padding(.top, 8)
                         .padding(.bottom, 16)
@@ -87,9 +91,25 @@ struct LocationTrackerView: View {
                     .padding(.top, 8)
                 }
             }
+            .id(allJourneys.count) // Force refresh when journeys count changes
         }
         .navigationTitle("Location Tracker")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if !userJourneys.isEmpty {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isEditMode.toggle()
+                        }
+                    }) {
+                        Image(systemName: isEditMode ? "checkmark.circle.fill" : "slider.horizontal.3")
+                            .font(.system(size: 18))
+                            .foregroundColor(isEditMode ? .green : AppConstants.primaryColor)
+                    }
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showTracking) {
             LocationTrackingView(isTabBarVisible: $isTabBarVisible, onJourneyCompleted: { journeyId in
                 selectedJourneyId = journeyId
@@ -116,6 +136,16 @@ struct LocationTrackerView: View {
                 PaywallView()
                     .environmentObject(subscriptionManager)
             }
+        }
+        .alert("Delete Journey?", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                if let journey = journeyToDelete {
+                    deleteJourney(journey)
+                }
+            }
+        } message: {
+            Text("This journey will be permanently deleted from all your devices.")
         }
     }
     
@@ -173,10 +203,10 @@ struct LocationTrackerView: View {
                     .fontDesign(.serif)
                     .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
                 
-                if !subscriptionManager.isPro && userJourneys.count > 3 {
+                if !subscriptionManager.isPro && userJourneys.count > 5 {
                     Spacer()
                     
-                    Text("Showing 3 of \(userJourneys.count)")
+                    Text("Showing 5 of \(userJourneys.count)")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.blue)
                 }
@@ -203,17 +233,37 @@ struct LocationTrackerView: View {
                     // Journeys for this date
                     if let journeys = groupedJourneys[date] {
                         ForEach(journeys, id: \.id) { journey in
-                            NavigationLink(destination: JourneyDetailView(journey: journey)) {
-                                LocationJourneyCard(journey: journey, enableMiles: enableMiles)
-                                    .padding(.horizontal, 20)
+                            HStack(spacing: 12) {
+                                NavigationLink(destination: JourneyDetailView(journey: journey)) {
+                                    LocationJourneyCard(journey: journey, enableMiles: enableMiles)
+                                }
+                                .disabled(isEditMode)
+                                
+                                // Delete button (only shown in edit mode)
+                                if isEditMode {
+                                    Button(action: {
+                                        journeyToDelete = journey
+                                        showDeleteConfirmation = true
+                                    }) {
+                                        Image(systemName: "trash.fill")
+                                            .font(.system(size: 18))
+                                            .foregroundColor(.red)
+                                            .frame(width: 44, height: 44)
+                                            .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                                            .cornerRadius(12)
+                                            .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
+                                    }
+                                    .transition(.scale.combined(with: .opacity))
+                                }
                             }
+                            .padding(.horizontal, 20)
                         }
                     }
                 }
             }
             
             // Upgrade prompt for free users
-            if !subscriptionManager.isPro && userJourneys.count > 3 {
+            if !subscriptionManager.isPro && userJourneys.count > 5 {
                 upgradePrompt
             }
         }
@@ -222,6 +272,11 @@ struct LocationTrackerView: View {
     // Upgrade prompt view
     private var upgradePrompt: some View {
         Button(action: {
+            // Track free tier limit reached
+            Analytics.logEvent("free_tier_limit_reached", parameters: [
+                "feature": "journey_history" as NSObject,
+                "limit": 5 as NSObject
+            ])
             showPaywall = true
         }) {
             HStack(spacing: 8) {
@@ -245,7 +300,7 @@ struct LocationTrackerView: View {
     // Group journeys by date
     private var groupedJourneys: [Date: [JourneyRealm]] {
         let calendar = Calendar.current
-        let limit = subscriptionManager.isPro ? userJourneys.count : min(3, userJourneys.count)
+        let limit = subscriptionManager.isPro ? userJourneys.count : min(5, userJourneys.count)
         let grouped = Dictionary(grouping: userJourneys.prefix(limit)) { journey in
             // Extract year, month, day components from the date in local timezone
             let components = calendar.dateComponents([.year, .month, .day], from: journey.startTime)
@@ -329,6 +384,45 @@ struct LocationTrackerView: View {
             return String(format: "%dh %dm", hours, minutes)
         }
         return String(format: "%dm", minutes)
+    }
+    
+    // MARK: - Delete Journey
+    private func deleteJourney(_ journey: JourneyRealm) {
+        let realm = try! Realm()
+        
+        // Thaw the frozen object before modifying
+        guard let liveJourney = journey.thaw() else {
+            journeyToDelete = nil
+            return
+        }
+        
+        // Mark JourneyRealm as deleted
+        realm.deleteJourneyData(liveJourney)
+        
+        // Also mark the corresponding Journey metadata object as deleted
+        if let journeyId = UUID(uuidString: liveJourney.id),
+           let journeyMetadata = realm.object(ofType: Journey.self, forPrimaryKey: journeyId) {
+            try! realm.write {
+                journeyMetadata.isDeleted = true
+                journeyMetadata.updatedAt = Date()
+                journeyMetadata.needsSync = true
+                journeyMetadata.isSynced = false
+            }
+        }
+        
+        // Trigger immediate sync to push deletion to Supabase
+        Task {
+            try? await journeySyncService.syncAll()
+        }
+        
+        journeyToDelete = nil
+        
+        // Exit edit mode if no journeys left
+        if userJourneys.count <= 1 {
+            withAnimation {
+                isEditMode = false
+            }
+        }
     }
 }
 
@@ -830,6 +924,8 @@ struct LocationTrackingView: View {
                     if locationManager.hapticsEnabled {
                         locationManager.lightHaptic.impactOccurred(intensity: 0.5)
                     }
+                    // Track journey cancelled
+                    Analytics.logEvent("journey_cancelled", parameters: nil)
                     dismiss()
                 }) {
                     ZStack {
@@ -1364,6 +1460,10 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         }
         
         isTracking = true
+        
+        // Track journey started
+        Analytics.logEvent("journey_started", parameters: nil)
+        
         trackingPoints = []
         feelingCheckpoints = []
         hesitationPoints = []
@@ -1432,6 +1532,14 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         if #available(iOS 16.1, *) {
             endLiveActivity()
         }
+        
+        // Track journey completed with metrics
+        let duration = Int(Date().timeIntervalSince(startTime ?? Date()))
+        Analytics.logEvent("journey_completed", parameters: [
+            "duration_seconds": duration as NSObject,
+            "distance_meters": Int(distanceMeters) as NSObject,
+            "hesitation_count": hesitationPoints.count as NSObject
+        ])
         
         // Save JourneyRealm (tracking data) FIRST - this must complete synchronously
         saveJourneyToRealm()
