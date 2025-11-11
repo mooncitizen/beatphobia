@@ -11,9 +11,111 @@ import RealmSwift
 
 struct JourneyDetailView: View {
     let journey: JourneyRealm
+    @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("setting.miles") private var enableMiles = false
     @State private var showFullScreenMap = false
+    @State private var linkedPlan: ExposurePlan?
+    @State private var targetCompletions: [TargetCompletion] = []
+    
+    // Get the linked plan from Realm
+    private func loadLinkedPlanAsync() {
+        guard let realm = try? Realm(),
+              let journeyId = UUID(uuidString: journey.id) else {
+            print("⚠️ JourneyDetailView: Could not parse journey ID: \(journey.id)")
+            return
+        }
+        
+        guard let journeyMeta = realm.object(ofType: Journey.self, forPrimaryKey: journeyId) else {
+            print("⚠️ JourneyDetailView: Could not find Journey with ID: \(journeyId)")
+            return
+        }
+        
+        guard let planId = journeyMeta.linkedPlanId else {
+            print("ℹ️ JourneyDetailView: Journey has no linkedPlanId")
+            return
+        }
+        
+        print("📍 JourneyDetailView: Found linkedPlanId: \(planId)")
+        
+        guard let plan = realm.object(ofType: ExposurePlan.self, forPrimaryKey: planId) else {
+            print("⚠️ JourneyDetailView: Could not find ExposurePlan with ID: \(planId)")
+            return
+        }
+        
+        print("✅ JourneyDetailView: Loaded plan: \(plan.name) with \(plan.targets.filter { !$0.isDeleted }.count) targets")
+        
+        linkedPlan = plan
+        
+        // Analyze target completions based on actual path
+        analyzeTargetCompletions(plan: plan)
+    }
+    
+    // Analyze which targets were likely reached based on proximity to actual path
+    private func analyzeTargetCompletions(plan: ExposurePlan) {
+        let targets = plan.targets.filter { !$0.isDeleted }.sorted(by: { $0.orderIndex < $1.orderIndex })
+        var completions: [TargetCompletion] = []
+        
+        // Convert journey path points to CLLocation array
+        let pathLocations = journey.pathPoints.map { point in
+            CLLocation(latitude: point.latitude, longitude: point.longitude)
+        }
+        
+        for (index, target) in targets.enumerated() {
+            let targetLocation = CLLocation(latitude: target.latitude, longitude: target.longitude)
+            
+            // Find minimum distance from any path point to this target
+            var minDistance: CLLocationDistance = Double.greatestFiniteMagnitude
+            var closestPointIndex: Int? = nil
+            var timeAtTarget: Date? = nil
+            
+            for (pathIndex, pathLocation) in pathLocations.enumerated() {
+                let distance = targetLocation.distance(from: pathLocation)
+                if distance < minDistance {
+                    minDistance = distance
+                    closestPointIndex = pathIndex
+                    // Estimate time based on path point index (rough approximation)
+                    if pathIndex < journey.pathPoints.count {
+                        // Use start time + estimated time based on point index
+                        let totalDuration = journey.duration
+                        let pointTime = journey.startTime.addingTimeInterval(Double(pathIndex) * Double(totalDuration) / Double(max(1, pathLocations.count)))
+                        timeAtTarget = pointTime
+                    }
+                }
+            }
+            
+            // Consider target "reached" if within 30 meters (geofence radius was 10-20m)
+            let wasReached = minDistance <= 30.0
+            
+            // Estimate wait time: if user stayed within 30m for a period, estimate wait time
+            var estimatedWaitTime: TimeInterval = 0
+            if wasReached, let closestIndex = closestPointIndex {
+                // Count consecutive points within 30m of target
+                var pointsNearTarget = 0
+                for i in max(0, closestIndex - 10)..<min(pathLocations.count, closestIndex + 10) {
+                    let distance = targetLocation.distance(from: pathLocations[i])
+                    if distance <= 30.0 {
+                        pointsNearTarget += 1
+                    }
+                }
+                // Estimate wait time: assume location updates every 5 seconds
+                estimatedWaitTime = Double(pointsNearTarget) * 5.0
+                // Cap at planned wait time
+                estimatedWaitTime = min(estimatedWaitTime, Double(target.waitTimeInSeconds))
+            }
+            
+            completions.append(TargetCompletion(
+                target: target,
+                index: index,
+                wasReached: wasReached,
+                minDistance: minDistance,
+                timeReached: timeAtTarget,
+                estimatedWaitTime: estimatedWaitTime
+            ))
+        }
+        
+        targetCompletions = completions
+    }
     
     var body: some View {
         ZStack {
@@ -24,6 +126,12 @@ struct JourneyDetailView: View {
                 VStack(spacing: 20) {
                     // Compact map section
                     compactMapSection
+                    
+                    // Plan information section (if journey was part of a plan)
+                    if linkedPlan != nil {
+                        planInfoSection
+                            .padding(.horizontal, 20)
+                    }
                     
                     // Stats cards
                     statsSection
@@ -41,9 +149,23 @@ struct JourneyDetailView: View {
                         .padding(.bottom, 100)
                 }
             }
+            .onAppear {
+                loadLinkedPlanAsync()
+            }
         }
         .navigationTitle(journey.startTime.formatted(date: .abbreviated, time: .omitted))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    dismiss()
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                }
+            }
+        }
         .toolbar(.hidden, for: .tabBar)
         .fullScreenCover(isPresented: $showFullScreenMap) {
             FullScreenMapView(journey: journey, isPresented: $showFullScreenMap)
@@ -237,6 +359,150 @@ struct JourneyDetailView: View {
         }
     }
     
+    // MARK: - Plan Info Section
+    private var planInfoSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let plan = linkedPlan {
+                // Plan header
+                HStack {
+                    Image(systemName: "map.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(AppConstants.primaryColor)
+                    
+                    Text(plan.name)
+                        .font(.system(size: 20, weight: .bold))
+                        .fontDesign(.serif)
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                    
+                    Spacer()
+                }
+                
+                // Plan stats
+                let targetsReached = targetCompletions.filter { $0.wasReached }.count
+                let totalTargets = targetCompletions.count
+                
+                HStack(spacing: 12) {
+                    planStatCard(
+                        icon: "checkmark.circle.fill",
+                        title: "Targets Reached",
+                        value: "\(targetsReached)/\(totalTargets)",
+                        color: targetsReached == totalTargets ? .green : .orange
+                    )
+                    
+                    planStatCard(
+                        icon: "clock.fill",
+                        title: "Plan Progress",
+                        value: totalTargets > 0 ? "\(Int((Double(targetsReached) / Double(totalTargets)) * 100))%" : "0%",
+                        color: AppConstants.primaryColor
+                    )
+                }
+                
+                // Targets list
+                if !targetCompletions.isEmpty {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Targets")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                        
+                        ForEach(Array(targetCompletions.enumerated()), id: \.element.target.id) { index, completion in
+                            targetCompletionRow(completion: completion, index: index)
+                        }
+                    }
+                    .padding(16)
+                    .background(AppConstants.cardBackgroundColor(for: colorScheme))
+                    .cornerRadius(16)
+                    .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
+                }
+            }
+        }
+    }
+    
+    private func planStatCard(icon: String, title: String, value: String, color: Color) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundColor(color)
+            
+            Text(value)
+                .font(.system(size: 20, weight: .bold))
+                .fontDesign(.monospaced)
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+            
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+        .cornerRadius(16)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
+    }
+    
+    private func targetCompletionRow(completion: TargetCompletion, index: Int) -> some View {
+        HStack(spacing: 12) {
+            // Status indicator
+            ZStack {
+                Circle()
+                    .fill(completion.wasReached ? Color.green.opacity(0.2) : Color.gray.opacity(0.2))
+                    .frame(width: 40, height: 40)
+                
+                if completion.wasReached {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.green)
+                } else {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            // Target info
+            VStack(alignment: .leading, spacing: 4) {
+                Text(completion.target.name.isEmpty ? "Target \(index + 1)" : completion.target.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                
+                HStack(spacing: 12) {
+                    if completion.wasReached {
+                        if completion.estimatedWaitTime > 0 {
+                            Text("Waited: \(formatWaitTime(completion.estimatedWaitTime))")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        }
+                        
+                        if let timeReached = completion.timeReached {
+                            Text(timeReached.formatted(date: .omitted, time: .shortened))
+                                .font(.system(size: 12))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        }
+                    } else {
+                        Text("Not reached")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        
+                        Text("Closest: \(formatDistance(completion.minDistance))")
+                            .font(.system(size: 12))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                    }
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(.vertical, 8)
+    }
+    
+    private func formatWaitTime(_ seconds: TimeInterval) -> String {
+        let minutes = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        if minutes > 0 {
+            return "\(minutes)m \(secs)s"
+        }
+        return "\(secs)s"
+    }
+    
     private var summarySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Journey Summary")
@@ -327,7 +593,24 @@ struct SavedJourneyMapView: UIViewRepresentable {
         mapView.removeOverlays(mapView.overlays)
         mapView.removeAnnotations(mapView.annotations)
         
+        // Clear planned route polylines
+        context.coordinator.plannedRoutePolylines.removeAll()
+        
         guard !journey.pathPoints.isEmpty else { return }
+        
+        // Load linked plan if exists
+        var linkedPlan: ExposurePlan?
+        if let realm = try? Realm(),
+           let journeyId = UUID(uuidString: journey.id),
+           let journeyMeta = realm.object(ofType: Journey.self, forPrimaryKey: journeyId),
+           let planId = journeyMeta.linkedPlanId {
+            linkedPlan = realm.object(ofType: ExposurePlan.self, forPrimaryKey: planId)
+        }
+        
+        // Add planned route if plan exists
+        if let plan = linkedPlan {
+            addPlannedRoute(plan: plan, to: mapView, context: context)
+        }
         
         // Convert path points to coordinates array
         var coordinates = [CLLocationCoordinate2D]()
@@ -431,6 +714,62 @@ struct SavedJourneyMapView: UIViewRepresentable {
     
     func makeCoordinator() -> Coordinator {
         Coordinator()
+    }
+    
+    // Add planned route overlays and annotations
+    private func addPlannedRoute(plan: ExposurePlan, to mapView: MKMapView, context: Context) {
+        let targets = plan.targets.filter { !$0.isDeleted }.sorted(by: { $0.orderIndex < $1.orderIndex })
+        guard !targets.isEmpty else { return }
+        
+        // Store planned route polylines in coordinator
+        let coordinator = context.coordinator
+        
+        // Add target annotations
+        for (index, target) in targets.enumerated() {
+            let coordinate = CLLocationCoordinate2D(latitude: target.latitude, longitude: target.longitude)
+            
+            // Check if target was reached (within 30m of any path point)
+            var wasReached = false
+            let targetLocation = CLLocation(latitude: target.latitude, longitude: target.longitude)
+            for point in journey.pathPoints {
+                let pathLocation = CLLocation(latitude: point.latitude, longitude: point.longitude)
+                if targetLocation.distance(from: pathLocation) <= 30.0 {
+                    wasReached = true
+                    break
+                }
+            }
+            
+            let annotation = PlannedTargetAnnotation(
+                target: target,
+                index: index,
+                wasReached: wasReached
+            )
+            mapView.addAnnotation(annotation)
+        }
+        
+        // Calculate and add planned route polylines between targets
+        if targets.count > 1 {
+            for i in 0..<targets.count - 1 {
+                let fromTarget = targets[i]
+                let toTarget = targets[i + 1]
+                
+                let request = MKDirections.Request()
+                request.source = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: fromTarget.latitude, longitude: fromTarget.longitude)))
+                request.destination = MKMapItem(placemark: MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: toTarget.latitude, longitude: toTarget.longitude)))
+                request.transportType = .walking
+                
+                let directions = MKDirections(request: request)
+                directions.calculate { response, error in
+                    guard let route = response?.routes.first else { return }
+                    DispatchQueue.main.async {
+                        // Store as planned route polyline
+                        let polyline = route.polyline
+                        coordinator.plannedRoutePolylines.append(polyline)
+                        mapView.addOverlay(polyline)
+                    }
+                }
+            }
+        }
     }
     
     // Calculate safe area polygon from all journeys
@@ -597,6 +936,8 @@ struct SavedJourneyMapView: UIViewRepresentable {
     }
     
     class Coordinator: NSObject, MKMapViewDelegate {
+        var plannedRoutePolylines: [MKPolyline] = []
+        
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             // Handle total distance circle (blue - straight line potential)
             if overlay is TotalDistanceCircle {
@@ -617,12 +958,25 @@ struct SavedJourneyMapView: UIViewRepresentable {
                 return renderer
             }
             else if let polyline = overlay as? MKPolyline {
-                let renderer = MKPolylineRenderer(polyline: polyline)
-                renderer.strokeColor = UIColor.systemBlue.withAlphaComponent(0.85)
-                renderer.lineWidth = 5
-                renderer.lineCap = .round
-                renderer.lineJoin = .round
-                return renderer
+                // Check if this is a planned route (by reference equality)
+                if plannedRoutePolylines.contains(where: { $0 === polyline }) {
+                    // Planned route - mustard yellow dashed line
+                    let renderer = MKPolylineRenderer(polyline: polyline)
+                    renderer.strokeColor = UIColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0) // Mustard yellow
+                    renderer.lineWidth = 4
+                    renderer.lineDashPattern = [8, 6]
+                    renderer.lineCap = .round
+                    renderer.lineJoin = .round
+                    return renderer
+                } else {
+                    // Actual route - blue solid line
+                    let renderer = MKPolylineRenderer(polyline: polyline)
+                    renderer.strokeColor = UIColor.systemBlue.withAlphaComponent(0.85)
+                    renderer.lineWidth = 5
+                    renderer.lineCap = .round
+                    renderer.lineJoin = .round
+                    return renderer
+                }
             }
             else if let polygon = overlay as? MKPolygon {
                 // Check if this is a safe area polygon (we'll identify by checking if it's a rectangle with green styling)
@@ -736,6 +1090,32 @@ struct SavedJourneyMapView: UIViewRepresentable {
             }
             
 
+            // Handle planned target annotations
+            if let plannedTarget = annotation as? PlannedTargetAnnotation {
+                let identifier = "PlannedTargetAnnotation"
+                var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier) as? MKMarkerAnnotationView
+                
+                if annotationView == nil {
+                    annotationView = MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                    annotationView?.canShowCallout = true
+                } else {
+                    annotationView?.annotation = annotation
+                }
+                
+                // Color based on whether target was reached
+                if plannedTarget.wasReached {
+                    annotationView?.markerTintColor = .systemGreen
+                    annotationView?.glyphImage = UIImage(systemName: "checkmark.circle.fill")
+                } else {
+                    annotationView?.markerTintColor = .systemGray
+                    annotationView?.glyphImage = UIImage(systemName: "mappin.circle.fill")
+                }
+                annotationView?.glyphTintColor = .white
+                annotationView?.displayPriority = .required
+                
+                return annotationView
+            }
+            
             // Handle feeling checkpoint annotations
             if let feelingAnnotation = annotation as? SavedFeelingAnnotation {
                 let identifier = "SavedFeelingAnnotation"
@@ -1066,6 +1446,42 @@ class SavedHesitationAnnotation: NSObject, MKAnnotation {
         self.startTime = startTime
         self.endTime = endTime
         self.duration = duration
+    }
+}
+
+// MARK: - Target Completion Model
+struct TargetCompletion {
+    let target: ExposureTarget
+    let index: Int
+    let wasReached: Bool
+    let minDistance: CLLocationDistance
+    let timeReached: Date?
+    let estimatedWaitTime: TimeInterval
+}
+
+// MARK: - Planned Target Annotation
+class PlannedTargetAnnotation: NSObject, MKAnnotation {
+    let target: ExposureTarget
+    let index: Int
+    let wasReached: Bool
+    
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: target.latitude, longitude: target.longitude)
+    }
+    
+    var title: String? {
+        target.name.isEmpty ? "Target \(index + 1)" : target.name
+    }
+    
+    var subtitle: String? {
+        wasReached ? "Reached" : "Not reached"
+    }
+    
+    init(target: ExposureTarget, index: Int, wasReached: Bool) {
+        self.target = target
+        self.index = index
+        self.wasReached = wasReached
+        super.init()
     }
 }
 

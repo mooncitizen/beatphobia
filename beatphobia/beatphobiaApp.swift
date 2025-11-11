@@ -17,6 +17,7 @@ struct beatphobiaApp: App {
     @StateObject private var authManager: AuthManager
     @StateObject private var journalSyncService: JournalSyncService
     @StateObject private var journeySyncService: JourneySyncService
+    @StateObject private var planSyncService: ExposurePlanSyncService
     @StateObject private var subscriptionManager: SubscriptionManager
     @StateObject private var themeManager: ThemeManager
     @StateObject private var notificationManager: NotificationManager
@@ -42,6 +43,7 @@ struct beatphobiaApp: App {
         _authManager = StateObject(wrappedValue: AuthManager())
         _journalSyncService = StateObject(wrappedValue: JournalSyncService())
         _journeySyncService = StateObject(wrappedValue: JourneySyncService())
+        _planSyncService = StateObject(wrappedValue: ExposurePlanSyncService())
         _subscriptionManager = StateObject(wrappedValue: SubscriptionManager())
         _themeManager = StateObject(wrappedValue: ThemeManager())
         _notificationManager = StateObject(wrappedValue: NotificationManager.shared)
@@ -53,6 +55,7 @@ struct beatphobiaApp: App {
                 .environmentObject(authManager)
                 .environmentObject(journalSyncService)
                 .environmentObject(journeySyncService)
+                .environmentObject(planSyncService)
                 .environmentObject(subscriptionManager)
                 .environmentObject(themeManager)
                 .preferredColorScheme(themeManager.selectedTheme.colorScheme)
@@ -60,6 +63,9 @@ struct beatphobiaApp: App {
                     // Connect subscription manager to sync services
                     journalSyncService.setSubscriptionManager(subscriptionManager)
                     journeySyncService.setSubscriptionManager(subscriptionManager)
+                    
+                    // Connect plan sync service to journey sync service
+                    journeySyncService.setPlanSyncService(planSyncService)
                     
                     // Start automatic syncing (will check Pro status)
                     journalSyncService.startAutoSync()

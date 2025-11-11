@@ -11,6 +11,7 @@ import RealmSwift
 struct JourneysView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var journalSyncService: JournalSyncService
+    @EnvironmentObject var journeySyncService: JourneySyncService
     @Binding var isTabBarVisible: Bool
     @State private var navigationPath = NavigationPath()
 
@@ -18,6 +19,7 @@ struct JourneysView: View {
         NavigationStack(path: $navigationPath) {
             JourneyAgorahobiaView(isTabBarVisible: $isTabBarVisible)
                 .environmentObject(journalSyncService)
+                .environmentObject(journeySyncService)
         }
     }
 }

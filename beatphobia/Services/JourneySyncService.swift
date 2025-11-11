@@ -29,6 +29,7 @@ struct JourneyDB: Codable {
     let startDate: Date
     let isCompleted: Bool
     let current: Bool
+    let linkedPlanId: UUID?
     let createdAt: Date?
     let updatedAt: Date?
     let isDeleted: Bool
@@ -40,6 +41,7 @@ struct JourneyDB: Codable {
         case startDate = "start_date"
         case isCompleted = "is_completed"
         case current
+        case linkedPlanId = "linked_plan_id"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case isDeleted = "is_deleted"
@@ -157,6 +159,7 @@ class JourneySyncService: ObservableObject {
     
     private var syncTimer: Timer?
     private weak var subscriptionManager: SubscriptionManager?
+    private var planSyncService: ExposurePlanSyncService?
     
     init() {
         // Load last sync date from UserDefaults
@@ -179,6 +182,11 @@ class JourneySyncService: ObservableObject {
     /// Set the subscription manager to check Pro status
     func setSubscriptionManager(_ manager: SubscriptionManager) {
         self.subscriptionManager = manager
+    }
+    
+    /// Set the plan sync service to sync plans before journeys
+    func setPlanSyncService(_ service: ExposurePlanSyncService) {
+        self.planSyncService = service
     }
     
     /// Handle subscription status changes (e.g., user upgraded to Pro)
@@ -272,6 +280,104 @@ class JourneySyncService: ObservableObject {
         isSyncing = false
     }
     
+    // MARK: - Helper: Sync Plan Directly
+    
+    /// Fallback method to sync a plan directly if plan sync service is not available
+    private func syncPlanDirectly(_ plan: ExposurePlan) async throws {
+        let userId = try await getCurrentUserId()
+        
+        // Prepare plan data for Supabase (using ExposurePlanDB from ExposurePlanSyncService)
+        // Note: We need to import or define ExposurePlanDB here
+        // For now, we'll use a simple approach - just upsert the plan
+        struct ExposurePlanDB: Codable {
+            let id: UUID
+            let userId: UUID
+            let name: String
+            let createdAt: Date?
+            let updatedAt: Date?
+            let isDeleted: Bool
+            
+            enum CodingKeys: String, CodingKey {
+                case id
+                case userId = "user_id"
+                case name
+                case createdAt = "created_at"
+                case updatedAt = "updated_at"
+                case isDeleted = "is_deleted"
+            }
+        }
+        
+        struct ExposureTargetDB: Codable {
+            let id: UUID
+            let planId: UUID
+            let userId: UUID
+            let name: String
+            let latitude: Double
+            let longitude: Double
+            let waitTimeSeconds: Int
+            let orderIndex: Int
+            let createdAt: Date?
+            let updatedAt: Date?
+            let isDeleted: Bool
+            
+            enum CodingKeys: String, CodingKey {
+                case id
+                case planId = "plan_id"
+                case userId = "user_id"
+                case name
+                case latitude
+                case longitude
+                case waitTimeSeconds = "wait_time_seconds"
+                case orderIndex = "order_index"
+                case createdAt = "created_at"
+                case updatedAt = "updated_at"
+                case isDeleted = "is_deleted"
+            }
+        }
+        
+        let dbPlan = ExposurePlanDB(
+            id: plan.id,
+            userId: userId,
+            name: plan.name,
+            createdAt: plan.createdAt,
+            updatedAt: plan.updatedAt,
+            isDeleted: plan.isDeleted
+        )
+        
+        // Upsert plan to Supabase
+        try await supabase
+            .from("exposure_plans")
+            .upsert(dbPlan)
+            .execute()
+        print("📋 Pushed plan \(plan.id) to cloud directly")
+        
+        // Sync targets
+        guard let realm = try? await Realm() else { return }
+        let targets = plan.targets.filter { !$0.isDeleted }
+        
+        for target in targets {
+            let dbTarget = ExposureTargetDB(
+                id: target.id,
+                planId: target.planId,
+                userId: userId,
+                name: target.name,
+                latitude: target.latitude,
+                longitude: target.longitude,
+                waitTimeSeconds: target.waitTimeInSeconds,
+                orderIndex: target.orderIndex,
+                createdAt: target.createdAt,
+                updatedAt: target.updatedAt,
+                isDeleted: target.isDeleted
+            )
+            
+            try await supabase
+                .from("exposure_targets")
+                .upsert(dbTarget)
+                .execute()
+        }
+        print("📋 Pushed \(targets.count) targets for plan \(plan.id)")
+    }
+    
     // MARK: - Push Local Changes
     
     private func pushLocalChanges() async throws {
@@ -356,6 +462,7 @@ class JourneySyncService: ObservableObject {
                     startDate: journey.startDate,
                     isCompleted: journey.isCompleted,
                     current: journey.current,
+                    linkedPlanId: journey.linkedPlanId,
                     createdAt: nil,
                     updatedAt: journey.updatedAt,
                     isDeleted: journey.isDeleted
@@ -410,6 +517,43 @@ class JourneySyncService: ObservableObject {
                         print("⚠️ Could not delete journey_data for \(journeyID) (this is okay): \(error.localizedDescription)")
                     }
                 } else {
+                    // If journey has a linked plan, ensure the plan exists in Supabase first
+                    if let linkedPlanId = journey.linkedPlanId {
+                        // Check if plan exists in Supabase
+                        do {
+                            let planResponse: [ExposurePlanDB] = try await supabase
+                                .from("exposure_plans")
+                                .select()
+                                .eq("id", value: linkedPlanId)
+                                .execute()
+                                .value
+                            
+                            if planResponse.isEmpty {
+                                // Plan doesn't exist in Supabase, sync it first
+                                print("📋 Plan \(linkedPlanId) not found in Supabase, syncing plan first...")
+                                if let realm = try? await Realm(),
+                                   let plan = realm.object(ofType: ExposurePlan.self, forPrimaryKey: linkedPlanId) {
+                                    // Sync the plan using the plan sync service
+                                    if let planSync = planSyncService {
+                                        await planSync.syncPlan(plan)
+                                        print("✅ Synced plan \(linkedPlanId) before journey")
+                                    } else {
+                                        // Fallback: try to sync the plan directly
+                                        print("⚠️ Plan sync service not available, attempting direct plan sync...")
+                                        try await syncPlanDirectly(plan)
+                                    }
+                                } else {
+                                    print("⚠️ Plan \(linkedPlanId) not found in Realm, skipping plan sync")
+                                }
+                            } else {
+                                print("✅ Plan \(linkedPlanId) exists in Supabase")
+                            }
+                        } catch {
+                            print("⚠️ Error checking plan existence: \(error.localizedDescription)")
+                            // Continue anyway - the foreign key constraint will catch it if the plan doesn't exist
+                        }
+                    }
+                    
                     // Upsert to Supabase (insert or update)
                     try await supabase
                         .from("journeys")
@@ -521,6 +665,7 @@ class JourneySyncService: ObservableObject {
                         localJourney.startDate = cloudJourney.startDate
                         localJourney.isCompleted = cloudJourney.isCompleted
                         localJourney.current = cloudJourney.current
+                        localJourney.linkedPlanId = cloudJourney.linkedPlanId
                         localJourney.isDeleted = cloudJourney.isDeleted
                         localJourney.updatedAt = cloudUpdatedAt
                         localJourney.isSynced = true
@@ -538,6 +683,7 @@ class JourneySyncService: ObservableObject {
                     newJourney.startDate = cloudJourney.startDate
                     newJourney.isCompleted = cloudJourney.isCompleted
                     newJourney.current = cloudJourney.current
+                    newJourney.linkedPlanId = cloudJourney.linkedPlanId
                     newJourney.isDeleted = cloudJourney.isDeleted
                     newJourney.updatedAt = cloudJourney.updatedAt ?? cloudJourney.createdAt ?? Date()
                     newJourney.isSynced = true

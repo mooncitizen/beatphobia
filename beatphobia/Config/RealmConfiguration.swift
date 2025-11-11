@@ -12,11 +12,11 @@ class RealmConfigurationManager {
     static func configure() {
         let config = Realm.Configuration(
             // Increment schema version when making model changes
-            schemaVersion: 6, // Version 6: HesitationPointRealm and SafeAreaPointRealm models
+            schemaVersion: 7, // Version 7: Journey.linkedPlanId and ExposurePlan models
             
             // Migration block to handle schema changes
             migrationBlock: { migration, oldSchemaVersion in
-                print("🔄 Migrating Realm from version \(oldSchemaVersion) to version 6")
+                print("🔄 Migrating Realm from version \(oldSchemaVersion) to version 7")
                 
                 // Migration to version 2: Journal sync properties
                 if oldSchemaVersion < 2 {
@@ -130,6 +130,20 @@ class RealmConfigurationManager {
                     // Realm will create them automatically, no migration needed for empty tables
                     
                     print("✅ HesitationPointRealm and SafeAreaPointRealm models migration complete")
+                }
+                
+                // Migration to version 7: Journey.linkedPlanId and ExposurePlan models
+                if oldSchemaVersion < 7 {
+                    print("📋 Migrating Journey: Adding linkedPlanId property")
+                    migration.enumerateObjects(ofType: "Journey") { oldObject, newObject in
+                        // Set default value for new linkedPlanId property (nil/optional)
+                        newObject?["linkedPlanId"] = nil
+                    }
+                    
+                    // ExposurePlan and ExposureTarget are new models
+                    // Realm will create them automatically, no migration needed for empty tables
+                    
+                    print("✅ Journey.linkedPlanId and ExposurePlan models migration complete")
                 }
             }
         )

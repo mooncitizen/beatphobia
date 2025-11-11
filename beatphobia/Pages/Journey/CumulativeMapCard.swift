@@ -66,7 +66,27 @@ struct CumulativeMapCard: View {
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("setting.miles") private var enableMiles = false
     @State private var showLayerSheet = false
-    @State private var layerToggles = MapLayerToggles()
+    
+    // Persisted layer toggle settings
+    @AppStorage("mapLayer.showHeatMap") private var showHeatMap = true
+    @AppStorage("mapLayer.showBoundary") private var showBoundary = true
+    @AppStorage("mapLayer.showLastWeekBoundary") private var showLastWeekBoundary = true
+    @AppStorage("mapLayer.showSafeArea") private var showSafeArea = true
+    @AppStorage("mapLayer.showPaths") private var showPaths = true
+    @AppStorage("mapLayer.showHesitations") private var showHesitations = true
+    @AppStorage("mapLayer.showCheckpoints") private var showCheckpoints = false
+    
+    private var layerToggles: MapLayerToggles {
+        MapLayerToggles(
+            showHeatMap: showHeatMap,
+            showBoundary: showBoundary,
+            showLastWeekBoundary: showLastWeekBoundary,
+            showSafeArea: showSafeArea,
+            showPaths: showPaths,
+            showHesitations: showHesitations,
+            showCheckpoints: showCheckpoints
+        )
+    }
     @State private var stats: CumulativeStats?
     @State private var heatMapCells: [HeatMapCell] = []
     @State private var boundaryPolygon: MKPolygon?
@@ -135,7 +155,13 @@ struct CumulativeMapCard: View {
                 lastWeekBoundaryPolygon: lastWeekBoundaryPolygon,
                 safeAreaPolygon: safeAreaPolygon,
                 hesitationClusters: hesitationClusters,
-                layerToggles: $layerToggles,
+                showHeatMap: $showHeatMap,
+                showBoundary: $showBoundary,
+                showLastWeekBoundary: $showLastWeekBoundary,
+                showSafeArea: $showSafeArea,
+                showPaths: $showPaths,
+                showHesitations: $showHesitations,
+                showCheckpoints: $showCheckpoints,
                 isPresented: $showFullScreenMap
             )
         }
@@ -1139,12 +1165,30 @@ struct FullScreenCumulativeMapView: View {
     let lastWeekBoundaryPolygon: MKPolygon?
     let safeAreaPolygon: MKPolygon?
     let hesitationClusters: [HesitationCluster]
-    @Binding var layerToggles: MapLayerToggles
+    @Binding var showHeatMap: Bool
+    @Binding var showBoundary: Bool
+    @Binding var showLastWeekBoundary: Bool
+    @Binding var showSafeArea: Bool
+    @Binding var showPaths: Bool
+    @Binding var showHesitations: Bool
+    @Binding var showCheckpoints: Bool
     @Binding var isPresented: Bool
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
     @State private var showLayerSheet = false
     @AppStorage("setting.miles") private var enableMiles = false
+    
+    private var layerToggles: MapLayerToggles {
+        MapLayerToggles(
+            showHeatMap: showHeatMap,
+            showBoundary: showBoundary,
+            showLastWeekBoundary: showLastWeekBoundary,
+            showSafeArea: showSafeArea,
+            showPaths: showPaths,
+            showHesitations: showHesitations,
+            showCheckpoints: showCheckpoints
+        )
+    }
     
     var body: some View {
         NavigationView {
@@ -1195,7 +1239,15 @@ struct FullScreenCumulativeMapView: View {
             }
         }
         .sheet(isPresented: $showLayerSheet) {
-            MapLayersSheet(layerToggles: $layerToggles)
+            MapLayersSheet(
+                showHeatMap: $showHeatMap,
+                showBoundary: $showBoundary,
+                showLastWeekBoundary: $showLastWeekBoundary,
+                showSafeArea: $showSafeArea,
+                showPaths: $showPaths,
+                showHesitations: $showHesitations,
+                showCheckpoints: $showCheckpoints
+            )
         }
     }
     
@@ -1273,19 +1325,25 @@ struct FullScreenCumulativeMapView: View {
 struct MapLayersSheet: View {
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
-    @Binding var layerToggles: MapLayerToggles
+    @Binding var showHeatMap: Bool
+    @Binding var showBoundary: Bool
+    @Binding var showLastWeekBoundary: Bool
+    @Binding var showSafeArea: Bool
+    @Binding var showPaths: Bool
+    @Binding var showHesitations: Bool
+    @Binding var showCheckpoints: Bool
     
     var body: some View {
         NavigationView {
             List {
                 Section {
-                    Toggle("Heat Map (Most Traveled Areas)", isOn: $layerToggles.showHeatMap)
-                    Toggle("Range Boundary", isOn: $layerToggles.showBoundary)
-                    Toggle("Last Week Range Boundary", isOn: $layerToggles.showLastWeekBoundary)
-                    Toggle("Safe Areas", isOn: $layerToggles.showSafeArea)
-                    Toggle("Journey Paths", isOn: $layerToggles.showPaths)
-                    Toggle("Hesitation Points", isOn: $layerToggles.showHesitations)
-                    Toggle("Feeling Checkpoints", isOn: $layerToggles.showCheckpoints)
+                    Toggle("Heat Map (Most Traveled Areas)", isOn: $showHeatMap)
+                    Toggle("Range Boundary", isOn: $showBoundary)
+                    Toggle("Last Week Range Boundary", isOn: $showLastWeekBoundary)
+                    Toggle("Safe Areas", isOn: $showSafeArea)
+                    Toggle("Journey Paths", isOn: $showPaths)
+                    Toggle("Hesitation Points", isOn: $showHesitations)
+                    Toggle("Feeling Checkpoints", isOn: $showCheckpoints)
                 } header: {
                     Text("Visualization Layers")
                 } footer: {

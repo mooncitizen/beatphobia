@@ -52,6 +52,7 @@ struct CalmingTool: Identifiable, Equatable {
 struct JourneyAgorahobiaView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var journalSyncService: JournalSyncService
+    @EnvironmentObject var journeySyncService: JourneySyncService
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("anxietyLevel") private var anxietyLevel: Double = 0
     @Binding var isTabBarVisible: Bool
@@ -393,7 +394,7 @@ struct JourneyAgorahobiaView: View {
                     // Current State Card - Enhanced Glass Morphism
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
-                            Image(systemName: "心.fill")
+                            Image(systemName: "heart.fill")
                                 .font(.system(size: 22))
                                 .foregroundColor(anxietyColorForLevel(anxietyLevel))
 

@@ -42,6 +42,7 @@ final class Journey: Object, ObjectKeyIdentifiable {
     @Persisted var startDate: Date = Date()
     @Persisted var isCompleted: Bool = false
     @Persisted var current: Bool = true
+    @Persisted var linkedPlanId: UUID? = nil // Reference to exposure plan if this is a planned journey
     
     // Sync metadata
     @Persisted var isSynced: Bool = false // Has been synced to cloud

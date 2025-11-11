@@ -21,6 +21,7 @@ struct LocationTrackerView: View {
     @EnvironmentObject var subscriptionManager: SubscriptionManager
     @EnvironmentObject var journeySyncService: JourneySyncService
     @ObservedResults(JourneyRealm.self) var allJourneys
+    @ObservedResults(ExposurePlan.self) var allPlans
     @Binding var isTabBarVisible: Bool
     
     @State private var showTracking = false
@@ -29,10 +30,17 @@ struct LocationTrackerView: View {
     @State private var journeyToDelete: JourneyRealm?
     @State private var showDeleteConfirmation = false
     @State private var isEditMode = false
+    @State private var selectedPlan: ExposurePlan?
+    @State private var planToStart: ExposurePlan? // Separate state for plan to start tracking with
+    @State private var newPlanToEdit: ExposurePlan? // New plan to edit in the plan editor
     @AppStorage("setting.miles") private var enableMiles = false
     
     var userJourneys: [JourneyRealm] {
         allJourneys.filter { !$0.isDeleted }.sorted(by: { $0.startTime > $1.startTime })
+    }
+    
+    var userPlans: [ExposurePlan] {
+        allPlans.filter { !$0.isDeleted }.sorted(by: { $0.createdAt > $1.createdAt })
     }
     
     var body: some View {
@@ -40,55 +48,56 @@ struct LocationTrackerView: View {
             AppConstants.backgroundColor(for: colorScheme)
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                // Quick stats (fixed at top)
-                if !userJourneys.isEmpty {
-                    statsSection
-                        .padding(.top, 8)
-                        .padding(.bottom, 16)
-                }
-                
-                // Start tracking button (fixed below stats)
-                Button(action: {
-                    showTracking = true
-                }) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24))
-                        
-                        Text(userJourneys.isEmpty ? "Start Your First Journey" : "Start New Journey")
-                            .font(.system(size: 18, weight: .bold))
-                            .fontDesign(.rounded)
+            // Scrollable content (full screen)
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Stats section (flush left, no padding)
+                    if !userJourneys.isEmpty {
+                        statsSection
+                            .padding(.top, 8)
+                            .padding(.leading, -20) // Negative padding to counteract parent padding
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 18)
-                    .background(
-                        LinearGradient(
-                            colors: [AppConstants.primaryColor, AppConstants.primaryColor.opacity(0.8)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .cornerRadius(16)
-                    .shadow(color: AppConstants.primaryColor.opacity(0.3), radius: 10, y: 5)
+                    
+                    // Journey history
+                    if !userJourneys.isEmpty {
+                        journeyHistorySection
+                    }
+                    
+                    // Bottom padding to account for floating button + tab bar
+                    Spacer(minLength: 120)
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 16)
-                
-                // Scrollable journey history
-                ScrollView {
-                    VStack(spacing: 24) {
-                        // Journey history
-                        if !userJourneys.isEmpty {
-                            journeyHistorySection
-                        } else {
-                            emptyStateView
+            }
+            .overlay(alignment: .bottom) {
+                // Start Journey button (floating above content, above tab bar)
+                VStack(spacing: 0) {
+                    Button(action: {
+                        showTracking = true
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 20))
+                            
+                            Text("Start Journey")
+                                .font(.system(size: 18, weight: .bold))
+                                .fontDesign(.rounded)
                         }
-                        
-                        Spacer(minLength: 100)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            LinearGradient(
+                                colors: [AppConstants.primaryColor, AppConstants.primaryColor.opacity(0.8)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .cornerRadius(16)
+                        .shadow(color: AppConstants.primaryColor.opacity(0.3), radius: 10, y: 5)
                     }
-                    .padding(.top, 8)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 100) // Padding to account for tab bar
                 }
             }
             .id(allJourneys.count) // Force refresh when journeys count changes
@@ -96,25 +105,64 @@ struct LocationTrackerView: View {
         .navigationTitle("Location Tracker")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .navigationBarLeading) {
                 if !userJourneys.isEmpty {
                     Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        withAnimation {
                             isEditMode.toggle()
                         }
                     }) {
-                        Image(systemName: isEditMode ? "checkmark.circle.fill" : "slider.horizontal.3")
-                            .font(.system(size: 18))
-                            .foregroundColor(isEditMode ? .green : AppConstants.primaryColor)
+                        Text(isEditMode ? "Done" : "Edit")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(AppConstants.primaryColor)
                     }
+                }
+            }
+            
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink(destination: ExposurePlansListView(isTabBarVisible: $isTabBarVisible)) {
+                    Text("Plans")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(AppConstants.primaryColor)
                 }
             }
         }
         .fullScreenCover(isPresented: $showTracking) {
             LocationTrackingView(isTabBarVisible: $isTabBarVisible, onJourneyCompleted: { journeyId in
                 selectedJourneyId = journeyId
-            })
+                // Clear all to prevent plan editor from showing
+                selectedPlan = nil
+                newPlanToEdit = nil
+                planToStart = nil
+            }, initialPlan: planToStart ?? selectedPlan)
             .environmentObject(journeySyncService)
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { selectedJourneyId != nil },
+            set: { if !$0 { selectedJourneyId = nil } }
+        )) {
+            if let journeyId = selectedJourneyId,
+               let realm = try? Realm(),
+               let journey = realm.object(ofType: JourneyRealm.self, forPrimaryKey: journeyId) {
+                NavigationStack {
+                    JourneyDetailView(journey: journey)
+                        .environmentObject(journeySyncService)
+                }
+            }
+        }
+        .sheet(item: Binding(
+            get: { showTracking ? nil : (newPlanToEdit ?? selectedPlan) },
+            set: { 
+                if newPlanToEdit != nil {
+                    newPlanToEdit = $0
+                } else {
+                    selectedPlan = $0
+                }
+            }
+        )) { plan in
+            NavigationStack {
+                PlanDetailView(plan: plan, isTabBarVisible: $isTabBarVisible, shouldAutoGenerate: false)
+            }
         }
         .onAppear {
             // Refresh when view appears to ensure new journeys are shown
@@ -124,6 +172,10 @@ struct LocationTrackerView: View {
         .onChange(of: showTracking) { oldValue, newValue in
             // When tracking view is dismissed, ensure we refresh
             if oldValue == true && newValue == false {
+                // Clear selectedPlan, newPlanToEdit, and planToStart when tracking view is dismissed to prevent plan editor from showing
+                selectedPlan = nil
+                newPlanToEdit = nil
+                planToStart = nil
                 // Small delay to allow Realm notifications to propagate
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     // Access allJourneys to trigger @ObservedResults update
@@ -152,17 +204,36 @@ struct LocationTrackerView: View {
     // MARK: - Stats Section
     private var statsSection: some View {
         VStack(spacing: 16) {
-            Text("Your Progress")
-                .font(.system(size: 18, weight: .bold))
-                .fontDesign(.serif)
-                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 20)
+            HStack {
+                Text("Your Stats")
+                    .font(.system(size: 20, weight: .bold, design: .serif))
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                    .padding(.leading, 20) // Add padding to title
+                
+                Spacer()
+            }
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    // Cumulative Map Card (first card)
-                    CumulativeMapCard(journeys: Array(userJourneys))
+                    // Cumulative Map Card (far left)
+                    CumulativeMapCard(journeys: userJourneys)
+                        .frame(width: 140, height: 140)
+                    
+                    LocationTrackerStatCard(
+                        title: "Total Time",
+                        value: formatTotalTime(),
+                        subtitle: "All journeys",
+                        icon: "clock.fill",
+                        color: AppConstants.primaryColor
+                    )
+                    
+                    LocationTrackerStatCard(
+                        title: "Avg Pace",
+                        value: calculateAveragePace(),
+                        subtitle: enableMiles ? "min/mi" : "min/km",
+                        icon: "gauge.high",
+                        color: .orange
+                    )
                     
                     LocationTrackerStatCard(
                         title: "Journeys",
@@ -171,32 +242,99 @@ struct LocationTrackerView: View {
                         icon: "map.fill",
                         color: .blue
                     )
-                    
-                    LocationTrackerStatCard(
-                        title: "Avg Pace",
-                        value: calculateAveragePace(),
-                        subtitle: enableMiles ? "per mi" : "per km",
-                        icon: "gauge.high",
-                        color: .orange
-                    )
-                    
-                    LocationTrackerStatCard(
-                        title: "Time",
-                        value: formatTotalTime(),
-                        subtitle: "Total time",
-                        icon: "clock.fill",
-                        color: .purple
-                    )
                 }
-                .padding(.horizontal, 20)
+                .padding(.leading, 20) // Only left padding to align with content
+                .padding(.trailing, 20) // Right padding for scroll
             }
         }
     }
     
+    // MARK: - Plans List Section
+    private var plansListSection: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("My Plans")
+                    .font(.system(size: 20, weight: .bold, design: .serif))
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                
+                Spacer()
+            }
+            
+            ForEach(userPlans) { plan in
+                HStack(spacing: 12) {
+                    Button(action: {
+                        selectedPlan = plan
+                    }) {
+                        PlanRowView(plan: plan)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Quick start button
+                    if !plan.targets.filter({ !$0.isDeleted }).isEmpty {
+                        Button(action: {
+                            // Start tracking directly with this plan
+                            // Use separate state to avoid triggering the sheet
+                            planToStart = plan
+                            selectedPlan = nil // Clear to prevent sheet from showing
+                            showTracking = true
+                        }) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(AppConstants.primaryColor)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Empty Plans View
+    private var emptyPlansView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            
+            Image(systemName: "map.fill")
+                .font(.system(size: 64))
+                .foregroundColor(AppConstants.primaryColor.opacity(0.6))
+            
+            Text("No plans yet")
+                .font(.system(size: 24, weight: .bold, design: .serif))
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+            
+            Text("Create your first exposure plan to get started")
+                .font(.system(size: 16))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            
+            NavigationLink(destination: ExposurePlansListView(isTabBarVisible: $isTabBarVisible)) {
+                Text("Create Plan")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        LinearGradient(
+                            colors: [AppConstants.primaryColor, AppConstants.primaryColor.opacity(0.8)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .cornerRadius(16)
+                    .shadow(color: AppConstants.primaryColor.opacity(0.3), radius: 10, y: 5)
+            }
+            .padding(.horizontal, 40)
+            .padding(.top, 8)
+            
+            Spacer()
+        }
+    }
     
     // MARK: - Journey History
     private var journeyHistorySection: some View {
-        VStack(spacing: 12) {
+        let realm = try! Realm()
+        
+        return VStack(spacing: 12) {
             HStack {
                 Text("Journey History")
                     .font(.system(size: 18, weight: .bold))
@@ -212,7 +350,6 @@ struct LocationTrackerView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
             
             ForEach(groupedJourneys.keys.sorted(by: >), id: \.self) { date in
                 VStack(spacing: 8) {
@@ -227,7 +364,6 @@ struct LocationTrackerView: View {
                             .fill(AppConstants.secondaryTextColor(for: colorScheme).opacity(0.3))
                             .frame(height: 1)
                     }
-                    .padding(.horizontal, 20)
                     .padding(.top, date == groupedJourneys.keys.sorted(by: >).first ? 0 : 12)
                     
                     // Journeys for this date
@@ -235,7 +371,7 @@ struct LocationTrackerView: View {
                         ForEach(journeys, id: \.id) { journey in
                             HStack(spacing: 12) {
                                 NavigationLink(destination: JourneyDetailView(journey: journey)) {
-                                    LocationJourneyCard(journey: journey, enableMiles: enableMiles)
+                                    LocationJourneyCard(journey: journey, enableMiles: enableMiles, realm: realm)
                                 }
                                 .disabled(isEditMode)
                                 
@@ -256,7 +392,6 @@ struct LocationTrackerView: View {
                                     .transition(.scale.combined(with: .opacity))
                                 }
                             }
-                            .padding(.horizontal, 20)
                         }
                     }
                 }
@@ -265,6 +400,7 @@ struct LocationTrackerView: View {
             // Upgrade prompt for free users
             if !subscriptionManager.isPro && userJourneys.count > 5 {
                 upgradePrompt
+                    .padding(.top, 8)
             }
         }
     }
@@ -293,8 +429,6 @@ struct LocationTrackerView: View {
             .background(AppConstants.cardBackgroundColor(for: colorScheme))
             .cornerRadius(12)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
     }
     
     // Group journeys by date
@@ -386,6 +520,46 @@ struct LocationTrackerView: View {
         return String(format: "%dm", minutes)
     }
     
+    // MARK: - Create New Plan
+    private func createNewPlan() {
+        Task {
+            await createNewPlanAsync()
+        }
+    }
+    
+    private func createNewPlanAsync() async {
+        let realm = await MainActor.run {
+            try? Realm()
+        }
+        guard let realm = realm else { return }
+        
+        // Create new plan in Realm
+        let newPlan = ExposurePlan()
+        newPlan.name = ""
+        newPlan.createdAt = Date()
+        newPlan.updatedAt = Date()
+        newPlan.needsSync = true
+        newPlan.isSynced = false
+        
+        let planToShow = await MainActor.run {
+            var result: ExposurePlan?
+            try! realm.write {
+                realm.add(newPlan)
+                // Get the managed version from Realm
+                result = realm.object(ofType: ExposurePlan.self, forPrimaryKey: newPlan.id)
+            }
+            return result
+        }
+        
+        // Now we can observe it (use the managed version from Realm)
+        if let plan = planToShow {
+            await MainActor.run {
+                newPlanToEdit = plan
+                selectedPlan = nil // Clear selectedPlan to ensure newPlanToEdit is used
+            }
+        }
+    }
+    
     // MARK: - Delete Journey
     private func deleteJourney(_ journey: JourneyRealm) {
         let realm = try! Realm()
@@ -431,11 +605,22 @@ struct LocationJourneyCard: View {
     @Environment(\.colorScheme) var colorScheme
     let journey: JourneyRealm
     let enableMiles: Bool
+    let realm: Realm
+    
+    // Get the linked plan if this journey is part of a plan
+    private var linkedPlan: ExposurePlan? {
+        guard let journeyId = UUID(uuidString: journey.id),
+              let journeyMeta = realm.object(ofType: Journey.self, forPrimaryKey: journeyId),
+              let planId = journeyMeta.linkedPlanId else {
+            return nil
+        }
+        return realm.object(ofType: ExposurePlan.self, forPrimaryKey: planId)
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(journey.startTime.formatted(date: .abbreviated, time: .omitted))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
@@ -443,6 +628,23 @@ struct LocationJourneyCard: View {
                     Text(journey.startTime.formatted(date: .omitted, time: .shortened))
                         .font(.system(size: 13))
                         .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                    
+                    // Show plan name if this journey is part of a plan - make it more prominent
+                    if let plan = linkedPlan {
+                        HStack(spacing: 6) {
+                            Image(systemName: "map.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppConstants.primaryColor)
+                            Text(plan.name)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(AppConstants.primaryColor)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(AppConstants.primaryColor.opacity(0.15))
+                        .cornerRadius(8)
+                        .padding(.top, 4)
+                    }
                 }
                 
                 Spacer()
@@ -473,6 +675,14 @@ struct LocationJourneyCard: View {
                 
                 if journey.duration > 0 && journey.distance > 0 {
                     DetailPill(icon: "gauge.high", text: calculatePace())
+                }
+                
+                // Show plan target count if this journey is part of a plan
+                if let plan = linkedPlan {
+                    let targetCount = plan.targets.filter { !$0.isDeleted }.count
+                    if targetCount > 0 {
+                        DetailPill(icon: "mappin.circle.fill", text: "\(targetCount) targets")
+                    }
                 }
             }
         }
@@ -559,9 +769,11 @@ struct LocationTrackingView: View {
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var journeySyncService: JourneySyncService
     @StateObject private var locationManager = LocationTrackingManager()
+    @ObservedResults(ExposurePlan.self) var allPlans
     @State private var showMap = false // Hide map by default
     @Binding var isTabBarVisible: Bool
     var onJourneyCompleted: ((String) -> Void)?
+    var initialPlan: ExposurePlan? = nil
     @AppStorage("setting.miles") private var enableMiles = false
     @State private var showEndJourneyAlert = false
     @State private var showJourneyResults = false
@@ -571,8 +783,13 @@ struct LocationTrackingView: View {
     @State private var isPaused = false
     @State private var countdownTimer: Timer?
     @State private var recenterToken = UUID()
+    @State private var selectedPlan: ExposurePlan?
     
     private let countdownHaptic = UIImpactFeedbackGenerator(style: .medium)
+    
+    var userPlans: [ExposurePlan] {
+        allPlans.filter { !$0.isDeleted }.sorted(by: { $0.createdAt > $1.createdAt })
+    }
     
     var body: some View {
         ZStack {
@@ -591,13 +808,32 @@ struct LocationTrackingView: View {
                 // Header
                 headerView
                 
-                // Info view (when not tracking) - scrollable
+                // Plan Overlay (when plan is active)
+                if let plan = locationManager.activePlan, locationManager.isTracking {
+                    planOverlayView(plan: plan)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                }
+                
+                // Info and plans list (when not tracking)
                 if !locationManager.isTracking {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 0) {
-                            infoView
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            // Tracking info
+                            trackingInfoView
                                 .padding(.horizontal, 20)
                                 .padding(.top, 20)
+                            
+                            // Plans list
+                            if !userPlans.isEmpty {
+                                plansListSection
+                                    .padding(.horizontal, 20)
+                            } else {
+                                emptyPlansView
+                                    .padding(.horizontal, 20)
+                            }
+                            
+                            Spacer(minLength: 100)
                         }
                     }
                 }
@@ -651,6 +887,9 @@ struct LocationTrackingView: View {
                         // Call the completion handler if provided
                         onJourneyCompleted?(journeyId)
                         
+                        // Clear selectedPlan to prevent plan editor from showing
+                        selectedPlan = nil
+                        
                         // Delay to ensure Realm notification propagates and view updates
                         // Increased delay to allow updateSafeAreaPoints to complete
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -666,9 +905,37 @@ struct LocationTrackingView: View {
                 }
             }
         }
+        .sheet(item: $selectedPlan) { plan in
+            NavigationStack {
+                PlanDetailView(plan: plan, isTabBarVisible: $isTabBarVisible, shouldAutoGenerate: false)
+            }
+        }
         .onAppear {
             locationManager.requestPermission()
             locationManager.useMiles = enableMiles
+            // If initialPlan is provided, set it as the active plan and start countdown immediately
+            // Thaw the plan if it's frozen (from Realm)
+            if let plan = initialPlan {
+                let thawedPlan: ExposurePlan
+                if plan.isFrozen {
+                    if let realm = try? Realm() {
+                        thawedPlan = realm.object(ofType: ExposurePlan.self, forPrimaryKey: plan.id) ?? plan
+                    } else {
+                        thawedPlan = plan
+                    }
+                } else {
+                    thawedPlan = plan
+                }
+                locationManager.activePlan = thawedPlan
+                print("📍 Set active plan: \(thawedPlan.name) with \(thawedPlan.targets.filter { !$0.isDeleted }.count) targets")
+                
+                // If plan is set, start countdown immediately to begin tracking
+                if !thawedPlan.targets.filter({ !$0.isDeleted }).isEmpty {
+                    countdown = 3
+                    showCountdown = true
+                    startCountdown()
+                }
+            }
             // Hide tab bar when view appears
             withAnimation(.easeInOut(duration: 0.2)) {
                 isTabBarVisible = false
@@ -779,7 +1046,7 @@ struct LocationTrackingView: View {
                     timer.invalidate()
                     countdownTimer = nil
                     showCountdown = false
-                    locationManager.startTracking()
+                    locationManager.startTracking(with: initialPlan)
                 }
             }
         }
@@ -803,6 +1070,182 @@ struct LocationTrackingView: View {
     
     private func togglePause() {
         isPaused.toggle()
+    }
+    
+    // MARK: - Plan Overlay View
+    
+    @State private var showSkipWaitAlert = false
+    
+    private func planOverlayView(plan: ExposurePlan) -> some View {
+        let targets = plan.targets.filter { !$0.isDeleted }.sorted(by: { $0.orderIndex < $1.orderIndex })
+        let currentTarget = locationManager.currentTargetIndex < targets.count ? targets[locationManager.currentTargetIndex] : nil
+        let nextTarget = locationManager.currentTargetIndex + 1 < targets.count ? targets[locationManager.currentTargetIndex + 1] : nil
+        
+        return VStack(spacing: 12) {
+            // Current Target Status
+            if let target = currentTarget {
+                if locationManager.isWaitingAtTarget {
+                    // Waiting at target
+                    VStack(spacing: 8) {
+                        HStack {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            
+                            Text("Reached: \(target.name)! Great job.")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                            
+                            Spacer()
+                        }
+                        
+                        Text("Now, let's wait.")
+                            .font(.system(size: 14))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        
+                        // Wait Timer
+                        HStack(spacing: 12) {
+                            Text("Wait Timer:")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                            
+                            Text(formatWaitTimeShort(Int(locationManager.waitTimerRemaining)))
+                                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                .foregroundColor(AppConstants.primaryColor)
+                            
+                            Spacer()
+                            
+                            Button(action: {
+                                showSkipWaitAlert = true
+                            }) {
+                                Text("Skip")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.red)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(Color.red.opacity(0.1))
+                                    .cornerRadius(8)
+                            }
+                        }
+                        
+                        // Prompt for tools
+                        HStack(spacing: 8) {
+                            Image(systemName: "heart.text.square.fill")
+                                .foregroundColor(AppConstants.primaryColor)
+                            
+                            Text("Feeling anxious? Use a calming tool now.")
+                                .font(.system(size: 13))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        }
+                        .padding(8)
+                        .background(AppConstants.primaryColor.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                } else {
+                    // Heading to target
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Current Target:")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                            
+                            Spacer()
+                        }
+                        
+                        HStack {
+                            Text(target.name)
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                            
+                            Spacer()
+                            
+                            // Calculate distance to target
+                            if let lastLocation = locationManager.trackingPoints.last {
+                                let targetLocation = CLLocation(latitude: target.latitude, longitude: target.longitude)
+                                let distance = lastLocation.distance(from: targetLocation)
+                                let distanceString = enableMiles
+                                    ? String(format: "%.2f mi", distance / 1609.34)
+                                    : String(format: "%.2f km", distance / 1000.0)
+                                
+                                Text("(\(distanceString) ahead)")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                            }
+                        }
+                        
+                    }
+                    
+                    // Next Target (smaller, underneath current target)
+                    if let next = nextTarget, !locationManager.isWaitingAtTarget {
+                        HStack(spacing: 8) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(AppConstants.primaryColor)
+                            
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Next Target")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                                
+                                Text(next.name)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                                    .lineLimit(1)
+                            }
+                            
+                            Spacer()
+                            
+                            // Calculate distance to next target
+                            if let lastLocation = locationManager.trackingPoints.last {
+                                let nextTargetLocation = CLLocation(latitude: next.latitude, longitude: next.longitude)
+                                let distance = lastLocation.distance(from: nextTargetLocation)
+                                let distanceString = enableMiles
+                                    ? String(format: "%.2f mi", distance / 1609.34)
+                                    : String(format: "%.2f km", distance / 1000.0)
+                                
+                                Text(distanceString)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(AppConstants.primaryColor)
+                            }
+                        }
+                        .padding(10)
+                        .background(AppConstants.cardBackgroundColor(for: colorScheme).opacity(0.7))
+                        .cornerRadius(10)
+                    }
+                }
+            }
+            
+            // Plan Completed
+            if locationManager.planCompleted {
+                VStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(.green)
+                    
+                    Text("Plan Complete!")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                    
+                    Text("Congratulations! You've completed all targets.")
+                        .font(.system(size: 14))
+                        .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(20)
+            }
+        }
+        .padding(16)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+        .cornerRadius(16)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
+        .alert("Skip Wait Timer?", isPresented: $showSkipWaitAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Skip", role: .destructive) {
+                locationManager.skipWaitTimer()
+            }
+        } message: {
+            Text("Are you sure you want to skip the wait timer? This will advance to the next target.")
+        }
     }
     
     // MARK: - Info View
@@ -997,6 +1440,11 @@ struct LocationTrackingView: View {
     // MARK: - Stats View
     private var statsView: some View {
         VStack(spacing: 16) {
+            // Next Target (if plan is active)
+            if let plan = locationManager.activePlan {
+                nextTargetView(plan: plan)
+            }
+            
             // Time and Distance Row
             HStack(spacing: 12) {
                 statCard(
@@ -1036,6 +1484,74 @@ struct LocationTrackingView: View {
                 recentEmotionsView
             }
         }
+    }
+    
+    // MARK: - Next Target View
+    private func nextTargetView(plan: ExposurePlan) -> some View {
+        let targets = plan.targets.filter { !$0.isDeleted }.sorted(by: { $0.orderIndex < $1.orderIndex })
+        let currentTarget = locationManager.currentTargetIndex < targets.count ? targets[locationManager.currentTargetIndex] : nil
+        let nextTarget = locationManager.currentTargetIndex + 1 < targets.count ? targets[locationManager.currentTargetIndex + 1] : nil
+        
+        // Show current target if waiting, otherwise show next target
+        let targetToShow = locationManager.isWaitingAtTarget ? currentTarget : (nextTarget ?? currentTarget)
+        
+        guard let target = targetToShow else { return AnyView(EmptyView()) }
+        
+        // Calculate distance to target
+        var distanceString = ""
+        if let lastLocation = locationManager.trackingPoints.last {
+            let targetLocation = CLLocation(latitude: target.latitude, longitude: target.longitude)
+            let distance = lastLocation.distance(from: targetLocation)
+            
+            if enableMiles {
+                if distance < 160.934 { // Less than 0.1 miles
+                    let feet = distance * 3.28084
+                    distanceString = String(format: "%.0f ft", feet)
+                } else {
+                    let miles = distance / 1609.34
+                    distanceString = String(format: "%.2f mi", miles)
+                }
+            } else {
+                if distance < 100 {
+                    distanceString = String(format: "%.0f m", distance)
+                } else {
+                    let km = distance / 1000.0
+                    distanceString = String(format: "%.2f km", km)
+                }
+            }
+        }
+        
+        return AnyView(
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Image(systemName: locationManager.isWaitingAtTarget ? "checkmark.circle.fill" : "mappin.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(locationManager.isWaitingAtTarget ? .green : AppConstants.primaryColor)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(locationManager.isWaitingAtTarget ? "Current Target" : "Next Target")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                        
+                        Text(target.name)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                    }
+                    
+                    Spacer()
+                    
+                    if !distanceString.isEmpty && !locationManager.isWaitingAtTarget {
+                        Text(distanceString)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(AppConstants.primaryColor)
+                    }
+                }
+            }
+            .padding(16)
+            .background(AppConstants.cardBackgroundColor(for: colorScheme))
+            .cornerRadius(16)
+            .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 3)
+        )
     }
     
     private func statCard(title: String, value: String, icon: String, color: Color) -> some View {
@@ -1174,36 +1690,147 @@ struct LocationTrackingView: View {
         }
     }
     
+    // MARK: - Tracking Info View
+    private var trackingInfoView: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Image(systemName: "map.circle.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(AppConstants.primaryColor)
+                
+                Text("Track Your Journey")
+                    .font(.system(size: 20, weight: .bold, design: .serif))
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                
+                Spacer()
+            }
+            
+            Text("Track your movements and emotions as you explore outside your safe space. Select a plan below to follow a guided exposure journey, or start a free journey to track your path.")
+                .font(.system(size: 14))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                .multilineTextAlignment(.leading)
+        }
+        .padding(16)
+        .background(AppConstants.cardBackgroundColor(for: colorScheme))
+        .cornerRadius(16)
+        .shadow(color: AppConstants.shadowColor(for: colorScheme), radius: 8, y: 4)
+    }
+    
+    // MARK: - Plans List Section (for tracking view)
+    private var plansListSection: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("My Plans")
+                    .font(.system(size: 20, weight: .bold, design: .serif))
+                    .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+                
+                Spacer()
+            }
+            
+            ForEach(userPlans) { plan in
+                HStack(spacing: 12) {
+                    Button(action: {
+                        selectedPlan = plan
+                    }) {
+                        PlanRowView(plan: plan)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    
+                    // Quick start button
+                    if !plan.targets.filter({ !$0.isDeleted }).isEmpty {
+                        Button(action: {
+                            locationManager.activePlan = plan
+                            countdown = 3
+                            showCountdown = true
+                            startCountdown()
+                        }) {
+                            Image(systemName: "play.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(AppConstants.primaryColor)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Empty Plans View (for tracking view)
+    private var emptyPlansView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "map.fill")
+                .font(.system(size: 48))
+                .foregroundColor(AppConstants.primaryColor.opacity(0.6))
+            
+            Text("No plans yet")
+                .font(.system(size: 18, weight: .bold, design: .serif))
+                .foregroundColor(AppConstants.primaryTextColor(for: colorScheme))
+            
+            Text("Create your first exposure plan to get started")
+                .font(.system(size: 14))
+                .foregroundColor(AppConstants.secondaryTextColor(for: colorScheme))
+                .multilineTextAlignment(.center)
+            
+            NavigationLink(destination: ExposurePlansListView(isTabBarVisible: $isTabBarVisible)) {
+                Text("Create Plan")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        LinearGradient(
+                            colors: [AppConstants.primaryColor, AppConstants.primaryColor.opacity(0.8)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .cornerRadius(12)
+                    .shadow(color: AppConstants.primaryColor.opacity(0.3), radius: 8, y: 4)
+            }
+        }
+        .padding(.vertical, 20)
+    }
+    
     // MARK: - Controls
     private var controlsView: some View {
         VStack(spacing: 12) {
             if !locationManager.isTracking {
-                // Start tracking button
-                Button(action: {
-                    countdown = 3
-                    showCountdown = true
-                    startCountdown()
-                }) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "location.fill")
-                            .font(.system(size: 20, weight: .semibold))
-                        
-                        Text("Start Tracking")
-                            .font(.system(size: 18, weight: .semibold))
-                            .fontDesign(.serif)
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(
-                        LinearGradient(
-                            colors: [Color.green, Color.green.opacity(0.8)],
-                            startPoint: .leading,
-                            endPoint: .trailing
+                // Start tracking button - if plan is set, start immediately, otherwise show button
+                if let plan = locationManager.activePlan, !plan.targets.filter({ !$0.isDeleted }).isEmpty {
+                    // Plan is set, start countdown immediately
+                    EmptyView()
+                        .onAppear {
+                            countdown = 3
+                            showCountdown = true
+                            startCountdown()
+                        }
+                } else {
+                    // No plan, show start button
+                    Button(action: {
+                        countdown = 3
+                        showCountdown = true
+                        startCountdown()
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "location.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                            
+                            Text("Start Journey")
+                                .font(.system(size: 18, weight: .semibold))
+                                .fontDesign(.serif)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(
+                            LinearGradient(
+                                colors: [Color.green, Color.green.opacity(0.8)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
                         )
-                    )
-                    .cornerRadius(28)
-                    .shadow(color: Color.green.opacity(0.3), radius: 10, y: 5)
+                        .cornerRadius(28)
+                        .shadow(color: Color.green.opacity(0.3), radius: 10, y: 5)
+                    }
                 }
             } else {
                 // Stop tracking button
@@ -1261,12 +1888,115 @@ struct MapView: UIViewRepresentable {
                 let needsUpdate = existingPolylines.isEmpty || existingPolylines.first?.pointCount != coordinates.count
                 
                 if needsUpdate {
-                    // Remove only polylines, keep everything else
-                    mapView.removeOverlays(existingPolylines)
+                    // Remove only tracking polylines, keep route polylines
+                    let trackingPolylines = existingPolylines.filter { polyline in
+                        // Check if this is a tracking polyline (not a route polyline)
+                        // Route polylines will have a different identifier or we can track them separately
+                        return true // For now, remove all and re-add
+                    }
+                    mapView.removeOverlays(trackingPolylines)
                     
-                    // Add new polyline
+                    // Add new polyline for tracking path
                     let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
                     mapView.addOverlay(polyline)
+                }
+            }
+            
+            // Update plan target annotations and route (only when plan or target index changes)
+            if let plan = locationManager.activePlan {
+                let targets = plan.targets.filter { !$0.isDeleted }.sorted(by: { $0.orderIndex < $1.orderIndex })
+                let currentTargetIndex = locationManager.currentTargetIndex
+                let planId = plan.id
+                
+                // Check if plan or target index has changed
+                let planChanged = context.coordinator.lastPlanId != planId
+                let targetIndexChanged = context.coordinator.lastTargetIndex != currentTargetIndex
+                
+                // Only update annotations if plan changed or target index changed
+                if planChanged || !context.coordinator.planAnnotationsAdded {
+                    print("🗺️ Updating map with plan: \(plan.name), \(targets.count) targets, current index: \(currentTargetIndex)")
+                    
+                    // Remove old target annotations
+                    let existingTargetAnnotations = mapView.annotations.compactMap { $0 as? PlanTargetAnnotation }
+                    mapView.removeAnnotations(existingTargetAnnotations)
+                    
+                    // Add target annotations
+                    for (index, target) in targets.enumerated() {
+                        let annotation = PlanTargetAnnotation(
+                            target: target,
+                            index: index,
+                            isCurrent: index == currentTargetIndex,
+                            isCompleted: index < currentTargetIndex
+                        )
+                        mapView.addAnnotation(annotation)
+                        print("📍 Added target annotation: \(target.name) at \(target.latitude), \(target.longitude)")
+                    }
+                    
+                    context.coordinator.planAnnotationsAdded = true
+                    context.coordinator.lastPlanId = planId
+                } else if targetIndexChanged {
+                    // Only update annotation states if target index changed
+                    let existingTargetAnnotations = mapView.annotations.compactMap { $0 as? PlanTargetAnnotation }
+                    for annotation in existingTargetAnnotations {
+                        annotation.isCurrent = (annotation.index == currentTargetIndex)
+                        annotation.isCompleted = (annotation.index < currentTargetIndex)
+                    }
+                    // Force annotation view refresh by removing and re-adding
+                    mapView.removeAnnotations(existingTargetAnnotations)
+                    mapView.addAnnotations(existingTargetAnnotations)
+                }
+                
+                // Update route to current target (only if target index changed or route doesn't exist)
+                if currentTargetIndex < targets.count,
+                   let lastLocation = locationManager.trackingPoints.last {
+                    let currentTarget = targets[currentTargetIndex]
+                    let targetCoordinate = CLLocationCoordinate2D(latitude: currentTarget.latitude, longitude: currentTarget.longitude)
+                    
+                    // Only update route if target changed or route doesn't exist
+                    let routeNeedsUpdate = targetIndexChanged ||
+                        context.coordinator.lastRouteTo == nil ||
+                        (context.coordinator.lastRouteTo?.latitude != targetCoordinate.latitude ||
+                         context.coordinator.lastRouteTo?.longitude != targetCoordinate.longitude)
+                    
+                    if routeNeedsUpdate && !locationManager.isWaitingAtTarget {
+                        print("🗺️ Updating route to target \(currentTargetIndex): \(currentTarget.name)")
+                        
+                        // Update route using coordinator
+                        context.coordinator.updateRoute(
+                            from: lastLocation.coordinate,
+                            to: targetCoordinate,
+                            mapView: mapView
+                        )
+                        
+                        context.coordinator.lastRouteFrom = lastLocation.coordinate
+                        context.coordinator.lastRouteTo = targetCoordinate
+                    }
+                } else {
+                    // Remove route if waiting at target or no current target
+                    if let routePoly = context.coordinator.routePolyline {
+                        mapView.removeOverlay(routePoly)
+                        context.coordinator.routePolyline = nil
+                        context.coordinator.lastRouteTo = nil
+                    }
+                }
+                
+                // Update last target index
+                context.coordinator.lastTargetIndex = currentTargetIndex
+            } else {
+                // Plan removed - clean up
+                if context.coordinator.planAnnotationsAdded {
+                    let existingTargetAnnotations = mapView.annotations.compactMap { $0 as? PlanTargetAnnotation }
+                    mapView.removeAnnotations(existingTargetAnnotations)
+                    context.coordinator.planAnnotationsAdded = false
+                    context.coordinator.lastPlanId = nil
+                    context.coordinator.lastTargetIndex = -1
+                }
+                
+                // Remove route if no plan
+                if let routePoly = context.coordinator.routePolyline {
+                    mapView.removeOverlay(routePoly)
+                    context.coordinator.routePolyline = nil
+                    context.coordinator.lastRouteTo = nil
                 }
             }
             
@@ -1310,11 +2040,53 @@ struct MapView: UIViewRepresentable {
     
     class Coordinator: NSObject, MKMapViewDelegate {
         var lastRecenterToken: UUID?
+        var routePolyline: MKPolyline?
+        
+        // Track plan state to avoid unnecessary updates
+        var lastPlanId: UUID?
+        var lastTargetIndex: Int = -1
+        var lastRouteFrom: CLLocationCoordinate2D?
+        var lastRouteTo: CLLocationCoordinate2D?
+        var planAnnotationsAdded: Bool = false
+        
+        func updateRoute(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D, mapView: MKMapView) {
+            // Remove old route polyline
+            if let oldRoute = routePolyline {
+                mapView.removeOverlay(oldRoute)
+            }
+            
+            // Request directions
+            let request = MKDirections.Request()
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: from))
+            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: to))
+            request.transportType = .walking
+            
+            let directions = MKDirections(request: request)
+            directions.calculate { [weak self] response, error in
+                guard let self = self, let route = response?.routes.first else { return }
+                
+                DispatchQueue.main.async {
+                    self.routePolyline = route.polyline
+                    mapView.addOverlay(route.polyline)
+                }
+            }
+        }
+        
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if let polyline = overlay as? MKPolyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
-                renderer.strokeColor = UIColor.systemBlue
-                renderer.lineWidth = 4
+                
+                // Check if this is the route polyline (to target) or tracking path
+                if let routePoly = routePolyline, routePoly === polyline {
+                    // Route to target - mustard yellow
+                    renderer.strokeColor = UIColor(red: 1.0, green: 0.84, blue: 0.0, alpha: 1.0) // Mustard yellow
+                    renderer.lineWidth = 5
+                    renderer.lineDashPattern = [5, 5] // Dashed line for route
+                } else {
+                    // Tracking path - regular yellow
+                    renderer.strokeColor = UIColor.systemYellow
+                    renderer.lineWidth = 4
+                }
                 return renderer
             }
             return MKOverlayRenderer(overlay: overlay)
@@ -1360,6 +2132,89 @@ struct MapView: UIViewRepresentable {
                 return annotationView
             }
             
+            // Handle plan target annotations
+            if let targetAnnotation = annotation as? PlanTargetAnnotation {
+                let identifier = "PlanTargetAnnotation"
+                var annotationView = mapView.dequeueReusableAnnotationView(withIdentifier: identifier)
+                
+                if annotationView == nil {
+                    annotationView = MKAnnotationView(annotation: annotation, reuseIdentifier: identifier)
+                    annotationView?.canShowCallout = true
+                } else {
+                    annotationView?.annotation = annotation
+                }
+                
+                // Create custom pin based on state
+                let pinSize: CGFloat = 40
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: pinSize, height: pinSize))
+                let pinImage = renderer.image { context in
+                    if targetAnnotation.isCompleted {
+                        // Green checkmark for completed
+                        UIColor.systemGreen.setFill()
+                        let circle = UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: pinSize, height: pinSize))
+                        circle.fill()
+                        
+                        UIColor.white.setFill()
+                        let checkmark = UIBezierPath()
+                        checkmark.move(to: CGPoint(x: pinSize * 0.3, y: pinSize * 0.5))
+                        checkmark.addLine(to: CGPoint(x: pinSize * 0.45, y: pinSize * 0.65))
+                        checkmark.addLine(to: CGPoint(x: pinSize * 0.7, y: pinSize * 0.35))
+                        checkmark.lineWidth = 3
+                        checkmark.stroke()
+                    } else if targetAnnotation.isCurrent {
+                        // Blue pin for current target
+                        UIColor.systemBlue.setFill()
+                        let circle = UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: pinSize, height: pinSize))
+                        circle.fill()
+                        
+                        UIColor.white.setFill()
+                        let number = "\(targetAnnotation.index + 1)"
+                        let font = UIFont.boldSystemFont(ofSize: 18)
+                        let attributes: [NSAttributedString.Key: Any] = [
+                            .font: font,
+                            .foregroundColor: UIColor.white
+                        ]
+                        let textSize = number.size(withAttributes: attributes)
+                        let textRect = CGRect(
+                            x: (pinSize - textSize.width) / 2,
+                            y: (pinSize - textSize.height) / 2,
+                            width: textSize.width,
+                            height: textSize.height
+                        )
+                        number.draw(in: textRect, withAttributes: attributes)
+                    } else {
+                        // Gray pin for future targets
+                        UIColor.systemGray.setFill()
+                        let circle = UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: pinSize, height: pinSize))
+                        circle.fill()
+                        
+                        UIColor.white.setFill()
+                        let number = "\(targetAnnotation.index + 1)"
+                        let font = UIFont.boldSystemFont(ofSize: 16)
+                        let attributes: [NSAttributedString.Key: Any] = [
+                            .font: font,
+                            .foregroundColor: UIColor.white
+                        ]
+                        let textSize = number.size(withAttributes: attributes)
+                        let textRect = CGRect(
+                            x: (pinSize - textSize.width) / 2,
+                            y: (pinSize - textSize.height) / 2,
+                            width: textSize.width,
+                            height: textSize.height
+                        )
+                        number.draw(in: textRect, withAttributes: attributes)
+                    }
+                    
+                    UIColor.white.setStroke()
+                    let border = UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: pinSize, height: pinSize))
+                    border.lineWidth = 2
+                    border.stroke()
+                }
+                
+                annotationView?.image = pinImage
+                return annotationView
+            }
+            
             // Handle feeling checkpoint annotations
             if let feelingAnnotation = annotation as? FeelingAnnotation {
                 let identifier = "FeelingAnnotation"
@@ -1394,6 +2249,30 @@ struct MapView: UIViewRepresentable {
     }
 }
 
+// MARK: - Plan Target Annotation
+class PlanTargetAnnotation: NSObject, MKAnnotation {
+    let target: ExposureTarget
+    let index: Int
+    var isCurrent: Bool
+    var isCompleted: Bool
+    
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: target.latitude, longitude: target.longitude)
+    }
+    
+    var title: String? {
+        target.name.isEmpty ? "Target \(index + 1)" : target.name
+    }
+    
+    init(target: ExposureTarget, index: Int, isCurrent: Bool, isCompleted: Bool) {
+        self.target = target
+        self.index = index
+        self.isCurrent = isCurrent
+        self.isCompleted = isCompleted
+        super.init()
+    }
+}
+
 // MARK: - Location Tracking Manager
 class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var isTracking = false
@@ -1408,16 +2287,25 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
     @Published var averagePace: String = "0:00"
     @Published var permissionStatus: CLAuthorizationStatus = .notDetermined
     
+    // Plan state management
+    @Published var activePlan: ExposurePlan?
+    @Published var currentTargetIndex: Int = 0
+    @Published var isWaitingAtTarget: Bool = false
+    @Published var waitTimerRemaining: TimeInterval = 0
+    @Published var planCompleted: Bool = false
+    
     var useMiles: Bool = false // Set from view based on user preference
     
     private let locationManager = CLLocationManager()
     private var startTime: Date?
     private var timer: Timer?
     private var saveTimer: Timer?
+    private var waitTimer: Timer?
     private var distanceMeters: Double = 0
     var currentJourneyId: UUID? // Made public to access after journey ends
     private let geocoder = CLGeocoder()
     private var currentLocationName: String = "Finding location..."
+    private var currentGeofence: CLCircularRegion?
     
     // Smoothing buffer for GPS coordinates
     private var smoothingBuffer: [CLLocation] = []
@@ -1454,7 +2342,7 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         locationManager.requestAlwaysAuthorization()
     }
     
-    func startTracking() {
+    func startTracking(with plan: ExposurePlan? = nil) {
         if hapticsEnabled {
             mediumHaptic.impactOccurred(intensity: 0.8)
         }
@@ -1475,6 +2363,40 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         averagePace = "0:00"
         startTime = Date()
         
+        // Initialize plan state
+        // Thaw the plan if it's frozen (from Realm)
+        if let plan = plan {
+            let thawedPlan: ExposurePlan
+            if plan.isFrozen {
+                if let realm = try? Realm() {
+                    thawedPlan = realm.object(ofType: ExposurePlan.self, forPrimaryKey: plan.id) ?? plan
+                } else {
+                    thawedPlan = plan
+                }
+            } else {
+                thawedPlan = plan
+            }
+            activePlan = thawedPlan
+            currentTargetIndex = 0
+            isWaitingAtTarget = false
+            waitTimerRemaining = 0
+            planCompleted = false
+            currentGeofence = nil
+            
+            // Setup geofence for first target if plan exists
+            let targets = thawedPlan.targets.filter { !$0.isDeleted }.sorted(by: { $0.orderIndex < $1.orderIndex })
+            if !targets.isEmpty {
+                setupGeofenceForTarget(targets[0])
+            }
+        } else {
+            activePlan = nil
+            currentTargetIndex = 0
+            isWaitingAtTarget = false
+            waitTimerRemaining = 0
+            planCompleted = false
+            currentGeofence = nil
+        }
+        
         // Find or create the current Journey object
         let realm = try? Realm()
         let currentJourney = realm?.objects(Journey.self).filter("current == true").first
@@ -1482,6 +2404,16 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         if let existingJourney = currentJourney {
             // Use existing journey's ID
             currentJourneyId = existingJourney.id
+            
+            // Update linkedPlanId if a plan is provided
+            if let plan = plan {
+                try? realm?.write {
+                    existingJourney.linkedPlanId = plan.id
+                    existingJourney.needsSync = true
+                    existingJourney.isSynced = false
+                    existingJourney.updatedAt = Date()
+                }
+            }
         } else {
             // Create new Journey if none exists
             let newJourney = Journey()
@@ -1489,6 +2421,11 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
             newJourney.startDate = Date()
             newJourney.current = true
             newJourney.isCompleted = false
+            
+            // Set linkedPlanId if a plan is provided
+            if let plan = plan {
+                newJourney.linkedPlanId = plan.id
+            }
             
             // saveJourney already handles the write transaction internally
             realm?.saveJourney(newJourney, needsSync: true)
@@ -1527,6 +2464,21 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
         timer = nil
         saveTimer?.invalidate()
         saveTimer = nil
+        waitTimer?.invalidate()
+        waitTimer = nil
+        
+        // Stop monitoring geofence
+        if let geofence = currentGeofence {
+            locationManager.stopMonitoring(for: geofence)
+            currentGeofence = nil
+        }
+        
+        // Reset plan state
+        activePlan = nil
+        currentTargetIndex = 0
+        isWaitingAtTarget = false
+        waitTimerRemaining = 0
+        planCompleted = false
         
         // End Live Activity
         if #available(iOS 16.1, *) {
@@ -2015,6 +2967,138 @@ class LocationTrackingManager: NSObject, ObservableObject, CLLocationManagerDele
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) { }
+    
+    // MARK: - Geofencing for Exposure Plans
+    
+    func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
+        guard let circularRegion = region as? CLCircularRegion,
+              let plan = activePlan,
+              !isWaitingAtTarget else { return }
+        
+        // Get current target
+        let targets = plan.targets.filter { !$0.isDeleted }.sorted(by: { $0.orderIndex < $1.orderIndex })
+        guard currentTargetIndex < targets.count else { return }
+        
+        let target = targets[currentTargetIndex]
+        
+        // Verify this is the correct region
+        let targetCoordinate = CLLocationCoordinate2D(latitude: target.latitude, longitude: target.longitude)
+        let regionCenter = circularRegion.center
+        let distance = CLLocation(latitude: targetCoordinate.latitude, longitude: targetCoordinate.longitude)
+            .distance(from: CLLocation(latitude: regionCenter.latitude, longitude: regionCenter.longitude))
+        
+        guard distance < 50 else { return } // Within 50 meters
+        
+        // Target reached!
+        if hapticsEnabled {
+            successHaptic.notificationOccurred(.success)
+        }
+        
+        // Start wait timer
+        isWaitingAtTarget = true
+        waitTimerRemaining = TimeInterval(target.waitTimeInSeconds)
+        startWaitTimer()
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
+        // Optional: Handle if user leaves before wait completes
+        // For now, we'll just log it
+        if isWaitingAtTarget {
+            print("⚠️ User left target region before wait completed")
+        }
+    }
+    
+    private func setupGeofenceForTarget(_ target: ExposureTarget) {
+        // Remove existing geofence
+        if let existingGeofence = currentGeofence {
+            locationManager.stopMonitoring(for: existingGeofence)
+        }
+        
+        // Calculate dynamic radius based on location accuracy
+        // Get current location accuracy if available
+        let baseRadius: CLLocationDistance = 10.0 // Minimum 10 meters
+        let maxRadius: CLLocationDistance = 20.0 // Maximum 20 meters
+        
+        // Use a default radius, or calculate from current location if available
+        var radius = baseRadius
+        if let lastLocation = trackingPoints.last {
+            // Use location accuracy to determine radius
+            let accuracy = lastLocation.horizontalAccuracy
+            radius = min(maxRadius, max(baseRadius, accuracy * 2))
+        } else {
+            radius = baseRadius
+        }
+        
+        // Create geofence
+        let coordinate = CLLocationCoordinate2D(latitude: target.latitude, longitude: target.longitude)
+        let region = CLCircularRegion(center: coordinate, radius: radius, identifier: "target_\(target.id.uuidString)")
+        region.notifyOnEntry = true
+        region.notifyOnExit = true
+        
+        currentGeofence = region
+        locationManager.startMonitoring(for: region)
+        
+        print("📍 Geofence set up for target: \(target.name) at radius: \(radius)m")
+    }
+    
+    // MARK: - Wait Timer
+    
+    private func startWaitTimer() {
+        waitTimer?.invalidate()
+        
+        waitTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            
+            if self.waitTimerRemaining > 0 {
+                self.waitTimerRemaining -= 1
+            } else {
+                // Timer completed
+                self.waitTimer?.invalidate()
+                self.waitTimer = nil
+                self.completeWait()
+            }
+        }
+    }
+    
+    func skipWaitTimer() {
+        waitTimer?.invalidate()
+        waitTimer = nil
+        completeWait()
+    }
+    
+    private func completeWait() {
+        guard let plan = activePlan else { return }
+        
+        let targets = plan.targets.filter { !$0.isDeleted }.sorted(by: { $0.orderIndex < $1.orderIndex })
+        
+        if hapticsEnabled {
+            successHaptic.notificationOccurred(.success)
+        }
+        
+        // Check if this was the last target
+        if currentTargetIndex >= targets.count - 1 {
+            // Plan completed!
+            planCompleted = true
+            isWaitingAtTarget = false
+            waitTimerRemaining = 0
+            
+            // Stop monitoring geofence
+            if let geofence = currentGeofence {
+                locationManager.stopMonitoring(for: geofence)
+                currentGeofence = nil
+            }
+        } else {
+            // Advance to next target
+            currentTargetIndex += 1
+            isWaitingAtTarget = false
+            waitTimerRemaining = 0
+            
+            // Setup geofence for next target
+            if currentTargetIndex < targets.count {
+                setupGeofenceForTarget(targets[currentTargetIndex])
+            }
+        }
+    }
 }
 
 // MARK: - Models
